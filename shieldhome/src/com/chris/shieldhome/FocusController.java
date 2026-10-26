@@ -37,10 +37,13 @@ class FocusController {
         restoreNow();
     }
 
-    void save() {
+    /** Remember focused section+index before any overlay/transition. */
+    void remember() {
         try {
             View f = a.getCurrentFocus();
-            if (f == null || a.appMenu != null) return;
+            if (f == null) return;
+            for (View x = f; x != null; x = x.getParent() instanceof View ? (View) x.getParent() : null)
+                if (x == a.appMenu) return;
             int sc = secOf(f);
             if (sc < 0) return;
             View root = secRoot(f, sc);
@@ -48,8 +51,29 @@ class FocusController {
             if (idx < 0) return;
             savedSec = sc;
             savedIdx = idx;
+            if (sc == 3 && a.cardScroll != null) lastCardX = a.cardScroll.getScrollX();
+        } catch (Exception e) {}
+    }
+
+    /** Posted requestFocus after layout. */
+    void restore() {
+        if (savedSec < 0 || a.appMenu != null) return;
+        final View t = savedView();
+        if (t == null) return;
+        t.setFocusable(true);
+        t.post(() -> {
+            if (savedSec == 3 && a.cardScroll != null) a.cardScroll.scrollTo(lastCardX, 0);
+            t.requestFocus();
+            android.util.Log.i("ShieldHome", "focus restored " + name(t));
+        });
+    }
+
+    void save() {
+        remember();
+        if (savedSec < 0) return;
+        try {
             a.prefs().edit().putInt("f_sec", savedSec).putInt("f_idx", savedIdx).putInt("f_tab", a.tab).apply();
-            android.util.Log.i("ShieldHome", "focus saved sec=" + savedSec + " idx=" + savedIdx + " " + name(root));
+            android.util.Log.i("ShieldHome", "focus saved sec=" + savedSec + " idx=" + savedIdx);
         } catch (Exception e) {}
     }
 
@@ -57,13 +81,7 @@ class FocusController {
         if (savedSec < 0) return;
         if (a.appMenu != null || a.editMode) return;
         if (savedSec >= 5) a.setDrawer(true);
-        final View t = savedView();
-        if (t == null) return;
-        t.setFocusable(true);
-        t.post(() -> {
-            t.requestFocus();
-            android.util.Log.i("ShieldHome", "focus restored " + name(t));
-        });
+        restore();
     }
 
     boolean dispatch(KeyEvent e) {
