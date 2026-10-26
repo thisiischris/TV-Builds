@@ -41,23 +41,26 @@ class FocusController {
             if (f == null || a.drawer.getVisibility() == View.VISIBLE) return;
             int sc = secOf(f);
             if (sc < 0) return;
+            View root = secRoot(f, sc);
+            int idx = sc == 0 ? topIdx(root) : secItems(sc).indexOf(root);
+            if (idx < 0) return;
             savedSec = sc;
-            savedIdx = Math.max(0, secItems(sc).indexOf(secRoot(f, sc)));
+            savedIdx = idx;
             a.prefs().edit().putInt("f_sec", savedSec).putInt("f_idx", savedIdx).putInt("f_tab", a.tab).apply();
-            android.util.Log.i("ShieldHome", "focus saved sec=" + savedSec + " idx=" + savedIdx);
+            android.util.Log.i("ShieldHome", "focus saved sec=" + savedSec + " idx=" + savedIdx + " " + name(root));
         } catch (Exception e) {}
     }
 
     void restoreNow() {
         if (savedSec < 0) return;
         if (a.drawer.getVisibility() == View.VISIBLE || a.editMode) return;
-        List<View> it = secItems(savedSec);
-        int s2 = savedSec;
-        while (it.isEmpty() && s2 < nSecs() - 1) it = secItems(++s2);
-        if (it.isEmpty()) return;
-        View t = it.get(Math.min(savedIdx, it.size() - 1));
-        t.requestFocus();
-        android.util.Log.i("ShieldHome", "focus restored " + name(t));
+        final View t = savedView();
+        if (t == null) return;
+        t.setFocusable(true);
+        t.post(() -> {
+            t.requestFocus();
+            android.util.Log.i("ShieldHome", "focus restored " + name(t));
+        });
     }
 
     boolean dispatch(KeyEvent e) {
@@ -175,6 +178,24 @@ class FocusController {
         return -1;
     }
 
+    int topIdx(View v) {
+        if (v == a.profile) return 0;
+        if (v == a.gear) return 1;
+        if (v == a.searchV || v == a.qsDim) return 2;
+        return -1;
+    }
+    View savedView() {
+        if (savedSec == 0) {
+            if (savedIdx == 0) return a.profile;
+            if (savedIdx == 1) return a.gear;
+            return a.qsOpen ? a.qsDim : a.searchV;
+        }
+        List<View> it = secItems(savedSec);
+        int s2 = savedSec;
+        while (it.isEmpty() && s2 < nSecs() - 1) it = secItems(++s2);
+        if (it.isEmpty()) return null;
+        return it.get(Math.min(savedIdx, it.size() - 1));
+    }
     View tabV() { return a.tab == 0 ? a.tabPlay : a.tabLive; }
     View topTarget() { return a.qsOpen ? a.qsDim : (a.searchV.getVisibility() == View.VISIBLE ? a.searchV : a.gear); }
 

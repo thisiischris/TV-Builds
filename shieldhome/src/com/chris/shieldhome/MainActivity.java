@@ -944,8 +944,8 @@ public class MainActivity extends Activity {
         main.putExtra(":android:show_fragment","com.android.tv.settings.accounts.AccountsFragment");
         main.putExtra(":settings:show_fragment","com.android.tv.settings.accounts.AccountsFragment");
         Intent[] tries={
-            main,
             new Intent(android.provider.Settings.ACTION_ADD_ACCOUNT).putExtra(android.provider.Settings.EXTRA_ACCOUNT_TYPES, new String[]{"com.google"}),
+            main,
             new Intent(android.provider.Settings.ACTION_SETTINGS)
         };
         for (Intent i: tries){
