@@ -98,81 +98,60 @@ class TvData {
     }
 
     List<Object[]> collectWatchNext() {
-        Map<String, List<Object[]>> wnBy = new LinkedHashMap<>(), pvBy = new LinkedHashMap<>();
-        Set<String> histPkg = new LinkedHashSet<>(), histGenre = new HashSet<>();
+        String yt = "com.google.android.youtube.tv";
+        List<Object[]> rows = new ArrayList<>();
         try (Cursor c = a.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, null, null, null, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC")) {
+            int idx = 0;
             while (c != null && c.moveToNext()) {
                 String pkg = s(c, "package_name");
-                if (newsRow(c, pkg)) continue;
+                if (pkg == null || newsRow(c, pkg) || !a.installed(pkg)) continue;
                 Object[] o = prog(c, true);
                 if (o == null || o[0] == null || o[2] == null) continue;
-                String k = (String) o[0];
-                histPkg.add(k);
-                addGenres(histGenre, s(c, "canonical_genre"));
-                addGenres(histGenre, s(c, "genre"));
-                if (!wnBy.containsKey(k)) wnBy.put(k, new ArrayList<>());
-                wnBy.get(k).add(o);
+                String uri = "";
+                try { uri = ((Intent) o[3]).toUri(Intent.URI_INTENT_SCHEME); } catch (Exception e) {}
+                rows.add(new Object[]{o, l(c, "last_engagement_time_utc_millis"), l(c, "last_playback_position_millis"), l(c, "duration_millis"), (int) l(c, "watch_next_type"), clean(s(c, "title")), idx++, uri});
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "wn " + e); }
-        try (Cursor c = a.getContentResolver().query(TvContract.PreviewPrograms.CONTENT_URI, null, null, null, null)) {
-            while (c != null && c.moveToNext()) {
-                String pkg = s(c, "package_name");
-                if (pkg == null || !VIDEO_APPS.contains(pkg) || newsRow(c, pkg)) continue;
-                Object[] o = prog(c, false);
-                if (o == null || o[0] == null || o[2] == null) continue;
-                String k = (String) o[0];
-                if (!pvBy.containsKey(k)) pvBy.put(k, new ArrayList<>());
-                if (genreHit(histGenre, s(c, "canonical_genre")) || genreHit(histGenre, s(c, "genre")))
-                    pvBy.get(k).add(0, o);
-                else pvBy.get(k).add(o);
+        Collections.sort(rows, (x, y) -> {
+            long ex = (Long) x[1], ey = (Long) y[1];
+            if (ex != ey) return Long.compare(ey, ex);
+            if (ex == 0) {
+                long px = (Long) x[2], py = (Long) y[2];
+                if (px != py) return Long.compare(py, px);
             }
-        } catch (Exception e) { android.util.Log.w("ShieldHome", "prev " + e); }
-        String yt = "com.google.android.youtube.tv";
-        StringBuilder diag = new StringBuilder();
-        Set<String> pk = new LinkedHashSet<>();
-        pk.addAll(wnBy.keySet());
-        pk.addAll(pvBy.keySet());
-        Map<String, Deque<Object[]>> cw = new HashMap<>(), nw = new HashMap<>();
-        for (String k : pk) {
-            if (!a.installed(k)) continue;
-            cw.put(k, new ArrayDeque<>(wnBy.containsKey(k) ? wnBy.get(k) : new ArrayList<Object[]>()));
-            nw.put(k, new ArrayDeque<>(pvBy.containsKey(k) ? pvBy.get(k) : new ArrayList<Object[]>()));
-            Long m = a.usage.get(k);
-            diag.append(k).append(" wn=").append(wnBy.containsKey(k) ? wnBy.get(k).size() : 0).append(" prev=").append(pvBy.containsKey(k) ? pvBy.get(k).size() : 0).append(" use=").append(m == null ? 0 : m / 60000).append("m; ");
-        }
-        List<String> order = new ArrayList<>(cw.keySet());
-        Collections.sort(order, (x, y) -> {
-            int hx = histPkg.contains(x) ? 0 : 1, hy = histPkg.contains(y) ? 0 : 1;
-            if (hx != hy) return hx - hy;
-            Long ua = a.usage.get(x), ub = a.usage.get(y);
-            return Long.compare(ub == null ? 0 : ub, ua == null ? 0 : ua);
+            return Integer.compare((Integer) x[6], (Integer) y[6]);
         });
-        long top = 1;
-        for (String k : order) { Long m = a.usage.get(k); if (m != null) top = Math.max(top, m); }
-        Set<String> seenT = new HashSet<>();
-        List<Object[]> cwL = rr(order, cw, top, 12, seenT);
-        List<Object[]> nwL = rr(order, nw, top, 12, seenT);
-        int ytRec = 0; for (Object[] o : nwL) if (yt.equals(o[0])) ytRec++;
-        int ytCwMax = ytRec > 1 ? ytRec - 1 : 2, ytCw = 0;
-        List<Object[]> cw2 = new ArrayList<>();
-        for (Object[] o : cwL) { if (yt.equals(o[0])) { if (ytCw >= ytCwMax) continue; ytCw++; } cw2.add(o); }
-        cwL = cw2;
-        List<Object[]> pick = new ArrayList<>();
-        final int MAX = 12;
-        int wantNew = Math.min(MAX * 3 / 5, nwL.size()), wantCw = Math.min(MAX - wantNew, cwL.size());
-        wantNew = Math.min(nwL.size(), MAX - wantCw);
-        int ci = 0, ni = 0;
-        int[] pattern = {1, 0, 1, 1, 0};
-        for (int slot = 0; pick.size() < wantCw + wantNew; slot++) {
-            boolean takeNew = pattern[slot % 5] == 1;
-            if (takeNew && ni < wantNew) pick.add(tag(nwL.get(ni++)));
-            else if (!takeNew && ci < wantCw) pick.add(cwL.get(ci++));
-            else if (ni < wantNew) pick.add(tag(nwL.get(ni++)));
-            else if (ci < wantCw) pick.add(cwL.get(ci++));
+        Set<String> feat = new HashSet<>();
+        if (a.featuredCache != null) for (Object[] f : a.featuredCache) {
+            if (f[0] != null && f[1] != null) feat.add(f[0] + "|" + clean((String) f[1]));
+            try { feat.add(((Intent) f[4]).toUri(Intent.URI_INTENT_SCHEME)); } catch (Exception e) {}
         }
-        android.util.Log.i("ShieldHome", "playnext " + diag + "order=" + order + " picked=" + pick.size() + " cw=" + cwL.size() + " rec=" + nwL.size() + " hist=" + histPkg);
+        Map<String, Intent> next = new HashMap<>();
+        for (Object[] r : rows) {
+            if ((Integer) r[4] != 1 || r[5] == null) continue;
+            next.put(((Object[]) r[0])[0] + "|" + r[5], (Intent) ((Object[]) r[0])[3]);
+        }
+        List<Object[]> pick = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        int ytN = 0;
+        for (Object[] r : rows) {
+            Object[] o = (Object[]) r[0];
+            String pkg = (String) o[0], title = (String) r[5], uri = (String) r[7], pkTitle = pkg + "|" + title;
+            if ((title != null && feat.contains(pkTitle)) || (uri != null && !uri.isEmpty() && feat.contains(uri))) continue;
+            if (title != null && !seen.add(pkTitle)) continue;
+            if (uri != null && !uri.isEmpty() && !seen.add(uri)) continue;
+            if (yt.equals(pkg)) { if (ytN >= 4) continue; ytN++; }
+            if ((Integer) r[4] == 1 || nearEnd((Long) r[2], (Long) r[3])) {
+                Intent nx = title == null ? null : next.get(pkTitle);
+                if (nx != null) o[3] = nx;
+            }
+            pick.add(o);
+            if (pick.size() >= 12) break;
+        }
+        android.util.Log.i("ShieldHome", "playnext cw=" + pick.size() + " rows=" + rows.size() + " yt=" + ytN);
         return pick;
     }
+    static boolean nearEnd(long pos, long dur) { return dur > 0 && pos * 10 >= dur * 9; }
 
     boolean newsRow(Cursor c, String pkg) {
         String genre = s(c, "canonical_genre");
@@ -190,17 +169,6 @@ class TvData {
             if (b.contains(k)) return true;
         return false;
     }
-    static void addGenres(Set<String> into, String g) {
-        if (g == null || g.isEmpty()) return;
-        for (String x : g.split("[,/|]")) { x = x.trim().toUpperCase(Locale.US); if (!x.isEmpty() && !x.equals("NEWS")) into.add(x); }
-    }
-    static boolean genreHit(Set<String> hist, String g) {
-        if (g == null || hist.isEmpty()) return false;
-        String u = g.toUpperCase(Locale.US);
-        for (String h : hist) if (u.contains(h)) return true;
-        return false;
-    }
-
     Map<String, Long> queryPlutoIds() {
         Map<String, Long> plutoIds = new HashMap<>();
         try (Cursor c = a.getContentResolver().query(TvContract.Channels.CONTENT_URI, null, null, null, null)) {
@@ -241,27 +209,6 @@ class TvData {
         return new Object[]{pkg, cap, thumb, in, (dur > 0 && pos > 0) ? (float) pos / dur : -1f};
     }
 
-    List<Object[]> rr(List<String> order, Map<String, Deque<Object[]>> q, long top, int max, Set<String> seen) {
-        List<Object[]> out = new ArrayList<>();
-        while (out.size() < max) {
-            boolean any = false;
-            for (String k : order) {
-                Long m = a.usage.get(k);
-                int w = 1 + (int) Math.round(1.0 * (m == null ? 0 : m) / top);
-                for (int r = 0; r < w && out.size() < max; r++) {
-                    Object[] o;
-                    do { o = q.get(k).poll(); } while (o != null && !seen.add(k + "|" + o[1]));
-                    if (o == null) break;
-                    out.add(o);
-                    any = true;
-                }
-            }
-            if (!any) break;
-        }
-        return out;
-    }
-
-    static Object[] tag(Object[] o) { return new Object[]{o[0], o[1], o[2], o[3], -1f, "NEW"}; }
     static String clean(String t) {
         if (t == null) return null;
         t = t.replaceAll("(?i)\\s*[\\-\u00B7:|]?\\s*continue watching\\s*[\\-\u00B7:|]?\\s*", " ").trim();

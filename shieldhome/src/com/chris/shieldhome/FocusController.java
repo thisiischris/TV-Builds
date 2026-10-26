@@ -21,6 +21,7 @@ class FocusController {
             savedSec = a.prefs().getInt("f_sec", -1);
             savedIdx = a.prefs().getInt("f_idx", 0);
             int ft = a.prefs().getInt("f_tab", 0);
+            if (a.wnPickCache != null && a.wnPickCache.isEmpty()) ft = 1;
             if (ft != a.tab && a.tabPlay != null) {
                 a.tab = ft;
                 a.tabPlay.setOn(a.tab == 0);
@@ -137,7 +138,7 @@ class FocusController {
             if (a.qsOpen) o.add(a.qsDim);
             else if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
         } else if (sec == 1) { if (a.heroShown()) o.add(a.heroG); }
-        else if (sec == 2) { o.add(a.tabPlay); o.add(a.tabLive); }
+        else if (sec == 2) { if (a.tabPlay.getVisibility()==View.VISIBLE) o.add(a.tabPlay); o.add(a.tabLive); }
         else if (sec == 3) {
             for (int i = 0; i < a.cardRow.getChildCount(); i++) {
                 View c = a.cardRow.getChildAt(i);
@@ -193,7 +194,7 @@ class FocusController {
         if (it.isEmpty()) return null;
         return it.get(Math.min(savedIdx, it.size() - 1));
     }
-    View tabV() { return a.tab == 0 ? a.tabPlay : a.tabLive; }
+    View tabV() { return a.tab == 0 && a.tabPlay.getVisibility()==View.VISIBLE ? a.tabPlay : a.tabLive; }
     View topTarget() { return a.qsOpen ? a.qsDim : (a.searchV.getVisibility() == View.VISIBLE ? a.searchV : a.gear); }
 
     View navTarget(View f, int sec, boolean up) {
