@@ -174,11 +174,9 @@ class TvData {
     }
 
     boolean newsRow(Cursor c, String pkg) {
-        String desc = s(c, "short_description");
-        if (desc == null) desc = s(c, "long_description");
         String genre = s(c, "canonical_genre");
         if (genre == null) genre = s(c, "genre");
-        return isNews(pkg, appName(pkg), s(c, "title"), desc, genre);
+        return isNews(pkg, appName(pkg), genre);
     }
     String appName(String pkg) {
         try { return a.pm.getApplicationLabel(a.pm.getApplicationInfo(pkg, 0)).toString(); }
@@ -192,7 +190,7 @@ class TvData {
                 org.json.JSONObject o = arr.getJSONObject(i);
                 String pkg = o.getString("pkg"), show = o.optString("show"), img = o.optString("img");
                 if (!a.installed(pkg) || img.isEmpty() || show.isEmpty()) continue;
-                if (isNews(pkg, appName(pkg), show, o.optString("summary"), null)) continue;
+                if (isNews(pkg, appName(pkg), null)) continue;
                 Intent li = a.pm.getLeanbackLaunchIntentForPackage(pkg);
                 if (li == null) li = a.pm.getLaunchIntentForPackage(pkg);
                 if (li == null) continue;
@@ -201,9 +199,9 @@ class TvData {
         } catch (Exception e) { android.util.Log.w("ShieldHome", "maze " + e); }
         return out;
     }
-    static boolean isNews(String pkg, String name, String title, String desc, String genre) {
+    static boolean isNews(String pkg, String name, String genre) {
         if (genre != null && genre.toUpperCase(Locale.US).contains("NEWS")) return true;
-        String b = ((pkg == null ? "" : pkg) + " " + (name == null ? "" : name) + " " + (title == null ? "" : title) + " " + (desc == null ? "" : desc)).toLowerCase(Locale.US);
+        String b = ((pkg == null ? "" : pkg) + " " + (name == null ? "" : name)).toLowerCase(Locale.US);
         for (String k : new String[]{"news", "cnn", "msnbc", "haystack"})
             if (b.contains(k)) return true;
         return false;

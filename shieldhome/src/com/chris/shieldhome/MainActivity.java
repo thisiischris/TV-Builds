@@ -153,8 +153,7 @@ public class MainActivity extends Activity {
         View trf = tr;
         root.addView(trf, lp(-2,-2,Gravity.TOP|Gravity.END,0,p(15),p(42),0));
 
-        // Profile (left of gear) + quick settings gear
-        profile = new PillView(this, profileInitial(), 6, false); profile.setOnClickListener(v->openAccounts()); place(profile, 14, 17, 28, 28);
+        // Quick settings gear + inline options
         gear = new PillView(this, "", 5, false); gear.setOnClickListener(v->toggleQs()); place(gear, 50, 17, 28, 28);
         PillView search = searchV = new PillView(this, "Search", 3, false);
         search.setOnClickListener(v->openAssistant()); place(search, 86, 17, 104, 28);
@@ -259,10 +258,10 @@ public class MainActivity extends Activity {
             boolean fo = isFocused();
             if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
             else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
-            else if (icon==5||icon==6) pt.setColor(fo?Color.argb(120,200,200,225):Color.argb(70,190,190,215));
+            else if (icon==5) pt.setColor(fo?Color.argb(120,200,200,225):Color.argb(70,190,190,215));
             else pt.setColor(fo?Color.argb(150,120,118,140):Color.argb(110,70,68,88));
             c.drawRoundRect(0,0,w,hh,r,r,pt);
-            if ((icon==5||icon==6) && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
+            if (icon==5 && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
             if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
             int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
             pt.setColor(fg); pt.setStrokeWidth(p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
@@ -278,15 +277,11 @@ public class MainActivity extends Activity {
                 for (int i=0;i<=240;i++){ double a=2*Math.PI*i/240; double cs=Math.cos(8*a); double t=Math.max(-1,Math.min(1,cs*2.4)); float rr=p(5.9f)+p(1.55f)*(float)t; float x=gx+(float)Math.cos(a)*rr, y=cy+(float)Math.sin(a)*rr; if(i==0) gp2.moveTo(x,y); else gp2.lineTo(x,y); }
                 gp2.close(); gp2.addCircle(gx,cy,p(2.3f),Path.Direction.CW); gp2.setFillType(Path.FillType.EVEN_ODD);
                 pt.setStyle(Paint.Style.FILL); c.drawPath(gp2,pt); }
-            else if (icon==6){ pt.setStyle(Paint.Style.FILL);
-                if (label.length()>0){ pt.setTextSize(p(13)); pt.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL)); pt.setTextAlign(Paint.Align.CENTER);
-                    Paint.FontMetrics fm2=pt.getFontMetrics(); c.drawText(label, w/2f, cy-(fm2.ascent+fm2.descent)/2, pt); }
-                else { float gx=w/2f; c.drawCircle(gx, cy-p(3.2f), p(3.5f), pt); c.drawOval(new RectF(gx-p(6.2f), cy+p(1.0f), gx+p(6.2f), cy+p(10.5f)), pt); } }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
             if (icon==4) pt.setTextAlign(Paint.Align.CENTER); else pt.setTextAlign(Paint.Align.LEFT);
-            if (label.length()>0 && icon!=6) c.drawText(label, icon==4? w/2f : p(icon==2?24:icon==3?46:43), cy-(fm.ascent+fm.descent)/2, pt);
+            if (label.length()>0) c.drawText(label, icon==4? w/2f : p(icon==2?24:icon==3?46:43), cy-(fm.ascent+fm.descent)/2, pt);
         }
     }
 
@@ -321,9 +316,11 @@ public class MainActivity extends Activity {
         g.setOnClickListener(x->click.run());
         return g;
     }
+    final Map<String,Integer> glowCache = new HashMap<>();
     int glowColor(String pkg){
         if (pkg==null) return FOCUS;
         if (pkg.contains("netflix")||pkg.contains("youtube")) return Color.rgb(210,48,48);
+        if (pkg.contains("spotify")) return Color.rgb(30,215,96);
         if (pkg.contains("amazon")) return Color.rgb(48,148,210);
         if (pkg.contains("disney")) return Color.rgb(64,112,214);
         if (pkg.contains("hulu")) return Color.rgb(40,186,118);
@@ -333,7 +330,31 @@ public class MainActivity extends Activity {
         if (pkg.contains("pluto")) return Color.rgb(32,186,186);
         if (pkg.contains("haystack")) return Color.rgb(88,168,80);
         if (pkg.contains("tvlauncher")) return Color.rgb(72,132,220);
-        return FOCUS;
+        Integer hit=glowCache.get(pkg); if (hit!=null) return hit;
+        int c=sampleGlow(pkg); glowCache.put(pkg,c); return c;
+    }
+    int sampleGlow(String pkg){
+        Drawable d=null;
+        try { d=pm.getApplicationBanner(pkg); if (d==null) d=pm.getApplicationIcon(pkg); } catch (Exception e){}
+        int c=vibrantColor(d); return c!=0?c:FOCUS;
+    }
+    int vibrantColor(Drawable d){
+        if (d==null) return 0;
+        try {
+            Bitmap bm=Bitmap.createBitmap(64,36,Bitmap.Config.ARGB_8888); Canvas c=new Canvas(bm); d.setBounds(0,0,64,36); d.draw(c);
+            Map<Integer,Integer> hist=new HashMap<>(); int best=0,bestN=0;
+            for (int x=0;x<64;x++) for (int y=0;y<36;y++){
+                int px=bm.getPixel(x,y); if (Color.alpha(px)<200) continue;
+                float[] hsv=new float[3]; Color.colorToHSV(px,hsv);
+                if (hsv[1]<0.22f || hsv[2]<0.15f || (hsv[2]>0.92f && hsv[1]<0.25f)) continue;
+                int k=(int)(hsv[0]/20); int n=(hist.containsKey(k)?hist.get(k):0)+1; hist.put(k,n);
+                if (n>bestN){ bestN=n; best=px; }
+            }
+            if (bestN==0) return 0;
+            float[] hsv=new float[3]; Color.colorToHSV(best,hsv);
+            hsv[1]=Math.max(0.5f,Math.min(1f,hsv[1])); hsv[2]=Math.max(0.5f,Math.min(0.85f,hsv[2]));
+            return Color.HSVToColor(hsv);
+        } catch (Exception e){ return 0; }
     }
     void tintCard(View v, String pkg){ if (v instanceof GlowFrame) ((GlowFrame)v).tint(glowColor(pkg)); }
 
@@ -736,8 +757,12 @@ public class MainActivity extends Activity {
     // ---------- Cards ----------
     void addCard(View v, int i){
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(p(177.2f), p(108)); lp.bottomMargin=p(8); lp.leftMargin = i==0?0:p(8);
-        final View.OnFocusChangeListener base = v.getOnFocusChangeListener();
-        v.setOnFocusChangeListener((x,f)->{ if (base!=null) base.onFocusChange(x,f); if (f) snapCardRow(x); });
+        if (v.getParent()==cardRow){ v.setLayoutParams(lp); return; }
+        if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v);
+        if (!(v.getLayoutParams() instanceof LinearLayout.LayoutParams)){
+            final View.OnFocusChangeListener base = v.getOnFocusChangeListener();
+            v.setOnFocusChangeListener((x,f)->{ if (base!=null) base.onFocusChange(x,f); if (f) snapCardRow(x); });
+        }
         cardRow.addView(v, lp);
     }
     void snapCardRow(View v){
@@ -755,7 +780,14 @@ public class MainActivity extends Activity {
     void updateCardAlphas(){
         if (cardRow==null) return;
         int sx=cardScroll==null?0:cardScroll.getScrollX(), stride=p(177.2f)+p(8);
-        for (int i=0;i<cardRow.getChildCount();i++) cardRow.getChildAt(i).setAlpha(tileAlpha(i,sx,stride,5));
+        for (int i=0;i<cardRow.getChildCount();i++){
+            View c=cardRow.getChildAt(i); float a=tileAlpha(i,sx,stride,5); c.setAlpha(a);
+            if (a>0.01f && c instanceof GlowFrame){
+                View iv=((GlowFrame)c).inner.getChildAt(0);
+                if (iv instanceof ImageView){ Object tg=iv.getTag();
+                    if (tg instanceof String && ((String)tg).startsWith("pend:")) loadInto((ImageView)iv, ((String)tg).substring(5), true); }
+            }
+        }
     }
     static float tileAlpha(int i, int sx, int stride, int nFit){
         if (stride<=0) return 1f;
@@ -810,6 +842,9 @@ public class MainActivity extends Activity {
 
     void refreshCards(){
         if (cardRow==null) return;
+        if (tab==1 && liveCache!=null && !liveCache.isEmpty()){
+            showLiveCache(); cardsBindSig=cardSig(); h.post(this::updateCardAlphas); return;
+        }
         String next=cardSig();
         if (next.equals(cardsBindSig) && cardRow.getChildCount()>0) return;
         cardsBindSig=next;
@@ -838,6 +873,7 @@ public class MainActivity extends Activity {
         return n;
     }
     List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
+    List<View> liveCache; final Set<String> liveSlugs = new LinkedHashSet<>();
     // Pluto doesn't publish programs to TvContract (0 readable rows), so read what's on now from Pluto's public guide.
     void fillPlutoNow(final List<Object[]> caps){
         final Runnable apply = ()->{ for (Object[] o: caps){ String t = plutoNow.get((String)o[1]); if (t!=null) ((TextView)o[0]).setText(o[1]+" \u00B7 "+t); } };
@@ -851,7 +887,12 @@ public class MainActivity extends Activity {
             org.json.JSONArray a = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>();
             for (int i=0;i<a.length();i++){ org.json.JSONObject ch=a.getJSONObject(i); org.json.JSONArray tl=ch.optJSONArray("timelines"); if (tl!=null && tl.length()>0) m.put(ch.optString("name"), tl.getJSONObject(0).optString("title")); String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
             android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels");
-            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoAt=System.currentTimeMillis(); apply.run(); refreshCards(); });
+            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoAt=System.currentTimeMillis(); apply.run();
+                if (liveCache==null) return;
+                List<String[]> extra=new ArrayList<>();
+                for (Map.Entry<String,String> e: plutoSlug.entrySet()) if (!liveSlugs.contains(e.getValue())) extra.add(new String[]{e.getValue(), e.getKey()});
+                if (!extra.isEmpty()) appendLive(extra, false);
+            });
         } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); } });
     }
     static final String[] LIVE_SLUGS = {"cnn-headlines","nbc-news-now","abc-news-live","cbs-news"};
@@ -863,34 +904,60 @@ public class MainActivity extends Activity {
         for (Map.Entry<String,Long> e: ids.entrySet()){ String k=slugify(e.getKey()); if (k.equals(slug)||k.equals(slugify(nm))) return e.getValue(); }
         return null;
     }
-    int loadLive(){ plutoCaps.clear();
-        Map<String,Long> plutoIds = plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
-        int n=0;
-        if (installed("com.google.android.tvlauncher")){ View v=freeplayLiveTile(); tintCard(v,"com.google.android.tvlauncher"); addCard(v, n++); }
+    int loadLive(){
+        if (liveCache!=null && !liveCache.isEmpty()){ showLiveCache(); return liveCache.size(); }
+        liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
+        if (installed("com.google.android.tvlauncher")){ View v=freeplayLiveTile(); tintCard(v,"com.google.android.tvlauncher"); putLive(v, null); }
+        List<String[]> rest=new ArrayList<>();
         if (installed("tv.pluto.android")){
-            LinkedHashMap<String,String> slugName=new LinkedHashMap<>();
-            for (String slug: LIVE_SLUGS){
-                String nm=null; for (Map.Entry<String,String> en: plutoSlug.entrySet()) if (slug.equals(en.getValue())) nm=en.getKey();
-                if (nm==null) nm = slug.equals("cnn-headlines")?"CNN Headlines":slug.equals("nbc-news-now")?"NBC News NOW":slug.equals("abc-news-live")?"ABC News Live":"CBS News 24/7";
-                slugName.put(slug, nm);
-            }
-            for (Map.Entry<String,Long> e: plutoIds.entrySet()){ String slug=slugify(e.getKey()); if (!slugName.containsKey(slug)) slugName.put(slug, e.getKey()); }
-            for (Map.Entry<String,String> e: plutoSlug.entrySet()) if (!slugName.containsKey(e.getValue())) slugName.put(e.getValue(), e.getKey());
-            for (Map.Entry<String,String> e: slugName.entrySet()){
-                final String slug=e.getKey(), nm=e.getValue();
-                final Intent in = plutoIntent(slug); Long id = plutoId(plutoIds, nm, slug);
-                android.util.Log.i("ShieldHome","live pluto "+nm+" -> "+in.getData()+" tif="+id);
-                View v = card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android")); tintCard(v, "tv.pluto.android");
-                ImageView big = (ImageView)((GlowFrame)v).inner.getChildAt(0); big.setPadding(p(40),p(16),p(40),p(32));
-                if (id!=null) loadInto(big, TvContract.buildChannelLogoUri(id).toString(), true);
-                for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView) plutoCaps.add(new Object[]{cv, nm}); }
-                addCard(v, n++);
+            for (Map.Entry<String,String> e: liveSlugNames().entrySet()){
+                if (liveCache.size()<6) putLive(plutoTile(e.getKey(), e.getValue(), true), e.getKey());
+                else rest.add(new String[]{e.getKey(), e.getValue()});
             }
         }
+        boolean hay=installed("com.haystack.android");
+        if (hay && liveCache.size()<6){ putLive(haystackTile(), "haystack"); hay=false; }
+        if (!rest.isEmpty() || hay){ final List<String[]> r=rest; final boolean h2=hay; h.post(()->appendLive(r,h2)); }
+        else if (!plutoCaps.isEmpty()) fillPlutoNow(plutoCaps);
+        return liveCache.size();
+    }
+    LinkedHashMap<String,String> liveSlugNames(){
+        LinkedHashMap<String,String> slugName=new LinkedHashMap<>();
+        Map<String,Long> plutoIds=plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
+        for (String slug: LIVE_SLUGS){
+            String nm=null; for (Map.Entry<String,String> en: plutoSlug.entrySet()) if (slug.equals(en.getValue())) nm=en.getKey();
+            if (nm==null) nm=slug.equals("cnn-headlines")?"CNN Headlines":slug.equals("nbc-news-now")?"NBC News NOW":slug.equals("abc-news-live")?"ABC News Live":"CBS News 24/7";
+            slugName.put(slug, nm);
+        }
+        for (Map.Entry<String,Long> e: plutoIds.entrySet()){ String slug=slugify(e.getKey()); if (!slugName.containsKey(slug)) slugName.put(slug, e.getKey()); }
+        for (Map.Entry<String,String> e: plutoSlug.entrySet()) if (!slugName.containsKey(e.getValue())) slugName.put(e.getValue(), e.getKey());
+        return slugName;
+    }
+    void putLive(View v, String slug){ if (slug!=null) liveSlugs.add(slug); liveCache.add(v); addCard(v, liveCache.size()-1); }
+    void showLiveCache(){
+        if (cardRow.getChildCount()==liveCache.size() && cardRow.getChildCount()>0 && cardRow.getChildAt(0)==liveCache.get(0)) return;
+        cardRow.removeAllViews();
+        int i=0; for (View v: liveCache){ if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v); addCard(v, i++); }
+    }
+    void appendLive(List<String[]> rest, boolean hay){
+        for (String[] e: rest){ if (liveSlugs.contains(e[0])) continue; View v=plutoTile(e[0], e[1], false); liveCache.add(v); liveSlugs.add(e[0]); if (tab==1) addCard(v, liveCache.size()-1); }
+        if (hay && !liveSlugs.contains("haystack")){ View v=haystackTile(); liveCache.add(v); liveSlugs.add("haystack"); if (tab==1) addCard(v, liveCache.size()-1); }
+        if (tab==1) updateCardAlphas();
         if (!plutoCaps.isEmpty()) fillPlutoNow(plutoCaps);
-        if (installed("com.haystack.android")){ Drawable art=null; try { art=pm.getApplicationBanner("com.haystack.android"); } catch(Exception e){}
-            View v=card(art, null, true, null, "Haystack News \u00B7 Live", -1, ()->startSafe(pm.getLeanbackLaunchIntentForPackage("com.haystack.android")==null?new Intent():pm.getLeanbackLaunchIntentForPackage("com.haystack.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "com.haystack.android")); tintCard(v,"com.haystack.android"); addCard(v, n++); }
-        return n;
+    }
+    View plutoTile(String slug, String nm, boolean loadArt){
+        Map<String,Long> plutoIds=plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
+        final Intent in=plutoIntent(slug); Long id=plutoId(plutoIds, nm, slug);
+        View v=card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android")); tintCard(v, "tv.pluto.android");
+        ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0); big.setPadding(p(40),p(16),p(40),p(32));
+        if (id!=null){ String uri=TvContract.buildChannelLogoUri(id).toString(); if (loadArt) loadInto(big, uri, true); else big.setTag("pend:"+uri); }
+        for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView) plutoCaps.add(new Object[]{cv, nm}); }
+        return v;
+    }
+    View haystackTile(){
+        Drawable art=null; try { art=pm.getApplicationBanner("com.haystack.android"); } catch(Exception e){}
+        View v=card(art, null, true, null, "Haystack News \u00B7 Live", -1, ()->startSafe(pm.getLeanbackLaunchIntentForPackage("com.haystack.android")==null?new Intent():pm.getLeanbackLaunchIntentForPackage("com.haystack.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "com.haystack.android"));
+        tintCard(v,"com.haystack.android"); return v;
     }
     boolean installed(String p){ try { pm.getApplicationInfo(p,0); return true; } catch(Exception e){ return false; } }
     void launchPkg(String pkg){ Intent i = pm.getLeanbackLaunchIntentForPackage(pkg); if (i==null) i = pm.getLaunchIntentForPackage(pkg); if (i!=null) startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
@@ -931,35 +998,7 @@ public class MainActivity extends Activity {
         pool.execute(()->{ List<Object[]> p=tv.collectWatchNext(); h.post(()->{ if (g==dataGen){ wnPickCache=p; refreshCards(); } }); });
     }
 
-    String profileInitial(){
-        try {
-            android.accounts.Account[] ac=android.accounts.AccountManager.get(this).getAccountsByType("com.google");
-            if (ac!=null && ac.length>0 && ac[0].name!=null && ac[0].name.length()>0)
-                return ac[0].name.substring(0,1).toUpperCase(Locale.US);
-        } catch (Exception e) {}
-        return "";
-    }
-    void openAccounts(){
-        Intent main=new Intent().setClassName("com.android.tv.settings","com.android.tv.settings.MainSettings");
-        main.putExtra(":android:show_fragment","com.android.tv.settings.accounts.AccountsFragment");
-        main.putExtra(":settings:show_fragment","com.android.tv.settings.accounts.AccountsFragment");
-        Intent[] tries={
-            new Intent(android.provider.Settings.ACTION_ADD_ACCOUNT).putExtra(android.provider.Settings.EXTRA_ACCOUNT_TYPES, new String[]{"com.google"}),
-            main,
-            new Intent(android.provider.Settings.ACTION_SETTINGS)
-        };
-        for (Intent i: tries){
-            try {
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                ResolveInfo ri=pm.resolveActivity(i,0);
-                if (ri==null || ri.activityInfo==null || ri.activityInfo.name==null) continue;
-                if (ri.activityInfo.name.contains("AccountSyncActivity")) continue;
-                startActivity(i); return;
-            } catch (Exception e) {}
-        }
-    }
-
-    PillView profile, gear, qsDim; LinearLayout qsPanel; boolean qsOpen=false; View heroG, heroFocus, inAppDim;
+    PillView gear, qsDim; LinearLayout qsPanel; boolean qsOpen=false; View heroG, heroFocus, inAppDim;
     static final int[] DIMS = {0,25,50,70,90};
     TextView wxTemp, wxDesc; View wxSep;
     int dimIdx(){ return Math.max(0, Math.min(DIMS.length-1, prefs().getInt("dim", 0))); }
