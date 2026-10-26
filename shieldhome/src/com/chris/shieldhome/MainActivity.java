@@ -154,23 +154,26 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
         place(qsPanel, 88, 17, 290, 28); qsLabels();
 
-        // Hero: full-bleed top half, under the top bar (inserted at index 0)
-        FrameLayout hero = new FrameLayout(this);
-        FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
+        // Hero: art continues p(72) past the focus box so the fade has no hard 288-line
+        FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true); artHost.setClickable(false); artHost.setFocusable(false);
         ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        View botFade = new View(this);
-        botFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(140,8,8,16), Color.rgb(8,8,16)}));
-        artHost.addView(botFade, lp(-1, p(96), Gravity.BOTTOM, 0,0,0,0));
-        hero.addView(artHost, new FrameLayout.LayoutParams(-1,-1));
+        View bleed = new View(this); bleed.setFocusable(false); bleed.setClickable(false);
+        bleed.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(90,8,8,16), Color.argb(200,8,8,16), Color.rgb(8,8,16)}));
+        artHost.addView(bleed, lp(-1, p(120), Gravity.BOTTOM, 0,0,0,0));
+        root.addView(artHost, 0, lp(-1, p(360), Gravity.TOP, 0,0,0,0));
+        FrameLayout hero = new FrameLayout(this);
         View topScrim = new View(this);
         topScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.argb(170,0,0,0), Color.argb(70,0,0,0), Color.TRANSPARENT}));
-        hero.addView(topScrim, lp(-1, p(80), Gravity.TOP, 0,0,0,0));
+        hero.addView(topScrim, new FrameLayout.LayoutParams(-1,-1));
         View textScrim = new View(this);
         textScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BL_TR, new int[]{Color.argb(200,0,0,0), Color.argb(90,0,0,0), Color.TRANSPARENT}));
-        hero.addView(textScrim, lp(p(640), p(190), Gravity.BOTTOM|Gravity.START, 0,0,0,0));
+        hero.addView(textScrim, new FrameLayout.LayoutParams(-1,-1));
+        View botFade = new View(this);
+        botFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.TRANSPARENT, Color.argb(70,0,0,0), Color.TRANSPARENT}));
+        hero.addView(botFade, new FrameLayout.LayoutParams(-1,-1));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroLabel = text("FEATURED", 8, Color.rgb(190,188,205), "sans-serif-medium");
         heroArt = art;
@@ -192,7 +195,7 @@ public class MainActivity extends Activity {
             heroFocus.animate().alpha(f?1f:0f).setDuration(180).start();
         });
         hero.setOnClickListener(x->{ Object[] o=heroOnScreen; if (o==null) synchronized(heroLock){ o=heroItems.isEmpty()?null:heroItems.get(heroIdx); } if (o==null) launchPkg(installed("com.plexapp.android")?"com.plexapp.android":PLAY_PKGS[0]); else { try { startActivity(((Intent)o[4]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch(Exception e){ launchPkg((String)o[0]); } } });
-        root.addView(hero, 0, lp(-1, p(288), Gravity.TOP, 0,0,0,0));
+        root.addView(hero, 1, lp(-1, p(288), Gravity.TOP, 0,0,0,0));
 
         // Tabs
         tabPlay = new PillView(this, "Play Next", 0, true); tabLive = new PillView(this, "Live TV", 1, false);
@@ -207,7 +210,9 @@ public class MainActivity extends Activity {
         };
         cardScroll.setHorizontalScrollBarEnabled(false);
         cardScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        cardScroll.setClipToPadding(false); cardScroll.setPadding(p(10),p(10),p(10),p(10)); // v18: room for focus glow
+        cardWrap.setClipChildren(false);
+        cardScroll.setClipToPadding(false);
+        cardScroll.setPadding(0,p(18),0,p(18)); // vertical glow room; horizontal clip stays at the row edge
         cardScroll.setClipChildren(true);
         cardRow = new LinearLayout(this); cardRow.setClipChildren(false); cardRow.setClipToPadding(false);
         cardScroll.addView(cardRow, new ViewGroup.LayoutParams(-2,-1));
@@ -215,8 +220,8 @@ public class MainActivity extends Activity {
         cardFade = new View(this);
         cardFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.TRANSPARENT, Color.rgb(8,8,16)}));
         cardFade.setFocusable(false); cardFade.setClickable(false);
-        cardWrap.addView(cardFade, lp(p(48),-1,Gravity.END,0,p(10),0,p(10)));
-        place(cardWrap, 40, 340, 938, 136);
+        cardWrap.addView(cardFade, lp(p(48),-1,Gravity.END,0,p(18),0,p(18)));
+        place(cardWrap, 50, 332, 918, 152);
         cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardFade);
 
         // Home apps: 11 most-used + Settings, 2 rows, nothing below
@@ -285,8 +290,12 @@ public class MainActivity extends Activity {
         FrameLayout inner; View badgeV; float radius; Paint gp = new Paint(Paint.ANTI_ALIAS_FLAG), rp = new Paint(Paint.ANTI_ALIAS_FLAG); float glow=0;
         GlowFrame(Context c, FrameLayout in, float r){ super(c); inner=in; radius=r; setClipChildren(false); setClipToPadding(false); setWillNotDraw(false);
             addView(in, new FrameLayout.LayoutParams(-1,-1));
-            gp.setColor(Color.argb(170, 70, 150, 255)); gp.setMaskFilter(new BlurMaskFilter(p(9), BlurMaskFilter.Blur.NORMAL));
-            rp.setStyle(Paint.Style.STROKE); rp.setStrokeWidth(p(1.6f)); rp.setColor(Color.rgb(120,185,255)); }
+            gp.setMaskFilter(new BlurMaskFilter(p(9), BlurMaskFilter.Blur.NORMAL));
+            rp.setStyle(Paint.Style.STROKE); rp.setStrokeWidth(p(1.6f));
+            tint(FOCUS); }
+        void tint(int c){
+            gp.setColor(Color.argb(155, Color.red(c), Color.green(c), Color.blue(c)));
+            rp.setColor(Color.rgb(Math.min(255,Color.red(c)+40), Math.min(255,Color.green(c)+40), Math.min(255,Color.blue(c)+40))); }
         @Override public void draw(Canvas c){
             if (glow>0){ gp.setAlpha((int)(150*glow)); c.drawRoundRect(-p(3),-p(3),getWidth()+p(3),getHeight()+p(3),radius+p(3),radius+p(3),gp); }
             super.draw(c);
@@ -307,6 +316,21 @@ public class MainActivity extends Activity {
         g.setOnClickListener(x->click.run());
         return g;
     }
+    int glowColor(String pkg){
+        if (pkg==null) return FOCUS;
+        if (pkg.contains("netflix")||pkg.contains("youtube")) return Color.rgb(210,48,48);
+        if (pkg.contains("amazon")) return Color.rgb(48,148,210);
+        if (pkg.contains("disney")) return Color.rgb(64,112,214);
+        if (pkg.contains("hulu")) return Color.rgb(40,186,118);
+        if (pkg.contains("wbd.stream")) return Color.rgb(138,104,208);
+        if (pkg.contains("crunchyroll")) return Color.rgb(224,128,48);
+        if (pkg.contains("plex")) return Color.rgb(214,168,48);
+        if (pkg.contains("pluto")) return Color.rgb(32,186,186);
+        if (pkg.contains("haystack")) return Color.rgb(88,168,80);
+        if (pkg.contains("tvlauncher")) return Color.rgb(72,132,220);
+        return FOCUS;
+    }
+    void tintCard(View v, String pkg){ if (v instanceof GlowFrame) ((GlowFrame)v).tint(glowColor(pkg)); }
 
     View appTile(final String pkg, String cls, String label){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
@@ -591,7 +615,7 @@ public class MainActivity extends Activity {
         return f;
     }
     void focalCrop(ImageView iv, Bitmap bm, float[] f){
-        int vw = iv.getWidth()>0?iv.getWidth():p(1024), vh = iv.getHeight()>0?iv.getHeight():p(288); float bw=bm.getWidth(), bh=bm.getHeight();
+        int vw = iv.getWidth()>0?iv.getWidth():p(1024), vh = iv.getHeight()>0?iv.getHeight():p(360); float bw=bm.getWidth(), bh=bm.getHeight();
         float sc = Math.max(vw/bw, vh/bh); float sw=bw*sc, sh=bh*sc;
         boolean face = !(f[0]==0.5f && f[1]==0.3f);
         float tx = face ? vw*0.6f - f[0]*sw : (vw-sw)/2f; tx = Math.max(vw-sw, Math.min(0, tx));
@@ -604,7 +628,7 @@ public class MainActivity extends Activity {
         final Object[] o;
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
         final String uri = (String)o[3];
-        final int tw=p(1024), th=p(288), g=++heroLoadGen;
+        final int tw=p(1024), th=p(360), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap bm = uri==null||images==null?null:images.decode(uri, tw, th);
             final float[] ff = bm==null? null : focal(bm);
@@ -740,8 +764,8 @@ public class MainActivity extends Activity {
 
     View card(Drawable art, String artUri, boolean fitArt, String badgePkg, String caption, float progress, final Runnable click){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
-        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(Color.argb(60,190,185,220)); bg.setStroke(Math.max(1,p(.6f)), Color.argb(50,255,255,255)); f.setBackground(bg);
-        f.setOutlineProvider(ViewOutlineProvider.BACKGROUND); f.setElevation(p(7)); if (Build.VERSION.SDK_INT>=28){ f.setOutlineSpotShadowColor(Color.BLACK); f.setOutlineAmbientShadowColor(Color.BLACK); }
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(Color.argb(96,190,185,220)); bg.setStroke(Math.max(1,p(.6f)), Color.argb(60,255,255,255)); f.setBackground(bg);
+        f.setOutlineProvider(ViewOutlineProvider.BACKGROUND); f.setElevation(p(11)); if (Build.VERSION.SDK_INT>=28){ f.setOutlineSpotShadowColor(Color.BLACK); f.setOutlineAmbientShadowColor(Color.BLACK); }
         ImageView iv = new ImageView(this); iv.setScaleType(ImageView.ScaleType.CENTER_CROP); if (art!=null) iv.setImageDrawable(art); if (fitArt){ iv.setScaleType(ImageView.ScaleType.FIT_CENTER); iv.setPadding(p(30),p(18),p(30),p(30)); } loadInto(iv, artUri, fitArt);
         f.addView(iv, new FrameLayout.LayoutParams(-1,-1));
         View shade = new View(this); shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(70,0,0,0), Color.argb(160,0,0,0), Color.argb(204,0,0,0)}));
@@ -762,7 +786,9 @@ public class MainActivity extends Activity {
             bar.addView(fill, new FrameLayout.LayoutParams(Math.round(p(159)*progress), -1));
             f.addView(bar, lp(p(159), p(2.5f), Gravity.BOTTOM, p(9), 0, 0, p(8)));
         }
-        return focusable(f, bg, 8, click);
+        View g = focusable(f, bg, 8, click);
+        if (badgePkg!=null) tintCard(g, badgePkg);
+        return g;
     }
 
     void refreshCards(){
@@ -776,10 +802,10 @@ public class MainActivity extends Activity {
         if (n>0){ h.post(this::updateCardFade); return; }
         int i=0;
         for (final String pk : (tab==0?PLAY_PKGS:LIVE_PKGS)){
-            if (!installed(pk) || i>=5) continue;
+            if (!installed(pk)) continue;
             Drawable art=null; try { art = pm.getApplicationBanner(pk); if (art==null){ Intent li=pm.getLeanbackLaunchIntentForPackage(pk); if(li!=null) art=pm.getActivityBanner(li);} if(art==null) art=pm.getApplicationIcon(pk);} catch(Exception e){}
             String cap = tab==1 && pk.equals("com.google.android.tv") ? "Free channels" : null;
-            addCard(card(art, null, false, null, cap, -1, ()->launchPkg(pk)), i++);
+            View v=card(art, null, false, null, cap, -1, ()->launchPkg(pk)); tintCard(v, pk); addCard(v, i++);
         }
         h.post(this::updateCardFade);
     }
@@ -808,32 +834,45 @@ public class MainActivity extends Activity {
             org.json.JSONArray a = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>();
             for (int i=0;i<a.length();i++){ org.json.JSONObject ch=a.getJSONObject(i); org.json.JSONArray tl=ch.optJSONArray("timelines"); if (tl!=null && tl.length()>0) m.put(ch.optString("name"), tl.getJSONObject(0).optString("title")); String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
             android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels");
-            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoAt=System.currentTimeMillis(); apply.run(); });
+            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoAt=System.currentTimeMillis(); apply.run(); refreshCards(); });
         } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); } });
     }
     static final String[] LIVE_SLUGS = {"cnn-headlines","nbc-news-now","abc-news-live","cbs-news"};
     String slugify(String n){ return n.toLowerCase(Locale.US).replace("+","").replaceAll("[^a-z0-9]+","-").replaceAll("(^-|-$)",""); }
     Intent plutoIntent(String slug){ return new Intent(Intent.ACTION_VIEW, Uri.parse("https://pluto.tv/live-tv"+(slug==null?"":"/"+slug))).setPackage("tv.pluto.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); }
     void startSafe(Intent in, String fallbackPkg){ try { if (in.resolveActivity(pm)!=null){ startActivity(in); return; } } catch (Exception e){} try { launchPkg(fallbackPkg); } catch (Exception e){} }
+    Long plutoId(Map<String,Long> ids, String nm, String slug){
+        Long id = ids.get(nm); if (id!=null) return id;
+        for (Map.Entry<String,Long> e: ids.entrySet()){ String k=slugify(e.getKey()); if (k.equals(slug)||k.equals(slugify(nm))) return e.getValue(); }
+        return null;
+    }
     int loadLive(){ plutoCaps.clear();
         Map<String,Long> plutoIds = plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
         int n=0;
-        if (installed("com.google.android.tvlauncher")) addCard(freeplayLiveTile(), n++);
-        if (installed("tv.pluto.android")) for (String slug: LIVE_SLUGS){
-            if (n>=4) break;
-            String nm=null; for (Map.Entry<String,String> en: plutoSlug.entrySet()) if (slug.equals(en.getValue())) nm=en.getKey();
-            if (nm==null) nm = slug.equals("cnn-headlines")?"CNN Headlines":slug.equals("nbc-news-now")?"NBC News NOW":slug.equals("abc-news-live")?"ABC News Live":"CBS News 24/7";
-            final Intent in = plutoIntent(slug); Long id = plutoIds.get(slugify(nm));
-            android.util.Log.i("ShieldHome","live pluto "+nm+" -> "+in.getData()+" tif="+id);
-            View v = card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android"));
-            ImageView big = (ImageView)((GlowFrame)v).inner.getChildAt(0); big.setPadding(p(40),p(16),p(40),p(32));
-            if (id!=null) loadInto(big, TvContract.buildChannelLogoUri(id).toString(), true);
-            for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView) plutoCaps.add(new Object[]{cv, nm}); }
-            addCard(v, n++);
+        if (installed("com.google.android.tvlauncher")){ View v=freeplayLiveTile(); tintCard(v,"com.google.android.tvlauncher"); addCard(v, n++); }
+        if (installed("tv.pluto.android")){
+            LinkedHashMap<String,String> slugName=new LinkedHashMap<>();
+            for (String slug: LIVE_SLUGS){
+                String nm=null; for (Map.Entry<String,String> en: plutoSlug.entrySet()) if (slug.equals(en.getValue())) nm=en.getKey();
+                if (nm==null) nm = slug.equals("cnn-headlines")?"CNN Headlines":slug.equals("nbc-news-now")?"NBC News NOW":slug.equals("abc-news-live")?"ABC News Live":"CBS News 24/7";
+                slugName.put(slug, nm);
+            }
+            for (Map.Entry<String,Long> e: plutoIds.entrySet()){ String slug=slugify(e.getKey()); if (!slugName.containsKey(slug)) slugName.put(slug, e.getKey()); }
+            for (Map.Entry<String,String> e: plutoSlug.entrySet()) if (!slugName.containsKey(e.getValue())) slugName.put(e.getValue(), e.getKey());
+            for (Map.Entry<String,String> e: slugName.entrySet()){
+                final String slug=e.getKey(), nm=e.getValue();
+                final Intent in = plutoIntent(slug); Long id = plutoId(plutoIds, nm, slug);
+                android.util.Log.i("ShieldHome","live pluto "+nm+" -> "+in.getData()+" tif="+id);
+                View v = card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android")); tintCard(v, "tv.pluto.android");
+                ImageView big = (ImageView)((GlowFrame)v).inner.getChildAt(0); big.setPadding(p(40),p(16),p(40),p(32));
+                if (id!=null) loadInto(big, TvContract.buildChannelLogoUri(id).toString(), true);
+                for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView) plutoCaps.add(new Object[]{cv, nm}); }
+                addCard(v, n++);
+            }
         }
         if (!plutoCaps.isEmpty()) fillPlutoNow(plutoCaps);
         if (installed("com.haystack.android")){ Drawable art=null; try { art=pm.getApplicationBanner("com.haystack.android"); } catch(Exception e){}
-            addCard(card(art, null, true, null, "Haystack News \u00B7 Live", -1, ()->startSafe(pm.getLeanbackLaunchIntentForPackage("com.haystack.android")==null?new Intent():pm.getLeanbackLaunchIntentForPackage("com.haystack.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "com.haystack.android")), n++); }
+            View v=card(art, null, true, null, "Haystack News \u00B7 Live", -1, ()->startSafe(pm.getLeanbackLaunchIntentForPackage("com.haystack.android")==null?new Intent():pm.getLeanbackLaunchIntentForPackage("com.haystack.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "com.haystack.android")); tintCard(v,"com.haystack.android"); addCard(v, n++); }
         return n;
     }
     boolean installed(String p){ try { pm.getApplicationInfo(p,0); return true; } catch(Exception e){ return false; } }

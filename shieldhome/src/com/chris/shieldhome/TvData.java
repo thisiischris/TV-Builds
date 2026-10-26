@@ -145,15 +145,15 @@ class TvData {
             nw.put(k, new ArrayDeque<>(pvBy.containsKey(k) ? pvBy.get(k) : new ArrayList<>()));
         }
         Set<String> seenT = new HashSet<>();
-        List<Object[]> cwL = rr(order, cw, top, 5, seenT), nwL = rr(order, nw, top, 5, seenT);
+        List<Object[]> cwL = rr(order, cw, top, 12, seenT), nwL = rr(order, nw, top, 12, seenT);
         List<Object[]> pick = new ArrayList<>();
-        final int MAX = 5;
-        int wantNew = Math.min(2, nwL.size()), wantCw = Math.min(MAX - wantNew, cwL.size());
+        final int MAX = 12;
+        int wantNew = Math.min(MAX * 2 / 5, nwL.size()), wantCw = Math.min(MAX - wantNew, cwL.size());
         wantNew = Math.min(nwL.size(), MAX - wantCw);
         int ci = 0, ni = 0;
         int[] pattern = {0, 0, 1, 0, 1};
         for (int slot = 0; pick.size() < wantCw + wantNew; slot++) {
-            boolean takeNew = slot < 5 ? pattern[slot] == 1 : true;
+            boolean takeNew = pattern[slot % 5] == 1;
             if (takeNew && ni < wantNew) pick.add(tag(nwL.get(ni++)));
             else if (ci < wantCw) pick.add(cwL.get(ci++));
             else if (ni < wantNew) pick.add(tag(nwL.get(ni++)));
@@ -168,7 +168,7 @@ class TvData {
             while (c != null && c.moveToNext()) {
                 if (!"tv.pluto.android".equals(s(c, "package_name"))) continue;
                 String nm = s(c, "display_name");
-                if (nm != null) plutoIds.put(a.slugify(nm), l(c, "_id"));
+                if (nm != null) plutoIds.put(nm, l(c, "_id"));
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "channels " + e); }
         return plutoIds;
