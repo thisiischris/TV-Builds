@@ -17,7 +17,7 @@ import java.util.*;
 
 public class MainActivity extends Activity {
     // All geometry is in mockup pixels (1024x576 reference), scaled to the real screen.
-    float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; TextView clock, date;
+    float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; View cardFade; TextView clock, date;
     PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255);
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
@@ -200,9 +200,24 @@ public class MainActivity extends Activity {
         View.OnFocusChangeListener tl = (v,f)->{ if(f){ int t = v==tabPlay?0:1; if (t!=tab){ tab=t; tabPlay.setOn(tab==0); tabLive.setOn(tab==1); refreshCards(); } } };
         tabPlay.setOnFocusChangeListener(tl); tabLive.setOnFocusChangeListener(tl);
 
-        // Cards row
+        // Cards row: snap-scroll, hard clip, right-edge fade
+        FrameLayout cardWrap = new FrameLayout(this);
+        cardScroll = new HorizontalScrollView(this){
+            @Override protected int computeScrollDeltaToGetChildRectOnScreen(Rect r){ return 0; }
+        };
+        cardScroll.setHorizontalScrollBarEnabled(false);
+        cardScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        cardScroll.setClipToPadding(true);
+        cardScroll.setClipChildren(true);
         cardRow = new LinearLayout(this); cardRow.setClipChildren(false); cardRow.setClipToPadding(false);
-        cardRow.setPadding(0,0,0,0); place(cardRow, 50, 350, 918, 116);
+        cardScroll.addView(cardRow, new ViewGroup.LayoutParams(-2,-1));
+        cardWrap.addView(cardScroll, new FrameLayout.LayoutParams(-1,-1));
+        cardFade = new View(this);
+        cardFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.TRANSPARENT, Color.rgb(8,8,16)}));
+        cardFade.setFocusable(false); cardFade.setClickable(false);
+        cardWrap.addView(cardFade, lp(p(48),-1,Gravity.END,0,0,0,0));
+        place(cardWrap, 50, 350, 918, 116);
+        cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardFade);
 
         // Home apps: 11 most-used + Settings, 2 rows, nothing below
         homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false);
@@ -690,7 +705,38 @@ public class MainActivity extends Activity {
     List<String[]> apps(){ return appsCache!=null?appsCache:tv.queryApps(); }
 
     // ---------- Cards ----------
-    void addCard(View v, int i){ LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(p(177.2f), p(108)); lp.bottomMargin=p(8); lp.leftMargin = i==0?0:p(8); cardRow.addView(v, lp); }
+    void addCard(View v, int i){
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(p(177.2f), p(108)); lp.bottomMargin=p(8); lp.leftMargin = i==0?0:p(8);
+        final View.OnFocusChangeListener base = v.getOnFocusChangeListener();
+        v.setOnFocusChangeListener((x,f)->{ if (base!=null) base.onFocusChange(x,f); if (f) snapCardRow(x); });
+        cardRow.addView(v, lp);
+    }
+    void snapCardRow(View v){
+        if (cardScroll==null) return;
+        int idx=cardRow.indexOfChild(v); if (idx<0) return;
+        int vis=cardScroll.getWidth(); if (vis<=0) vis=p(918);
+        int x=snapX(cardScroll.getScrollX(), idx, p(177.2f), p(8), vis, cardRow.getChildCount());
+        if (x!=cardScroll.getScrollX()) cardScroll.smoothScrollTo(x,0); else updateCardFade();
+    }
+    void updateCardFade(){
+        if (cardFade==null||cardScroll==null) return;
+        int vis=cardScroll.getWidth(); if (vis<=0) vis=p(918);
+        int stride=p(177.2f)+p(8);
+        int nFit=Math.max(1,(vis+p(8))/stride);
+        cardFade.setVisibility(cardScroll.getScrollX()<Math.max(0,cardRow.getChildCount()-nFit)*stride-1 ? View.VISIBLE : View.GONE);
+    }
+    static int snapX(int sx, int idx, int cardW, int gap, int vis, int n){
+        int stride=cardW+gap;
+        if (stride<=0||n<=0) return 0;
+        int nFit=Math.max(1,(vis+gap)/stride);
+        int max=Math.max(0,n-nFit)*stride;
+        int left=idx*stride, right=left+cardW;
+        int target=sx;
+        if (left<sx) target=left;
+        else if (right>sx+vis) target=right-vis;
+        target=Math.round(target/(float)stride)*stride;
+        return Math.max(0, Math.min(target, max));
+    }
 
     View card(Drawable art, String artUri, boolean fitArt, String badgePkg, String caption, float progress, final Runnable click){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
@@ -725,8 +771,9 @@ public class MainActivity extends Activity {
         if (next.equals(cardsBindSig) && cardRow.getChildCount()>0) return;
         cardsBindSig=next;
         cardRow.removeAllViews();
+        if (cardScroll!=null) cardScroll.scrollTo(0,0);
         int n = tab==0 ? loadWatchNext() : loadLive();
-        if (n>0) return;
+        if (n>0){ h.post(this::updateCardFade); return; }
         int i=0;
         for (final String pk : (tab==0?PLAY_PKGS:LIVE_PKGS)){
             if (!installed(pk) || i>=5) continue;
@@ -734,6 +781,7 @@ public class MainActivity extends Activity {
             String cap = tab==1 && pk.equals("com.google.android.tv") ? "Free channels" : null;
             addCard(card(art, null, false, null, cap, -1, ()->launchPkg(pk)), i++);
         }
+        h.post(this::updateCardFade);
     }
 
     int loadWatchNext(){
