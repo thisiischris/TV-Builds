@@ -204,7 +204,7 @@ class TvData {
     static boolean isNews(String pkg, String name, String title, String desc, String genre) {
         if (genre != null && genre.toUpperCase(Locale.US).contains("NEWS")) return true;
         String b = ((pkg == null ? "" : pkg) + " " + (name == null ? "" : name) + " " + (title == null ? "" : title) + " " + (desc == null ? "" : desc)).toLowerCase(Locale.US);
-        for (String k : new String[]{"news", "cnn", "fox news", "msnbc", "cbs news", "abc news", "nbc news", "bbc news", "haystack"})
+        for (String k : new String[]{"news", "cnn", "msnbc", "haystack"})
             if (b.contains(k)) return true;
         return false;
     }

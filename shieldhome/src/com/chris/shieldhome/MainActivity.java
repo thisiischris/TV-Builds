@@ -106,7 +106,6 @@ public class MainActivity extends Activity {
         return super.dispatchKeyEvent(e);
     }
     @Override public void onBackPressed(){ if (!focus.closeOverlay()) focusHomeApp(); }
-    void focusHero(){ View t = heroShown()?heroG:tabV(); t.requestFocus(); android.util.Log.i("ShieldHome","back -> "+name(t)); }
     void focusHomeApp(){
         if (homeGrid==null) return;
         if (focus!=null) focus.lastIdx[4]=0;
@@ -941,18 +940,22 @@ public class MainActivity extends Activity {
         return "";
     }
     void openAccounts(){
-        List<Intent> tries=new ArrayList<>();
-        tries.add(new Intent(android.provider.Settings.ACTION_SYNC_SETTINGS));
-        try {
-            PackageInfo pi=pm.getPackageInfo("com.android.tv.settings", PackageManager.GET_ACTIVITIES);
-            if (pi.activities!=null) for (ActivityInfo ai: pi.activities)
-                if (ai.name!=null && ai.name.toLowerCase(Locale.US).contains("account"))
-                    tries.add(new Intent().setClassName(ai.packageName, ai.name));
-        } catch (Exception e) {}
-        tries.add(new Intent(android.provider.Settings.ACTION_ADD_ACCOUNT).putExtra(android.provider.Settings.EXTRA_ACCOUNT_TYPES, new String[]{"com.google"}));
-        tries.add(new Intent(android.provider.Settings.ACTION_SETTINGS));
+        Intent main=new Intent().setClassName("com.android.tv.settings","com.android.tv.settings.MainSettings");
+        main.putExtra(":android:show_fragment","com.android.tv.settings.accounts.AccountsFragment");
+        main.putExtra(":settings:show_fragment","com.android.tv.settings.accounts.AccountsFragment");
+        Intent[] tries={
+            main,
+            new Intent(android.provider.Settings.ACTION_ADD_ACCOUNT).putExtra(android.provider.Settings.EXTRA_ACCOUNT_TYPES, new String[]{"com.google"}),
+            new Intent(android.provider.Settings.ACTION_SETTINGS)
+        };
         for (Intent i: tries){
-            try { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (i.resolveActivity(pm)!=null){ startActivity(i); return; } } catch (Exception e) {}
+            try {
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ResolveInfo ri=pm.resolveActivity(i,0);
+                if (ri==null || ri.activityInfo==null || ri.activityInfo.name==null) continue;
+                if (ri.activityInfo.name.contains("AccountSyncActivity")) continue;
+                startActivity(i); return;
+            } catch (Exception e) {}
         }
     }
 
