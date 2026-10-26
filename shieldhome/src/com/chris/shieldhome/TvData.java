@@ -99,53 +99,64 @@ class TvData {
 
     List<Object[]> collectWatchNext() {
         Map<String, List<Object[]>> wnBy = new LinkedHashMap<>(), pvBy = new LinkedHashMap<>();
+        Set<String> histPkg = new LinkedHashSet<>(), histGenre = new HashSet<>();
         try (Cursor c = a.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, null, null, null, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC")) {
             while (c != null && c.moveToNext()) {
+                String pkg = s(c, "package_name");
+                if (newsRow(c, pkg)) continue;
                 Object[] o = prog(c, true);
                 if (o == null || o[0] == null || o[2] == null) continue;
                 String k = (String) o[0];
+                histPkg.add(k);
+                addGenres(histGenre, s(c, "canonical_genre"));
+                addGenres(histGenre, s(c, "genre"));
                 if (!wnBy.containsKey(k)) wnBy.put(k, new ArrayList<>());
                 wnBy.get(k).add(o);
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "wn " + e); }
         try (Cursor c = a.getContentResolver().query(TvContract.PreviewPrograms.CONTENT_URI, null, null, null, null)) {
             while (c != null && c.moveToNext()) {
+                String pkg = s(c, "package_name");
+                if (pkg == null || !VIDEO_APPS.contains(pkg) || newsRow(c, pkg)) continue;
                 Object[] o = prog(c, false);
                 if (o == null || o[0] == null || o[2] == null) continue;
                 String k = (String) o[0];
-                if (!VIDEO_APPS.contains(k)) continue;
                 if (!pvBy.containsKey(k)) pvBy.put(k, new ArrayList<>());
-                pvBy.get(k).add(o);
+                if (genreHit(histGenre, s(c, "canonical_genre")) || genreHit(histGenre, s(c, "genre")))
+                    pvBy.get(k).add(0, o);
+                else pvBy.get(k).add(o);
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "prev " + e); }
         StringBuilder diag = new StringBuilder();
         Set<String> pk = new LinkedHashSet<>();
         pk.addAll(wnBy.keySet());
         pk.addAll(pvBy.keySet());
-        Map<String, Deque<Object[]>> q = new HashMap<>();
+        Map<String, Deque<Object[]>> cw = new HashMap<>(), nw = new HashMap<>();
         for (String k : pk) {
-            Deque<Object[]> d = new ArrayDeque<>();
-            if (wnBy.containsKey(k)) d.addAll(wnBy.get(k));
-            if (pvBy.containsKey(k)) d.addAll(pvBy.get(k));
             if (!a.installed(k)) continue;
-            q.put(k, d);
+            cw.put(k, new ArrayDeque<>(wnBy.containsKey(k) ? wnBy.get(k) : new ArrayList<Object[]>()));
+            nw.put(k, new ArrayDeque<>(pvBy.containsKey(k) ? pvBy.get(k) : new ArrayList<Object[]>()));
             Long m = a.usage.get(k);
             diag.append(k).append(" wn=").append(wnBy.containsKey(k) ? wnBy.get(k).size() : 0).append(" prev=").append(pvBy.containsKey(k) ? pvBy.get(k).size() : 0).append(" use=").append(m == null ? 0 : m / 60000).append("m; ");
         }
-        List<String> order = new ArrayList<>(q.keySet());
+        List<String> order = new ArrayList<>(cw.keySet());
         Collections.sort(order, (x, y) -> {
+            int hx = histPkg.contains(x) ? 0 : 1, hy = histPkg.contains(y) ? 0 : 1;
+            if (hx != hy) return hx - hy;
             Long ua = a.usage.get(x), ub = a.usage.get(y);
             return Long.compare(ub == null ? 0 : ub, ua == null ? 0 : ua);
         });
         long top = 1;
         for (String k : order) { Long m = a.usage.get(k); if (m != null) top = Math.max(top, m); }
-        Map<String, Deque<Object[]>> cw = new HashMap<>(), nw = new HashMap<>();
-        for (String k : order) {
-            cw.put(k, new ArrayDeque<>(wnBy.containsKey(k) ? wnBy.get(k) : new ArrayList<>()));
-            nw.put(k, new ArrayDeque<>(pvBy.containsKey(k) ? pvBy.get(k) : new ArrayList<>()));
-        }
         Set<String> seenT = new HashSet<>();
-        List<Object[]> cwL = rr(order, cw, top, 12, seenT), nwL = rr(order, nw, top, 12, seenT);
+        List<Object[]> cwL = rr(order, cw, top, 12, seenT);
+        List<Object[]> nwL = new ArrayList<>();
+        for (Object[] o : mazeNew()) {
+            if (o[0] == null || o[1] == null) continue;
+            if (!seenT.add(o[0] + "|" + o[1])) continue;
+            nwL.add(o);
+        }
+        nwL.addAll(rr(order, nw, top, 12, seenT));
         List<Object[]> pick = new ArrayList<>();
         final int MAX = 12;
         int wantNew = Math.min(MAX * 2 / 5, nwL.size()), wantCw = Math.min(MAX - wantNew, cwL.size());
@@ -158,8 +169,54 @@ class TvData {
             else if (ci < wantCw) pick.add(cwL.get(ci++));
             else if (ni < wantNew) pick.add(tag(nwL.get(ni++)));
         }
-        android.util.Log.i("ShieldHome", "playnext " + diag + "order=" + order + " picked=" + pick.size() + " cw=" + cwL.size() + " new=" + nwL.size());
+        android.util.Log.i("ShieldHome", "playnext " + diag + "order=" + order + " picked=" + pick.size() + " cw=" + cwL.size() + " new=" + nwL.size() + " hist=" + histPkg);
         return pick;
+    }
+
+    boolean newsRow(Cursor c, String pkg) {
+        String desc = s(c, "short_description");
+        if (desc == null) desc = s(c, "long_description");
+        String genre = s(c, "canonical_genre");
+        if (genre == null) genre = s(c, "genre");
+        return isNews(pkg, appName(pkg), s(c, "title"), desc, genre);
+    }
+    String appName(String pkg) {
+        try { return a.pm.getApplicationLabel(a.pm.getApplicationInfo(pkg, 0)).toString(); }
+        catch (Exception e) { return null; }
+    }
+    List<Object[]> mazeNew() {
+        List<Object[]> out = new ArrayList<>();
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(a.prefs().getString("wn_json", "[]"));
+            for (int i = 0; i < arr.length(); i++) {
+                org.json.JSONObject o = arr.getJSONObject(i);
+                String pkg = o.getString("pkg"), show = o.optString("show"), img = o.optString("img");
+                if (!a.installed(pkg) || img.isEmpty() || show.isEmpty()) continue;
+                if (isNews(pkg, appName(pkg), show, o.optString("summary"), null)) continue;
+                Intent li = a.pm.getLeanbackLaunchIntentForPackage(pkg);
+                if (li == null) li = a.pm.getLaunchIntentForPackage(pkg);
+                if (li == null) continue;
+                out.add(new Object[]{pkg, show, img, li, -1f});
+            }
+        } catch (Exception e) { android.util.Log.w("ShieldHome", "maze " + e); }
+        return out;
+    }
+    static boolean isNews(String pkg, String name, String title, String desc, String genre) {
+        if (genre != null && genre.toUpperCase(Locale.US).contains("NEWS")) return true;
+        String b = ((pkg == null ? "" : pkg) + " " + (name == null ? "" : name) + " " + (title == null ? "" : title) + " " + (desc == null ? "" : desc)).toLowerCase(Locale.US);
+        for (String k : new String[]{"news", "cnn", "fox news", "msnbc", "cbs news", "abc news", "nbc news", "bbc news", "haystack"})
+            if (b.contains(k)) return true;
+        return false;
+    }
+    static void addGenres(Set<String> into, String g) {
+        if (g == null || g.isEmpty()) return;
+        for (String x : g.split("[,/|]")) { x = x.trim().toUpperCase(Locale.US); if (!x.isEmpty() && !x.equals("NEWS")) into.add(x); }
+    }
+    static boolean genreHit(Set<String> hist, String g) {
+        if (g == null || hist.isEmpty()) return false;
+        String u = g.toUpperCase(Locale.US);
+        for (String h : hist) if (u.contains(h)) return true;
+        return false;
     }
 
     Map<String, Long> queryPlutoIds() {

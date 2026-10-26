@@ -119,7 +119,7 @@ class FocusController {
     boolean keyUp(int k, KeyEvent e) {
         if (k != KeyEvent.KEYCODE_BACK) return false;
         if (e.isTracking()) {
-            if (!backLong && !e.isCanceled() && !closeOverlay()) a.focusHero();
+            if (!backLong && !e.isCanceled() && !closeOverlay()) a.focusHomeApp();
             backLong = false;
             return true;
         }
@@ -130,6 +130,7 @@ class FocusController {
     List<View> secItems(int sec) {
         List<View> o = new ArrayList<>();
         if (sec == 0) {
+            if (a.profile != null) o.add(a.profile);
             if (a.gear != null) o.add(a.gear);
             if (a.qsOpen) o.add(a.qsDim);
             else if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
@@ -165,7 +166,7 @@ class FocusController {
     int secOf(View f) {
         if (a.homeGrid == null || a.cardRow == null) return -1;
         for (View x = f; x != null; x = x.getParent() instanceof View ? (View) x.getParent() : null) {
-            if (x == a.gear || x == a.searchV || x == a.qsDim || x == a.qsPanel) return 0;
+            if (x == a.profile || x == a.gear || x == a.searchV || x == a.qsDim || x == a.qsPanel) return 0;
             if (x == a.heroG) return 1;
             if (x == a.tabPlay || x == a.tabLive) return 2;
             if (x.getParent() == a.cardRow) return 3;
@@ -195,6 +196,7 @@ class FocusController {
     }
 
     String name(View v) {
+        if (v == a.profile) return "profile";
         if (v == a.gear) return "gear";
         if (v == a.searchV) return "search";
         if (v == a.qsDim) return "qsDim";

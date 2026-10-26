@@ -20,6 +20,7 @@ public class MainActivity extends Activity {
     float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; TextView clock, date;
     PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255);
+    static final int TILE_R = 11;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
 
@@ -104,8 +105,16 @@ public class MainActivity extends Activity {
         if (focus!=null && focus.dispatch(e)) return true;
         return super.dispatchKeyEvent(e);
     }
-    @Override public void onBackPressed(){ if (!focus.closeOverlay()) focusHero(); }
+    @Override public void onBackPressed(){ if (!focus.closeOverlay()) focusHomeApp(); }
     void focusHero(){ View t = heroShown()?heroG:tabV(); t.requestFocus(); android.util.Log.i("ShieldHome","back -> "+name(t)); }
+    void focusHomeApp(){
+        if (homeGrid==null) return;
+        if (focus!=null) focus.lastIdx[4]=0;
+        for (int i=0;i<homeGrid.getChildCount();i++){
+            View c=homeGrid.getChildAt(i);
+            if (c!=null && c.isFocusable() && c.getVisibility()==View.VISIBLE){ c.requestFocus(); android.util.Log.i("ShieldHome","back -> "+name(c)); return; }
+        }
+    }
     @Override public boolean onKeyDown(int k, KeyEvent e){ if (focus.keyDown(k,e)) return true; return super.onKeyDown(k,e); }
     @Override public boolean onKeyLongPress(int k, KeyEvent e){ if (focus.keyLong(k,e)) return true; return super.onKeyLongPress(k,e); }
     @Override public boolean onKeyUp(int k, KeyEvent e){ if (focus.keyUp(k,e)) return true; return super.onKeyUp(k,e); }
@@ -145,7 +154,8 @@ public class MainActivity extends Activity {
         View trf = tr;
         root.addView(trf, lp(-2,-2,Gravity.TOP|Gravity.END,0,p(15),p(42),0));
 
-        // Quick settings gear + inline options
+        // Profile (left of gear) + quick settings gear
+        profile = new PillView(this, profileInitial(), 6, false); profile.setOnClickListener(v->openAccounts()); place(profile, 14, 17, 28, 28);
         gear = new PillView(this, "", 5, false); gear.setOnClickListener(v->toggleQs()); place(gear, 50, 17, 28, 28);
         PillView search = searchV = new PillView(this, "Search", 3, false);
         search.setOnClickListener(v->openAssistant()); place(search, 86, 17, 104, 28);
@@ -250,10 +260,10 @@ public class MainActivity extends Activity {
             boolean fo = isFocused();
             if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
             else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
-            else if (icon==5) pt.setColor(fo?Color.argb(120,200,200,225):Color.argb(70,190,190,215));
+            else if (icon==5||icon==6) pt.setColor(fo?Color.argb(120,200,200,225):Color.argb(70,190,190,215));
             else pt.setColor(fo?Color.argb(150,120,118,140):Color.argb(110,70,68,88));
             c.drawRoundRect(0,0,w,hh,r,r,pt);
-            if (icon==5 && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
+            if ((icon==5||icon==6) && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
             if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
             int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
             pt.setColor(fg); pt.setStrokeWidth(p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
@@ -269,11 +279,15 @@ public class MainActivity extends Activity {
                 for (int i=0;i<=240;i++){ double a=2*Math.PI*i/240; double cs=Math.cos(8*a); double t=Math.max(-1,Math.min(1,cs*2.4)); float rr=p(5.9f)+p(1.55f)*(float)t; float x=gx+(float)Math.cos(a)*rr, y=cy+(float)Math.sin(a)*rr; if(i==0) gp2.moveTo(x,y); else gp2.lineTo(x,y); }
                 gp2.close(); gp2.addCircle(gx,cy,p(2.3f),Path.Direction.CW); gp2.setFillType(Path.FillType.EVEN_ODD);
                 pt.setStyle(Paint.Style.FILL); c.drawPath(gp2,pt); }
+            else if (icon==6){ pt.setStyle(Paint.Style.FILL);
+                if (label.length()>0){ pt.setTextSize(p(13)); pt.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL)); pt.setTextAlign(Paint.Align.CENTER);
+                    Paint.FontMetrics fm2=pt.getFontMetrics(); c.drawText(label, w/2f, cy-(fm2.ascent+fm2.descent)/2, pt); }
+                else { float gx=w/2f; c.drawCircle(gx, cy-p(3.2f), p(3.5f), pt); c.drawOval(new RectF(gx-p(6.2f), cy+p(1.0f), gx+p(6.2f), cy+p(10.5f)), pt); } }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
             if (icon==4) pt.setTextAlign(Paint.Align.CENTER); else pt.setTextAlign(Paint.Align.LEFT);
-            if (label.length()>0) c.drawText(label, icon==4? w/2f : p(icon==2?24:icon==3?46:43), cy-(fm.ascent+fm.descent)/2, pt);
+            if (label.length()>0 && icon!=6) c.drawText(label, icon==4? w/2f : p(icon==2?24:icon==3?46:43), cy-(fm.ascent+fm.descent)/2, pt);
         }
     }
 
@@ -289,9 +303,9 @@ public class MainActivity extends Activity {
             gp.setColor(Color.argb(155, Color.red(c), Color.green(c), Color.blue(c)));
             rp.setColor(Color.rgb(Math.min(255,Color.red(c)+40), Math.min(255,Color.green(c)+40), Math.min(255,Color.blue(c)+40))); }
         @Override public void draw(Canvas c){
-            if (glow>0){ gp.setAlpha((int)(150*glow)); c.drawRoundRect(-p(3),-p(3),getWidth()+p(3),getHeight()+p(3),radius+p(3),radius+p(3),gp); }
+            if (glow>0){ gp.setAlpha((int)(150*glow)); c.drawRoundRect(0,0,getWidth(),getHeight(),radius,radius,gp); }
             super.draw(c);
-            if (glow>0){ rp.setAlpha((int)(255*glow)); float o=p(.8f); c.drawRoundRect(o,o,getWidth()-o,getHeight()-o,radius,radius,rp); }
+            if (glow>0){ rp.setAlpha((int)(255*glow)); c.drawRoundRect(0,0,getWidth(),getHeight(),radius,radius,rp); }
             if (badgeV!=null && badgeV.getAlpha()>0.01f){ c.saveLayerAlpha(badgeV.getLeft(), badgeV.getTop(), badgeV.getRight(), badgeV.getBottom(), Math.round(255*badgeV.getAlpha())); c.translate(badgeV.getLeft(), badgeV.getTop()); badgeV.draw(c); c.restore(); }
         }
     }
@@ -326,7 +340,7 @@ public class MainActivity extends Activity {
 
     View appTile(final String pkg, String cls, String label){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
-        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(TILE); bg.setStroke(1, Color.argb(30,255,255,255)); f.setBackground(bg);
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(TILE); bg.setStroke(1, Color.argb(30,255,255,255)); f.setBackground(bg);
         ImageView iv = new ImageView(this);
         Drawable banner = null; ComponentName cn = new ComponentName(pkg, cls);
         try { banner = pm.getActivityBanner(cn); if (banner==null) banner = pm.getApplicationBanner(pkg); } catch (Exception e) {}
@@ -346,7 +360,7 @@ public class MainActivity extends Activity {
             f.addView(t, lp(-1, -2, Gravity.BOTTOM, p(6), 0, p(6), p(8)));
         }
         final Intent li = new Intent(Intent.ACTION_MAIN).setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        View gv = focusable(f, bg, 8, ()->{ try{ startActivity(li);}catch(Exception e){} }); gv.setTag(pkg); tintCard(gv, pkg); return gv;
+        View gv = focusable(f, bg, TILE_R, ()->{ try{ startActivity(li);}catch(Exception e){} }); gv.setTag(pkg); tintCard(gv, pkg); return gv;
     }
     // Banner: use its edge colour so the banner blends into the tile. Icon: dominant (most saturated common) colour, darkened.
     int brandColor(Drawable d, boolean edge){
@@ -405,10 +419,10 @@ public class MainActivity extends Activity {
     List<View> editBlocked = new ArrayList<>(); View dimV;
     View editTile(){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
-        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(editMode?Color.rgb(229,227,228):TILE); bg.setStroke(Math.max(1,p(.6f)), Color.argb(55,255,255,255)); f.setBackground(bg);
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(editMode?Color.rgb(229,227,228):TILE); bg.setStroke(Math.max(1,p(.6f)), Color.argb(55,255,255,255)); f.setBackground(bg);
         TextView t = text(editMode?"\u2713  Done":"\u270E  Edit", 13, editMode?Color.rgb(22,22,30):Color.rgb(235,234,242), "sans-serif-medium"); t.setGravity(Gravity.CENTER);
         f.addView(t, new FrameLayout.LayoutParams(-1,-1));
-        return focusable(f, bg, 8, ()->{ if (editMode) exitEdit(); else enterEdit(); });
+        return focusable(f, bg, TILE_R, ()->{ if (editMode) exitEdit(); else enterEdit(); });
     }
     void buildHomeGrid(){ buildHomeGrid(-1); }
     void buildHomeGrid(int focusIdx){
@@ -472,10 +486,10 @@ public class MainActivity extends Activity {
     void drop(int i){ dragIdx=-1; saveVisible(); buildHomeGrid(i); }
     View placeholderTile(final int i){
         FrameLayout f = new FrameLayout(this);
-        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(Color.argb(14,255,255,255)); bg.setStroke(Math.max(1,p(1.2f)), Color.argb(90,255,255,255), p(6), p(4)); f.setBackground(bg);
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(Color.argb(14,255,255,255)); bg.setStroke(Math.max(1,p(1.2f)), Color.argb(90,255,255,255), p(6), p(4)); f.setBackground(bg);
         TextView plus = text("+", 30, Color.argb(120,255,255,255), "sans-serif-light"); plus.setGravity(Gravity.CENTER);
         f.addView(plus, new FrameLayout.LayoutParams(-1,-1));
-        View g = focusable(f, bg, 8, ()->openPicker(i));
+        View g = focusable(f, bg, TILE_R, ()->openPicker(i));
         g.setOnKeyListener((v,k,e)->{ if (dragIdx>=0 && e.getAction()==KeyEvent.ACTION_DOWN) return true; return false; });
         return g;
     }
@@ -768,7 +782,7 @@ public class MainActivity extends Activity {
 
     View card(Drawable art, String artUri, boolean fitArt, String badgePkg, String caption, float progress, final Runnable click){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
-        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(Color.argb(96,190,185,220)); bg.setStroke(Math.max(1,p(.6f)), Color.argb(60,255,255,255)); f.setBackground(bg);
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(Color.argb(96,190,185,220)); bg.setStroke(Math.max(1,p(.6f)), Color.argb(60,255,255,255)); f.setBackground(bg);
         f.setOutlineProvider(ViewOutlineProvider.BACKGROUND); f.setElevation(p(11)); if (Build.VERSION.SDK_INT>=28){ f.setOutlineSpotShadowColor(Color.BLACK); f.setOutlineAmbientShadowColor(Color.BLACK); }
         ImageView iv = new ImageView(this); iv.setScaleType(ImageView.ScaleType.CENTER_CROP); if (art!=null) iv.setImageDrawable(art); if (fitArt){ iv.setScaleType(ImageView.ScaleType.FIT_CENTER); iv.setPadding(p(30),p(18),p(30),p(30)); } loadInto(iv, artUri, fitArt);
         f.addView(iv, new FrameLayout.LayoutParams(-1,-1));
@@ -790,7 +804,7 @@ public class MainActivity extends Activity {
             bar.addView(fill, new FrameLayout.LayoutParams(Math.round(p(159)*progress), -1));
             f.addView(bar, lp(p(159), p(2.5f), Gravity.BOTTOM, p(9), 0, 0, p(8)));
         }
-        View g = focusable(f, bg, 8, click);
+        View g = focusable(f, bg, TILE_R, click);
         if (badgePkg!=null) tintCard(g, badgePkg);
         return g;
     }
@@ -909,13 +923,40 @@ public class MainActivity extends Activity {
         List<Object[]> mix = new ArrayList<>(); for (Object[] o: heroItems) if (o.length>5 && "FEATURED".equals(o[5])) mix.add(o);
         int nf = mix.size(); Collections.shuffle(nl); for (int i=0;i<Math.min(8,nl.size());i++) mix.add(nl.get(i));
         android.util.Log.i("ShieldHome","hero mix featured="+nf+" new="+(mix.size()-nf));
-        if (mix.size()==nf) return;
-        Collections.shuffle(mix);
-        synchronized(heroLock){ h.removeCallbacks(heroRotate); heroItems.clear(); heroItems.addAll(mix); heroIdx=0; }
-        showHero(); h.postDelayed(heroRotate, 16000);
+        if (mix.size()!=nf){
+            Collections.shuffle(mix);
+            synchronized(heroLock){ h.removeCallbacks(heroRotate); heroItems.clear(); heroItems.addAll(mix); heroIdx=0; }
+            showHero(); h.postDelayed(heroRotate, 16000);
+        }
+        final int g=dataGen;
+        pool.execute(()->{ List<Object[]> p=tv.collectWatchNext(); h.post(()->{ if (g==dataGen){ wnPickCache=p; refreshCards(); } }); });
     }
 
-    PillView gear, qsDim; LinearLayout qsPanel; boolean qsOpen=false; View heroG, heroFocus, inAppDim;
+    String profileInitial(){
+        try {
+            android.accounts.Account[] ac=android.accounts.AccountManager.get(this).getAccountsByType("com.google");
+            if (ac!=null && ac.length>0 && ac[0].name!=null && ac[0].name.length()>0)
+                return ac[0].name.substring(0,1).toUpperCase(Locale.US);
+        } catch (Exception e) {}
+        return "";
+    }
+    void openAccounts(){
+        List<Intent> tries=new ArrayList<>();
+        tries.add(new Intent(android.provider.Settings.ACTION_SYNC_SETTINGS));
+        try {
+            PackageInfo pi=pm.getPackageInfo("com.android.tv.settings", PackageManager.GET_ACTIVITIES);
+            if (pi.activities!=null) for (ActivityInfo ai: pi.activities)
+                if (ai.name!=null && ai.name.toLowerCase(Locale.US).contains("account"))
+                    tries.add(new Intent().setClassName(ai.packageName, ai.name));
+        } catch (Exception e) {}
+        tries.add(new Intent(android.provider.Settings.ACTION_ADD_ACCOUNT).putExtra(android.provider.Settings.EXTRA_ACCOUNT_TYPES, new String[]{"com.google"}));
+        tries.add(new Intent(android.provider.Settings.ACTION_SETTINGS));
+        for (Intent i: tries){
+            try { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (i.resolveActivity(pm)!=null){ startActivity(i); return; } } catch (Exception e) {}
+        }
+    }
+
+    PillView profile, gear, qsDim; LinearLayout qsPanel; boolean qsOpen=false; View heroG, heroFocus, inAppDim;
     static final int[] DIMS = {0,25,50,70,90};
     TextView wxTemp, wxDesc; View wxSep;
     int dimIdx(){ return Math.max(0, Math.min(DIMS.length-1, prefs().getInt("dim", 0))); }
