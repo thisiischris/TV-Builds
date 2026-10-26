@@ -105,7 +105,16 @@ public class MainActivity extends Activity {
         if (focus!=null && focus.dispatch(e)) return true;
         return super.dispatchKeyEvent(e);
     }
-    @Override public void onBackPressed(){ if (!focus.closeOverlay()) focusHomeApp(); }
+    @Override public void onBackPressed(){ back(); }
+    void back(){
+        if (focus!=null && focus.closeOverlay()) return;
+        View f=getCurrentFocus();
+        if (f!=null && cardRow!=null && f.getParent()==cardRow){
+            int i=cardRow.indexOfChild(f);
+            if (i>0 || (cardScroll!=null && cardScroll.getScrollX()>0)){ resetCardRow(); android.util.Log.i("ShieldHome","back -> card0"); return; }
+        }
+        focusHomeApp();
+    }
     void focusHomeApp(){
         if (homeGrid==null) return;
         if (focus!=null) focus.lastIdx[4]=0;
@@ -805,7 +814,7 @@ public class MainActivity extends Activity {
         if (x!=cardScroll.getScrollX()) cardScroll.smoothScrollTo(x,0); else updateCardAlphas();
     }
     void resetCardRow(){
-        if (focus!=null) focus.lastIdx[3]=0;
+        if (focus!=null){ focus.lastIdx[3]=0; focus.lastCardX=0; }
         if (cardScroll!=null) cardScroll.scrollTo(0,0);
         if (cardRow!=null && cardRow.getChildCount()>0 && cardRow.indexOfChild(getCurrentFocus())>=0) cardRow.getChildAt(0).requestFocus();
         updateCardAlphas();

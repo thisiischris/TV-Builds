@@ -10,6 +10,7 @@ import java.util.List;
 class FocusController {
     final MainActivity a;
     final int[] lastIdx = new int[16];
+    int lastCardX;
     int savedSec = -1, savedIdx = 0;
     boolean backLong, pendingRestore;
 
@@ -88,6 +89,7 @@ class FocusController {
             int ix = it.indexOf(secRoot(f, sec));
             int ni = ix + (k == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
             t = (ix >= 0 && ni >= 0 && ni < it.size()) ? it.get(ni) : f;
+            if (t != f && ni >= 0) lastIdx[sec] = ni;
         }
         if (t != null && t != f) {
             t.requestFocus();
@@ -123,7 +125,7 @@ class FocusController {
     boolean keyUp(int k, KeyEvent e) {
         if (k != KeyEvent.KEYCODE_BACK) return false;
         if (e.isTracking()) {
-            if (!backLong && !e.isCanceled() && !closeOverlay()) a.focusHomeApp();
+            if (!backLong && !e.isCanceled() && !closeOverlay()) a.back();
             backLong = false;
             return true;
         }
@@ -202,14 +204,17 @@ class FocusController {
         List<View> cur = secItems(sec);
         int ix = Math.max(0, cur.indexOf(fr));
         lastIdx[sec] = ix;
+        if (sec == 3 && a.cardScroll != null) lastCardX = a.cardScroll.getScrollX();
         boolean multi = sec >= 3;
         for (int s2 = sec + (up ? -1 : 1); s2 >= 0 && s2 < nSecs(); s2 += up ? -1 : 1) {
             List<View> it = secItems(s2);
             if (it.isEmpty()) continue;
             if (s2 == 0) return (sec == 1 && !a.qsOpen) ? a.gear : topTarget();
             if (s2 == 2) return tabV();
-            int ti = multi ? ix : lastIdx[s2];
-            return it.get(Math.max(0, Math.min(ti, it.size() - 1)));
+            int ti = s2 == 3 ? lastIdx[3] : (multi ? ix : lastIdx[s2]);
+            View dest = it.get(Math.max(0, Math.min(ti, it.size() - 1)));
+            if (s2 == 3 && a.cardScroll != null) a.cardScroll.scrollTo(lastCardX, 0);
+            return dest;
         }
         return f;
     }
