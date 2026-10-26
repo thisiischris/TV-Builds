@@ -17,7 +17,7 @@ import java.util.*;
 
 public class MainActivity extends Activity {
     // All geometry is in mockup pixels (1024x576 reference), scaled to the real screen.
-    float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; TextView clock, date;
+    float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; FrameLayout cardWrap; TextView clock, date;
     PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255);
     static final int TILE_R = 11;
@@ -61,11 +61,9 @@ public class MainActivity extends Activity {
         final boolean removed = Intent.ACTION_PACKAGE_REMOVED.equals(i.getAction()) && !repl && pkg!=null;
         if (removed){
             Runnable home = ()->{ appsCache=null; kickData(true); };
-            if (drawer.getVisibility()==View.VISIBLE) fadeRemove(drawerGrid, pkg, null);
             if (!editMode && dragIdx<0) fadeRemove(homeGrid, pkg, home); else home.run();
             return; }
-        h.postDelayed(()->{ appsCache=null; kickData(true);
-            if (drawer.getVisibility()==View.VISIBLE) syncDrawer(); }, 150); } };
+        h.postDelayed(()->{ appsCache=null; kickData(true); }, 150); } };
     @Override protected void onDestroy(){
         dataGen++; heroLoadGen++;
         try { unregisterReceiver(pkgRx); } catch (Exception e){}
@@ -80,12 +78,7 @@ public class MainActivity extends Activity {
         bindFromCache();
         kickData(true);
         tick(); showWeather(); weatherTick(); applyDim();
-        if (drawer!=null && drawer.getVisibility()==View.VISIBLE) syncDrawer();
     }
-    void syncDrawer(){ String cur=currentDrawerSig(); if (cur.equals(drawerSig)) return;
-        List<String> o=new ArrayList<>(Arrays.asList(drawerSig.split(","))), n=Arrays.asList(cur.split(","));
-        if (!o.isEmpty() && n.size()>0 && o.get(0).equals(n.get(0).substring(0,0)+o.get(0)) && o.containsAll(n)){ for (String k: o) if (!n.contains(k)){ String kk=k.contains("|")?k.substring(k.indexOf('|')+1):k; int sl=kk.indexOf('/'); if (sl>0) fadeRemove(drawerGrid, kk.substring(0,sl), null); } }
-        else fillDrawer(); android.util.Log.i("ShieldHome","drawer sync"); }
     @Override protected void onPause(){ super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(heroRotate); h.removeCallbacks(wxRun); }
     boolean heroShown(){ return heroG!=null && heroG.getVisibility()==View.VISIBLE; }
     View tabV(){ return focus!=null?focus.tabV():(tab==0?tabPlay:tabLive); }
@@ -117,6 +110,7 @@ public class MainActivity extends Activity {
     }
     void focusHomeApp(){
         if (homeGrid==null) return;
+        if (drawerOpen) setDrawer(false);
         if (focus!=null) focus.lastIdx[4]=0;
         for (int i=0;i<homeGrid.getChildCount();i++){
             View c=homeGrid.getChildAt(i);
@@ -218,7 +212,7 @@ public class MainActivity extends Activity {
         tabPlay.setOnFocusChangeListener(tl); tabLive.setOnFocusChangeListener(tl);
 
         // Cards row: 5-tile viewport; clip off so scale+glow can draw; 6th hidden by alpha
-        FrameLayout cardWrap = new FrameLayout(this);
+        cardWrap = new FrameLayout(this);
         cardWrap.setClipChildren(false); cardWrap.setClipToPadding(false);
         cardScroll = new HorizontalScrollView(this){
             @Override protected int computeScrollDeltaToGetChildRectOnScreen(Rect r){ return 0; }
@@ -233,21 +227,9 @@ public class MainActivity extends Activity {
         place(cardWrap, 30, 330, 958, 156);
         cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardAlphas);
 
-        // Home apps: 11 most-used + Settings, 2 rows, nothing below
         homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false);
         place(homeGrid, 50, 474, 930, 90);
         buildHomeGrid();
-
-        // App drawer overlay
-        drawer = new FrameLayout(this); drawer.setVisibility(View.GONE);
-        drawer.setBackgroundResource(R.drawable.bg);
-        TextView dt = drawerTitle = text("All Apps", 22, Color.WHITE, "sans-serif-medium");
-        drawer.addView(dt, lp(-2,-2,Gravity.TOP|Gravity.START,p(52),p(30),0,0));
-        ScrollView dsv = new ScrollView(this); dsv.setVerticalScrollBarEnabled(false); dsv.setClipToPadding(false); dsv.setPadding(p(44),p(16),p(38),p(40)); dsv.setClipChildren(false); drawer.setClipChildren(false);
-        drawerGrid = new GridLayout(this); drawerGrid.setColumnCount(6); drawerGrid.setClipChildren(false);
-        LinearLayout dcol = new LinearLayout(this); dcol.setOrientation(LinearLayout.VERTICAL); dcol.setClipChildren(false); dcol.addView(drawerGrid);
-        dsv.addView(dcol); drawerScroll = dsv; drawer.addView(dsv, lp(-1,-1,Gravity.TOP,0,p(66),0,0));
-        root.addView(drawer, new FrameLayout.LayoutParams(-1,-1));
 
         setContentView(root);
         tabPlay.setNextFocusDownId(View.NO_ID); tabLive.setNextFocusDownId(View.NO_ID);
@@ -429,82 +411,66 @@ public class MainActivity extends Activity {
     Map<String,Long> usage = new HashMap<>();
     long use(String p){ Long v = p==null?null:usage.get(p); long base = v==null?0:v; if ("com.google.android.youtube.tv".equals(p)) base = base*3+1; return base; }
 
-    GridLayout homeGrid, drawerGrid; FrameLayout drawer;
+    GridLayout homeGrid; boolean drawerOpen, editMode; int dragIdx=-1;
+    LinearLayout appMenu; List<View> editBlocked = new ArrayList<>(); View dimV;
     android.content.SharedPreferences prefs(){ return getSharedPreferences("home", MODE_PRIVATE); }
     List<String[]> homeApps(){
-        List<String[]> all = apps(); List<String[]> rest=new ArrayList<>();
-        for (String[] a: all) if (!a[0].equals("com.android.tv.settings")) rest.add(a);
+        List<String[]> all = new ArrayList<>(apps());
         String saved = prefs().getString("order", null);
-        if (saved != null){
-            List<String[]> out = new ArrayList<>();
-            for (String key : saved.split(",")){ if (key.equals("_")){ out.add(null); continue; } for (String[] a: rest) if ((a[0]+"/"+a[1]).equals(key)) out.add(a); }
-            while (!out.isEmpty() && out.get(out.size()-1)==null && !editMode) out.remove(out.size()-1);
-            return out;
+        if (saved == null){
+            final List<String> pref = Arrays.asList(PLAY_PKGS);
+            Collections.sort(all,(a,b)->{
+                if (a[0].equals("com.android.tv.settings")) return 1;
+                if (b[0].equals("com.android.tv.settings")) return -1;
+                long ua=use(a[0]), ub=use(b[0]); if (ua<300000L) ua=0; if (ub<300000L) ub=0;
+                int c=Long.compare(ub,ua); if (c!=0) return c;
+                int ia=pref.indexOf(a[0]), ib=pref.indexOf(b[0]); if(ia<0)ia=99; if(ib<0)ib=99;
+                return ia!=ib?ia-ib:a[2].compareToIgnoreCase(b[2]);
+            });
+            return all;
         }
-        final List<String> pref = Arrays.asList(PLAY_PKGS);
-        Collections.sort(rest,(a,b)->{ long ua=use(a[0]), ub=use(b[0]); if (ua<300000L) ua=0; if (ub<300000L) ub=0; int c=Long.compare(ub,ua); if (c!=0) return c; int ia=pref.indexOf(a[0]), ib=pref.indexOf(b[0]); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib; });
-        return new ArrayList<>(rest.subList(0, Math.min(11, rest.size())));
-    }
-    void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (sb.length()>0) sb.append(','); if (a==null) sb.append('_'); else sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).apply(); }
-    // Visible row is 5 + Edit; tail of the saved order is kept on write.
-    void saveVisible(){
-        List<String[]> out=new ArrayList<>(slots);
-        Set<String> seen=new HashSet<>();
-        for (String[] a: slots) if (a!=null) seen.add(a[0]+"/"+a[1]);
-        if (fullOrder!=null) for (int i=5;i<fullOrder.size();i++){
-            String[] a=fullOrder.get(i);
-            if (a==null){ out.add(null); continue; }
-            String k=a[0]+"/"+a[1]; if (seen.add(k)) out.add(a);
+        List<String[]> out=new ArrayList<>(); Set<String> seen=new HashSet<>();
+        for (String key: saved.split(",")){
+            if (key.isEmpty() || key.equals("_")) continue;
+            for (String[] a: all) if ((a[0]+"/"+a[1]).equals(key) && seen.add(key)) out.add(a);
         }
-        fullOrder=out; saveHome(out);
+        for (String[] a: all) if (seen.add(a[0]+"/"+a[1])) out.add(a);
+        return out;
     }
+    void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).apply(); }
     GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(141); gl.height=p(78); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
-    // ---------- Home rows: in-place edit mode + long-press drag ----------
-    List<String[]> slots = new ArrayList<>(); boolean editMode=false; int dragIdx=-1, pickSlot=-1;
-    TextView drawerTitle; ScrollView drawerScroll; boolean pickerMode=false;
-    List<View> editBlocked = new ArrayList<>(); View dimV;
-    View editTile(){
-        FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
-        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(editMode?Color.rgb(229,227,228):TILE); bg.setStroke(Math.max(1,p(.6f)), Color.argb(55,255,255,255)); f.setBackground(bg);
-        TextView t = text(editMode?"\u2713  Done":"\u270E  Edit", 13, editMode?Color.rgb(22,22,30):Color.rgb(235,234,242), "sans-serif-medium"); t.setGravity(Gravity.CENTER);
-        f.addView(t, new FrameLayout.LayoutParams(-1,-1));
-        return focusable(f, bg, TILE_R, ()->{ if (editMode) exitEdit(); else enterEdit(); });
+    int rowH(){ return p(90); }
+    View[] slideViews(){ return new View[]{heroG, tabPlay, tabLive, cardWrap, homeGrid}; }
+    void setDrawer(boolean on){ drawerOpen=on; slideHome(); }
+    void slideHome(){
+        int r=0; View f=getCurrentFocus();
+        if (f!=null && homeGrid!=null && f.getParent()==homeGrid) r=Math.max(0, homeGrid.indexOfChild(f)/6);
+        float y = drawerOpen ? -(p(396)+Math.max(0, r-4)*rowH()) : 0;
+        android.view.animation.Interpolator ip=new android.view.animation.DecelerateInterpolator();
+        for (View v: slideViews()) if (v!=null) v.animate().translationY(y).setDuration(250).setInterpolator(ip).start();
     }
     void buildHomeGrid(){ buildHomeGrid(-1); }
     void buildHomeGrid(int focusIdx){
         if (homeGrid==null) return;
-        List<String[]> all = homeApps(); while (all.size()>11) all.remove(all.size()-1);
+        List<String[]> all = homeApps();
         fullOrder = all;
-        int nv = Math.min(5, all.size());
-        slots = new ArrayList<>(all.subList(0, nv));
-        String sig=(editMode?"E":"N")+"|"+dragIdx+"|";
-        for (String[] a: slots) sig += a==null?"_,":a[0]+"/"+a[1]+",";
-        if (focusIdx<0 && sig.equals(homeBindSig) && homeGrid.getChildCount()>0) return;
+        String sig=(editMode?"E":"N")+"|"+dragIdx+"|"+(drawerOpen?"D":"H")+"|";
+        for (String[] a: all) sig += a[0]+"/"+a[1]+",";
+        if (focusIdx<0 && sig.equals(homeBindSig) && homeGrid.getChildCount()==all.size()) return;
         homeBindSig=sig;
         homeGrid.removeAllViews();
-        for (int i=0;i<nv;i++){
-            String[] a = slots.get(i); View t;
-            if (a==null){ if (editMode) t = placeholderTile(i); else { t = new View(this); t.setFocusable(false); } }
-            else t = homeTile(a, i);
-            homeGrid.addView(t, gridLp(i));
+        for (int i=0;i<all.size();i++) homeGrid.addView(homeTile(all.get(i), i), gridLp(i));
+        ViewGroup.LayoutParams lp=homeGrid.getLayoutParams();
+        if (lp!=null){ lp.height=rowH()*Math.max(1,(all.size()+5)/6); homeGrid.setLayoutParams(lp); }
+        if (focusIdx>=0 && homeGrid.getChildCount()>0){
+            final int f=Math.min(focusIdx, homeGrid.getChildCount()-1);
+            homeGrid.getChildAt(f).requestFocus();
+            h.post(()->{ if (f<homeGrid.getChildCount()) homeGrid.getChildAt(f).requestFocus(); });
         }
-        int ei = nv; View et = editTile();
-        if (!editMode) downOpensDrawer(et, ei);
-        homeGrid.addView(et, gridLp(ei));
-        if (focusIdx>=0){ final int f = Math.min(focusIdx, homeGrid.getChildCount()-1); homeGrid.getChildAt(f).requestFocus(); h.post(()->homeGrid.getChildAt(f).requestFocus()); }
-    }
-    View badge(boolean plus){
-        TextView b = text(plus?"+":"\u2212", 15, Color.WHITE, "sans-serif-medium"); b.setGravity(Gravity.CENTER); b.setIncludeFontPadding(false);
-        GradientDrawable d = new GradientDrawable(); d.setShape(GradientDrawable.OVAL); d.setColor(Color.rgb(222,58,58)); d.setStroke(Math.max(1,p(1.2f)), Color.WHITE); b.setBackground(d);
-        b.setElevation(p(10)); return b;
     }
     View homeTile(final String[] a, final int i){
         final GlowFrame g = (GlowFrame)appTile(a[0], a[1], a[2]);
-        if (editMode){
-            g.badgeV = badge(false); g.badgeV.setAlpha(badgeStart); g.addView(g.badgeV, lp(p(19), p(19), Gravity.TOP|Gravity.START, -p(7), -p(7), 0, 0));
-            g.setOnClickListener(v->{ if (dragIdx>=0) return; slots.set(i, null); saveVisible(); buildHomeGrid(i); });
-        }
-        g.setOnLongClickListener(v->{ if (!editMode) startDrag(i); return true; });
+        g.setOnLongClickListener(v->{ if (!editMode) appMenu(g, a, i); return true; });
         final View.OnFocusChangeListener base = g.getOnFocusChangeListener();
         if (dragIdx==i){
             g.glow=1f; g.setTranslationZ(p(18));
@@ -519,120 +485,81 @@ public class MainActivity extends Activity {
                 if (k==KeyEvent.KEYCODE_BACK){ drop(i); return true; }
                 int to = k==KeyEvent.KEYCODE_DPAD_LEFT? i-1 : k==KeyEvent.KEYCODE_DPAD_RIGHT? i+1 : k==KeyEvent.KEYCODE_DPAD_UP? i-6 : k==KeyEvent.KEYCODE_DPAD_DOWN? i+6 : -99;
                 if (to==-99) return false;
-                if (to>=0 && to<Math.min(5,slots.size())){ Collections.swap(slots, i, to); dragIdx=to; saveVisible(); buildHomeGrid(to); }
+                if (to>=0 && to<fullOrder.size()){
+                    Collections.swap(fullOrder, i, to); dragIdx=to; saveHome(fullOrder);
+                    if (to>=6) setDrawer(true); else if (k==KeyEvent.KEYCODE_DPAD_UP && i<6) setDrawer(false);
+                    buildHomeGrid(to);
+                } else if (k==KeyEvent.KEYCODE_DPAD_UP && i<6 && drawerOpen) setDrawer(false);
                 return true;
             }
-            if (dragIdx<0 && ok && e.getAction()==KeyEvent.ACTION_DOWN && (e.isLongPress() || e.getRepeatCount()>=3)){ startDrag(i); return true; }
-            if (!editMode && k==KeyEvent.KEYCODE_DPAD_DOWN && e.getAction()==KeyEvent.ACTION_DOWN){ openDrawer(); return true; }
+            if (editMode) return false;
+            if (ok && e.getAction()==KeyEvent.ACTION_DOWN && (e.isLongPress() || e.getRepeatCount()>=3)){ appMenu(g, a, i); return true; }
             return false;
         });
         return g;
     }
-    void startDrag(int i){ if (dragIdx>=0 || i>=slots.size() || slots.get(i)==null) return; dragIdx=i; buildHomeGrid(i); }
-    void drop(int i){ dragIdx=-1; saveVisible(); buildHomeGrid(i); }
-    View placeholderTile(final int i){
-        FrameLayout f = new FrameLayout(this);
-        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(Color.argb(14,255,255,255)); bg.setStroke(Math.max(1,p(1.2f)), Color.argb(90,255,255,255), p(6), p(4)); f.setBackground(bg);
-        TextView plus = text("+", 30, Color.argb(120,255,255,255), "sans-serif-light"); plus.setGravity(Gravity.CENTER);
-        f.addView(plus, new FrameLayout.LayoutParams(-1,-1));
-        View g = focusable(f, bg, TILE_R, ()->openPicker(i));
-        g.setOnKeyListener((v,k,e)->{ if (dragIdx>=0 && e.getAction()==KeyEvent.ACTION_DOWN) return true; return false; });
-        return g;
+    void enterEdit(int i){ if (editMode) return; editMode=true; setEditDim(true); startDrag(i); }
+    void startDrag(int i){ if (i<0 || i>=fullOrder.size()) return; dragIdx=i; if (i>=6) setDrawer(true); buildHomeGrid(i); }
+    void drop(int i){
+        dragIdx=-1; editMode=false; saveHome(fullOrder); setEditDim(false); buildHomeGrid(i);
     }
+    void exitEdit(){ drop(Math.max(0, dragIdx)); }
     void setEditDim(boolean on){
         if (dimV==null){ dimV = new View(this); dimV.setBackgroundColor(Color.argb(150,4,4,10)); dimV.setAlpha(0f); dimV.setVisibility(View.GONE); root.addView(dimV, root.indexOfChild(homeGrid), new FrameLayout.LayoutParams(-1,-1)); }
         dimV.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        if (on){ dimV.setVisibility(View.VISIBLE); dimV.animate().alpha(1f).setDuration(280).setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).withEndAction(null).start(); }
+        if (on){ dimV.setVisibility(View.VISIBLE); dimV.animate().alpha(1f).setDuration(280).setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).start(); }
         else dimV.animate().alpha(0f).setDuration(280).setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator()).withEndAction(()->dimV.setVisibility(View.GONE)).start();
         if (on){ editBlocked.clear();
-            for (int i=0;i<root.getChildCount();i++){ View c=root.getChildAt(i); if (c==drawer||c==homeGrid||c==dimV) continue;
+            for (int i=0;i<root.getChildCount();i++){ View c=root.getChildAt(i); if (c==homeGrid||c==dimV) continue;
                 if (c instanceof ViewGroup){ ((ViewGroup)c).setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS); editBlocked.add(c); }
                 if (c.isFocusable()){ c.setFocusable(false); if (!editBlocked.contains(c)) editBlocked.add(c); } } }
         else {
             for (View c: editBlocked){ if (c instanceof ViewGroup) ((ViewGroup)c).setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS); if (!(c instanceof ViewGroup) || c instanceof PillView || c instanceof GlowFrame || c==heroG) c.setFocusable(true); } editBlocked.clear(); }
     }
-    boolean editAnim=false; android.animation.ValueAnimator badgeAnim;
-    void fadeBadges(float from, float to, Runnable end){
-        if (badgeAnim!=null) badgeAnim.cancel();
-        badgeAnim = android.animation.ValueAnimator.ofFloat(from,to); badgeAnim.setDuration(280); badgeAnim.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
-        badgeAnim.addUpdateListener(a->{ float v=(Float)a.getAnimatedValue(); for (int i=0;i<homeGrid.getChildCount();i++){ View c=homeGrid.getChildAt(i); if (c instanceof GlowFrame && ((GlowFrame)c).badgeV!=null){ ((GlowFrame)c).badgeV.setAlpha(v); c.invalidate(); } } });
-        if (end!=null) badgeAnim.addListener(new android.animation.AnimatorListenerAdapter(){ boolean cx=false; public void onAnimationCancel(android.animation.Animator a){cx=true;} public void onAnimationEnd(android.animation.Animator a){ if(!cx) end.run(); } });
-        badgeAnim.start();
-    }
-    void enterEdit(){ if (editAnim) return; editMode=true; dragIdx=-1; setEditDim(true); badgeStart=0f; buildHomeGrid(99); badgeStart=1f; fadeBadges(0f,1f,null); }
-    void exitEdit(){ if (editAnim) return; editAnim=true; dragIdx=-1; saveVisible(); setEditDim(false);
-        fadeBadges(1f,0f,()->{ editMode=false; editAnim=false; buildHomeGrid(99); }); }
-    float badgeStart=1f;
-    View downOpensDrawer(View t, int i){
-        t.setOnKeyListener((v,k,e)->{ if (k==KeyEvent.KEYCODE_DPAD_DOWN && e.getAction()==KeyEvent.ACTION_DOWN){ openDrawer(); return true;} return false; });
-        return t;
-    }
-    GridLayout.LayoutParams dlp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(141); gl.height=p(78); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
-    void openPicker(int slot){ pickSlot=slot; pickerMode=true; fillDrawer(); }
-    void openDrawer(){ pickerMode=false; setHomeFocus(false); fillDrawer(); }
-    String drawerSig="";
-    String sig(List<String[]> l){ StringBuilder b=new StringBuilder(pickerMode?"P|":"A|"); for (String[] a: l) b.append(a[0]).append('/').append(a[1]).append(','); return b.toString(); }
-    String currentDrawerSig(){ List<String> on=new ArrayList<>(); for (String[] a: slots) if (a!=null) on.add(a[0]+"/"+a[1]); List<String[]> l=new ArrayList<>(); for (String[] a: apps()){ if (pickerMode){ if (!a[0].equals("com.android.tv.settings") && !on.contains(a[0]+"/"+a[1])) l.add(a);} else l.add(a);} return sig(l); }
-    // v15: fade one tile out, remove only it, slide the rest into place
     void fadeRemove(final GridLayout g, final String pkg, final Runnable after){
         View tv=null; for (int i=0;i<g.getChildCount();i++) if (pkg.equals(g.getChildAt(i).getTag())) { tv=g.getChildAt(i); break; }
         if (tv==null || !tv.isFocusable()){ if (after!=null) after.run(); return; }
-        final View t=tv; final boolean hadFocus = t.hasFocus(); final int idx=g.indexOfChild(t);
+        final View t=tv;
         t.setFocusable(false);
-        if (hadFocus){ int n=g.getChildCount(); View nb = idx+1<n ? g.getChildAt(idx+1) : idx-1>=0 ? g.getChildAt(idx-1) : null; if (nb!=null) nb.requestFocus(); }
-        t.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(250).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{
-            if (g!=drawerGrid){ if (after!=null) after.run(); return; }
-            final Map<View,int[]> old=new HashMap<>(); for (int i=0;i<g.getChildCount();i++){ View c=g.getChildAt(i); old.put(c,new int[]{c.getLeft(),c.getTop()}); }
-            g.removeView(t);
-            for (int i=0;i<g.getChildCount();i++) g.getChildAt(i).setLayoutParams(dlp(i));
-            g.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){ public boolean onPreDraw(){ g.getViewTreeObserver().removeOnPreDrawListener(this);
-                for (int i=0;i<g.getChildCount();i++){ View c=g.getChildAt(i); int[] o=old.get(c); if (o==null) continue; float dx=o[0]-c.getLeft(), dy=o[1]-c.getTop(); if (dx==0&&dy==0) continue;
-                    c.setTranslationX(dx); c.setTranslationY(dy); c.animate().translationX(0).translationY(0).setDuration(260).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); }
-                drawerSig = currentDrawerSig(); return true; } });
-            if (after!=null) after.run();
-        }).start();
+        t.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(250).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{ if (after!=null) after.run(); }).start();
     }
-    void fillDrawer(){
-        drawer.setTranslationZ(p(20));
-        if (pickerMode) homeGrid.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
-        drawerGrid.removeAllViews();
-        drawerTitle.setText(pickerMode ? "Add to Home" : "All Apps");
-        List<String> on = new ArrayList<>(); for (String[] a: slots) if (a!=null) on.add(a[0]+"/"+a[1]);
-        List<String[]> all = apps(), list = new ArrayList<>();
-        for (String[] a: all){
-            if (pickerMode){ if (!a[0].equals("com.android.tv.settings") && !on.contains(a[0]+"/"+a[1])) list.add(a); }
-            else list.add(a);
+    boolean systemApp(String pkg){
+        try { int f=pm.getApplicationInfo(pkg,0).flags; return (f&(ApplicationInfo.FLAG_SYSTEM|ApplicationInfo.FLAG_UPDATED_SYSTEM_APP))!=0; }
+        catch (Exception e){ return true; }
+    }
+    void appMenu(View anchor, String[] a, int idx){
+        if (editMode) return;
+        closeMenu();
+        LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,20,20,28)); bg.setCornerRadius(p(10)); bg.setStroke(1, Color.argb(40,255,255,255));
+        p.setBackground(bg); p.setPadding(p(4),p(6),p(4),p(6)); p.setElevation(p(16));
+        String[] labs={"Edit Home Screen","Force Stop","Uninstall","App Info"};
+        boolean sys=systemApp(a[0]);
+        for (int n=0;n<labs.length;n++){
+            final int id=n;
+            boolean off=id==2 && sys;
+            TextView t=text(labs[n], 12, off?Color.argb(80,255,255,255):Color.WHITE, "sans-serif");
+            t.setPadding(p(14),p(8),p(14),p(8)); t.setFocusable(!off); t.setClickable(!off);
+            t.setOnFocusChangeListener((v,f)-> t.setBackgroundColor(f?Color.argb(40,255,255,255):0));
+            if (!off) t.setOnClickListener(v->menuAct(id, a, idx));
+            t.setOnKeyListener((v,k,e)->{ if (k==KeyEvent.KEYCODE_BACK && e.getAction()==KeyEvent.ACTION_DOWN){ closeMenu(); return true; } return false; });
+            p.addView(t, new LinearLayout.LayoutParams(p(168), -2));
         }
-        for (int i=0;i<list.size();i++){
-            final String[] a = list.get(i);
-            View t = appTile(a[0], a[1], a[2]);
-            if (pickerMode) t.setOnClickListener(v->{ if (pickSlot>=0 && pickSlot<slots.size()) slots.set(pickSlot, a); else { int e=slots.indexOf(null); if (e>=0 && e<5) slots.set(e,a); else if (slots.size()<5) slots.add(a); } saveVisible(); closeDrawer(); });
-            if (!pickerMode) t.setOnLongClickListener(v->{ appInfo(a[0]); return true; });
-            final boolean[] lp={false};
-            t.setOnKeyListener((v,k,e)->{
-                if (drawerGrid.indexOfChild(v)>=0 && drawerGrid.indexOfChild(v)<6 && k==KeyEvent.KEYCODE_DPAD_UP && e.getAction()==KeyEvent.ACTION_DOWN){ closeDrawer(); return true;}
-                if (!pickerMode && (k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER)){
-                    if (e.getAction()==KeyEvent.ACTION_DOWN && (e.getRepeatCount()>0 || (e.getFlags()&KeyEvent.FLAG_LONG_PRESS)!=0)){ if (!lp[0]){ lp[0]=true; appInfo(a[0]);} return true; }
-                    if (e.getAction()==KeyEvent.ACTION_UP && lp[0]){ lp[0]=false; return true; } }
-                return false; });
-            drawerGrid.addView(t, dlp(i));
-        }
-        drawerSig = sig(list);
-        android.util.Log.i("ShieldHome","drawer picker="+pickerMode+" apps="+list.size());
-        drawerScroll.scrollTo(0,0);
-        drawer.setVisibility(View.VISIBLE); drawer.setTranslationY(root.getHeight()); drawer.setAlpha(0.6f);
-        drawer.animate().translationY(0).alpha(1f).setDuration(260).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
-        h.postDelayed(()->{ if (drawerGrid.getChildCount()>0) drawerGrid.getChildAt(0).requestFocus(); }, 60);
+        int[] loc=new int[2]; anchor.getLocationInWindow(loc);
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-2,-2);
+        lp.leftMargin=Math.max(p(8), Math.min(loc[0]+anchor.getWidth()-p(8), p(1024)-p(190)));
+        lp.topMargin=Math.max(p(8), loc[1]);
+        appMenu=p; root.addView(p, lp);
+        h.post(()->{ if (p.getChildCount()>0) p.getChildAt(0).requestFocus(); });
     }
-    void appInfo(String pkg){ android.util.Log.i("ShieldHome","appinfo "+pkg); try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch(Exception e){ android.util.Log.w("ShieldHome","appinfo "+e); } }
-    void closeDrawer(){
-        final boolean picker = pickerMode;
-        drawer.animate().translationY(root.getHeight()).setDuration(260).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{
-            drawer.setVisibility(View.GONE); pickerMode=false;
-            if (picker){ homeGrid.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS); buildHomeGrid(Math.max(0,pickSlot)); }
-            else { setHomeFocus(true); if (homeGrid.getChildCount()>0) homeGrid.getChildAt(0).requestFocus(); }
-        }).start();
+    void menuAct(int id, String[] a, int idx){
+        closeMenu();
+        if (id==0){ enterEdit(idx); return; }
+        if (id==1 || id==3){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+a[0])).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} return; }
+        if (id==2 && !systemApp(a[0])){ try { startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:"+a[0])).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
     }
+    void closeMenu(){ if (appMenu!=null){ root.removeView(appMenu); appMenu=null; } }
+    void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
     // ---------- Featured hero ----------
     ImageView heroArt, heroBadge; TextView heroTitle, heroSub; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
     final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, 16000); return; } } showHero(); h.postDelayed(this, 16000); } };
@@ -734,15 +661,6 @@ public class MainActivity extends Activity {
         oc.drawBitmap(w,pad,pad,null);
         glyphs.put(pkg,out); return out; }
 
-    List<View> blocked = new ArrayList<>();
-    void setHomeFocus(boolean on){
-        if (!on){ blocked.clear();
-            for (int i=0;i<root.getChildCount();i++){ View c=root.getChildAt(i); if (c==drawer) continue;
-                if (c instanceof ViewGroup){ ((ViewGroup)c).setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS); blocked.add(c); }
-                if (c.isFocusable()){ c.setFocusable(false); blocked.add(c); } } }
-        else { for (View c: blocked){ if (c instanceof ViewGroup) ((ViewGroup)c).setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS); if (!(c instanceof ViewGroup) || c instanceof PillView || c instanceof GlowFrame || c==heroG) c.setFocusable(true); } blocked.clear(); }
-    }
-
     void kickData(boolean postBind){
         final int g=++dataGen;
         dataFut=pool.submit(()->{
@@ -771,7 +689,6 @@ public class MainActivity extends Activity {
         refreshCards();
         applyFeaturedCache();
         if (focus!=null) focus.afterData();
-        if (drawer!=null && drawer.getVisibility()==View.VISIBLE) syncDrawer();
     }
     boolean playNextOn(){ return wnPickCache!=null && !wnPickCache.isEmpty(); }
     void applyTabs(){

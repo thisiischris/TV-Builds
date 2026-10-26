@@ -40,7 +40,7 @@ class FocusController {
     void save() {
         try {
             View f = a.getCurrentFocus();
-            if (f == null || a.drawer.getVisibility() == View.VISIBLE) return;
+            if (f == null || a.appMenu != null) return;
             int sc = secOf(f);
             if (sc < 0) return;
             View root = secRoot(f, sc);
@@ -55,7 +55,8 @@ class FocusController {
 
     void restoreNow() {
         if (savedSec < 0) return;
-        if (a.drawer.getVisibility() == View.VISIBLE || a.editMode) return;
+        if (a.appMenu != null || a.editMode) return;
+        if (savedSec >= 5) a.setDrawer(true);
         final View t = savedView();
         if (t == null) return;
         t.setFocusable(true);
@@ -69,19 +70,14 @@ class FocusController {
         int k = e.getKeyCode();
         boolean v = k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN;
         boolean hz = k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT;
-        if (!(v || hz) || a.drawer == null || a.drawer.getVisibility() == View.VISIBLE || a.editMode || a.dragIdx >= 0)
+        if (!(v || hz) || a.homeGrid == null || a.appMenu != null || a.editMode || a.dragIdx >= 0)
             return false;
         View f = a.getCurrentFocus();
         int sec = f == null ? -1 : secOf(f);
         if (sec < 0) return false;
         if (e.getAction() != KeyEvent.ACTION_DOWN) return false; // ponytail: let ACTION_UP through
-        if (k == KeyEvent.KEYCODE_DPAD_DOWN && sec >= 4 && sec == nSecs() - 1) {
-            if (e.getRepeatCount() == 0) {
-                android.util.Log.i("ShieldHome", "nav " + name(f) + " -> drawer");
-                a.openDrawer();
-            }
+        if (k == KeyEvent.KEYCODE_DPAD_DOWN && sec >= 4 && sec == nSecs() - 1)
             return true;
-        }
         View t;
         if (v) t = navTarget(f, sec, k == KeyEvent.KEYCODE_DPAD_UP);
         else {
@@ -89,10 +85,11 @@ class FocusController {
             int ix = it.indexOf(secRoot(f, sec));
             int ni = ix + (k == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
             t = (ix >= 0 && ni >= 0 && ni < it.size()) ? it.get(ni) : f;
-            if (t != f && ni >= 0) lastIdx[sec] = ni;
+            if (t != f && ni >= 0 && sec >= 0 && sec < lastIdx.length) lastIdx[sec] = ni;
         }
         if (t != null && t != f) {
             t.requestFocus();
+            if (t.getParent() == a.homeGrid) a.slideHome();
             android.util.Log.i("ShieldHome", "nav " + name(f) + " -> " + name(t));
         }
         return true;
@@ -100,9 +97,9 @@ class FocusController {
 
     /** Overlays close themselves. Returns true if consumed (not the home short/long path). */
     boolean closeOverlay() {
-        if (a.drawer != null && a.drawer.getVisibility() == View.VISIBLE) { a.closeDrawer(); return true; }
-        if (a.dragIdx >= 0) { a.drop(a.dragIdx); return true; }
-        if (a.editMode) { a.exitEdit(); return true; }
+        if (a.appMenu != null) { a.closeMenu(); return true; }
+        if (a.editMode || a.dragIdx >= 0) { a.exitEdit(); return true; }
+        if (a.drawerOpen) { a.setDrawer(false); a.focusHomeApp(); return true; }
         if (a.qsOpen) { a.toggleQs(); return true; }
         return false;
     }
@@ -203,17 +200,19 @@ class FocusController {
         View fr = secRoot(f, sec);
         List<View> cur = secItems(sec);
         int ix = Math.max(0, cur.indexOf(fr));
-        lastIdx[sec] = ix;
+        if (sec >= 0 && sec < lastIdx.length) lastIdx[sec] = ix;
         if (sec == 3 && a.cardScroll != null) lastCardX = a.cardScroll.getScrollX();
+        if (up && sec == 4 && a.drawerOpen) { a.setDrawer(false); return fr; }
         boolean multi = sec >= 3;
         for (int s2 = sec + (up ? -1 : 1); s2 >= 0 && s2 < nSecs(); s2 += up ? -1 : 1) {
             List<View> it = secItems(s2);
             if (it.isEmpty()) continue;
             if (s2 == 0) return (sec == 1 && !a.qsOpen) ? a.gear : topTarget();
             if (s2 == 2) return tabV();
-            int ti = s2 == 3 ? lastIdx[3] : (multi ? ix : lastIdx[s2]);
+            int ti = s2 == 3 ? lastIdx[3] : (s2 == 4 && sec == 3) ? 0 : (multi ? ix : (s2 < lastIdx.length ? lastIdx[s2] : 0));
             View dest = it.get(Math.max(0, Math.min(ti, it.size() - 1)));
             if (s2 == 3 && a.cardScroll != null) a.cardScroll.scrollTo(lastCardX, 0);
+            if (s2 >= 5) a.setDrawer(true);
             return dest;
         }
         return f;
