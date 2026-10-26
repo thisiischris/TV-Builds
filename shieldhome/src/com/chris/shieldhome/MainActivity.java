@@ -207,7 +207,7 @@ public class MainActivity extends Activity {
         };
         cardScroll.setHorizontalScrollBarEnabled(false);
         cardScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        cardScroll.setClipToPadding(true);
+        cardScroll.setClipToPadding(false); cardScroll.setPadding(p(10),p(10),p(10),p(10)); // v18: room for focus glow
         cardScroll.setClipChildren(true);
         cardRow = new LinearLayout(this); cardRow.setClipChildren(false); cardRow.setClipToPadding(false);
         cardScroll.addView(cardRow, new ViewGroup.LayoutParams(-2,-1));
@@ -215,8 +215,8 @@ public class MainActivity extends Activity {
         cardFade = new View(this);
         cardFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.TRANSPARENT, Color.rgb(8,8,16)}));
         cardFade.setFocusable(false); cardFade.setClickable(false);
-        cardWrap.addView(cardFade, lp(p(48),-1,Gravity.END,0,0,0,0));
-        place(cardWrap, 50, 350, 918, 116);
+        cardWrap.addView(cardFade, lp(p(48),-1,Gravity.END,0,p(10),0,p(10)));
+        place(cardWrap, 40, 340, 938, 136);
         cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardFade);
 
         // Home apps: 11 most-used + Settings, 2 rows, nothing below
@@ -714,13 +714,13 @@ public class MainActivity extends Activity {
     void snapCardRow(View v){
         if (cardScroll==null) return;
         int idx=cardRow.indexOfChild(v); if (idx<0) return;
-        int vis=cardScroll.getWidth(); if (vis<=0) vis=p(918);
+        int vis=cardScroll.getWidth()-cardScroll.getPaddingLeft()-cardScroll.getPaddingRight(); if (vis<=0) vis=p(918);
         int x=snapX(cardScroll.getScrollX(), idx, p(177.2f), p(8), vis, cardRow.getChildCount());
         if (x!=cardScroll.getScrollX()) cardScroll.smoothScrollTo(x,0); else updateCardFade();
     }
     void updateCardFade(){
         if (cardFade==null||cardScroll==null) return;
-        int vis=cardScroll.getWidth(); if (vis<=0) vis=p(918);
+        int vis=cardScroll.getWidth()-cardScroll.getPaddingLeft()-cardScroll.getPaddingRight(); if (vis<=0) vis=p(918);
         int stride=p(177.2f)+p(8);
         int nFit=Math.max(1,(vis+p(8))/stride);
         cardFade.setVisibility(cardScroll.getScrollX()<Math.max(0,cardRow.getChildCount()-nFit)*stride-1 ? View.VISIBLE : View.GONE);
