@@ -1,0 +1,864 @@
+package com.chris.shieldhome;
+
+import android.app.Activity;
+import android.content.*;
+import android.content.pm.*;
+import android.database.Cursor;
+import android.graphics.*;
+import android.graphics.drawable.*;
+import android.media.tv.TvContract;
+import android.net.Uri;
+import android.os.*;
+import android.util.TypedValue;
+import android.view.*;
+import android.widget.*;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class MainActivity extends Activity {
+    // All geometry is in mockup pixels (1024x576 reference), scaled to the real screen.
+    float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; TextView clock, date;
+    PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
+    static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255);
+    static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
+    static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
+
+    FrameLayout.LayoutParams lp(int w,int h,int g,int l,int t,int r,int b){ FrameLayout.LayoutParams x=new FrameLayout.LayoutParams(w,h,g); x.setMargins(l,t,r,b); return x; }
+    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+    ImageLoader images; FocusController focus; TvData tv; NetData net;
+    java.util.concurrent.Future<?> dataFut; int dataGen, heroLoadGen;
+    List<String[]> appsCache, fullOrder=new ArrayList<>();
+    List<Object[]> featuredCache, wnPickCache;
+    Map<String,Long> plutoIdsCache=new HashMap<>();
+    String homeBindSig="", cardsBindSig="", featuredBoundSig="";
+    final Object heroLock=new Object(); Object[] heroOnScreen;
+    void loadInto(final ImageView iv, String uri0, final boolean fit){
+        if (images==null||uri0==null) return;
+        images.load(iv, uri0, fit, iv.getWidth()>0?iv.getWidth():p(177), iv.getHeight()>0?iv.getHeight():p(108));
+    }
+    int p(float v){ return Math.round(v*u); }
+    void ts(TextView t, float v){ t.setTextSize(TypedValue.COMPLEX_UNIT_PX, v*u); }
+
+    @Override protected void onCreate(Bundle b){
+        super.onCreate(b);
+        pm = getPackageManager();
+        images = new ImageLoader(this, pool, h);
+        focus = new FocusController(this);
+        tv = new TvData(this);
+        net = new NetData(this);
+        prefs().edit().remove("heromode").remove("featured").apply(); // v9: card mode removed
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        DisplayMetricsHolder();
+        kickData(false);
+        build();
+        IntentFilter pf = new IntentFilter(); pf.addAction(Intent.ACTION_PACKAGE_REMOVED); pf.addAction(Intent.ACTION_PACKAGE_ADDED); pf.addAction(Intent.ACTION_PACKAGE_CHANGED); pf.addDataScheme("package");
+        registerReceiver(pkgRx, pf);
+    }
+    final BroadcastReceiver pkgRx = new BroadcastReceiver(){ @Override public void onReceive(Context c, Intent i){
+        String pkg = i.getData()==null?null:i.getData().getSchemeSpecificPart(); boolean repl = i.getBooleanExtra(Intent.EXTRA_REPLACING,false);
+        android.util.Log.i("ShieldHome","pkg "+i.getAction()+" "+pkg+" repl="+repl);
+        final boolean removed = Intent.ACTION_PACKAGE_REMOVED.equals(i.getAction()) && !repl && pkg!=null;
+        if (removed){
+            Runnable home = ()->{ appsCache=null; kickData(true); };
+            if (drawer.getVisibility()==View.VISIBLE) fadeRemove(drawerGrid, pkg, null);
+            if (!editMode && dragIdx<0) fadeRemove(homeGrid, pkg, home); else home.run();
+            return; }
+        h.postDelayed(()->{ appsCache=null; kickData(true);
+            if (drawer.getVisibility()==View.VISIBLE) syncDrawer(); }, 150); } };
+    @Override protected void onDestroy(){
+        dataGen++; heroLoadGen++;
+        try { unregisterReceiver(pkgRx); } catch (Exception e){}
+        pool.shutdownNow();
+        super.onDestroy();
+    }
+    void DisplayMetricsHolder(){ android.util.DisplayMetrics m = new android.util.DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(m); u = m.widthPixels/1024f; }
+    @Override protected void onResume(){
+        super.onResume();
+        focus.prepare();
+        if (appsCache==null){ if (dataFut==null) kickData(false); awaitData(); }
+        bindFromCache();
+        kickData(true);
+        tick(); showWeather(); weatherTick(); applyDim();
+        if (drawer!=null && drawer.getVisibility()==View.VISIBLE) syncDrawer();
+    }
+    void syncDrawer(){ String cur=currentDrawerSig(); if (cur.equals(drawerSig)) return;
+        List<String> o=new ArrayList<>(Arrays.asList(drawerSig.split(","))), n=Arrays.asList(cur.split(","));
+        if (!o.isEmpty() && n.size()>0 && o.get(0).equals(n.get(0).substring(0,0)+o.get(0)) && o.containsAll(n)){ for (String k: o) if (!n.contains(k)){ String kk=k.contains("|")?k.substring(k.indexOf('|')+1):k; int sl=kk.indexOf('/'); if (sl>0) fadeRemove(drawerGrid, kk.substring(0,sl), null); } }
+        else fillDrawer(); android.util.Log.i("ShieldHome","drawer sync"); }
+    @Override protected void onPause(){ super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(heroRotate); h.removeCallbacks(wxRun); }
+    boolean heroShown(){ return heroG!=null && heroG.getVisibility()==View.VISIBLE; }
+    View tabV(){ return focus!=null?focus.tabV():(tab==0?tabPlay:tabLive); }
+    String name(View v){ return focus!=null?focus.name(v):"?"; }
+    @Override protected void onNewIntent(Intent i){ super.onNewIntent(i); focus.restoreNow(); }
+    boolean editLp=false;
+    @Override public boolean dispatchKeyEvent(KeyEvent e){
+        // v17: in edit mode a long-press on a home row tile does nothing (no drag, no click on release)
+        if (editMode && dragIdx<0 && homeGrid!=null && (e.getKeyCode()==KeyEvent.KEYCODE_DPAD_CENTER||e.getKeyCode()==KeyEvent.KEYCODE_ENTER||e.getKeyCode()==KeyEvent.KEYCODE_NUMPAD_ENTER)){
+            View f=getCurrentFocus();
+            if (f!=null && f.getParent()==homeGrid){
+                if (e.getAction()==KeyEvent.ACTION_DOWN && (e.getRepeatCount()>0 || e.isLongPress())){ editLp=true; return true; }
+                if (e.getAction()==KeyEvent.ACTION_UP && editLp){ editLp=false; f.setPressed(false); f.cancelLongPress(); android.util.Log.i("ShieldHome","edit long-press ignored"); return true; }
+                if (e.getAction()==KeyEvent.ACTION_DOWN) editLp=false;
+            }
+        }
+        if (focus!=null && focus.dispatch(e)) return true;
+        return super.dispatchKeyEvent(e);
+    }
+    @Override public void onBackPressed(){ if (!focus.closeOverlay()) focusHero(); }
+    void focusHero(){ View t = heroShown()?heroG:tabV(); t.requestFocus(); android.util.Log.i("ShieldHome","back -> "+name(t)); }
+    @Override public boolean onKeyDown(int k, KeyEvent e){ if (focus.keyDown(k,e)) return true; return super.onKeyDown(k,e); }
+    @Override public boolean onKeyLongPress(int k, KeyEvent e){ if (focus.keyLong(k,e)) return true; return super.onKeyLongPress(k,e); }
+    @Override public boolean onKeyUp(int k, KeyEvent e){ if (focus.keyUp(k,e)) return true; return super.onKeyUp(k,e); }
+    void openAssistant(){
+        Intent[] tries = { new Intent(Intent.ACTION_ASSIST).setPackage("com.google.android.katniss"), new Intent(Intent.ACTION_ASSIST), new Intent("android.speech.action.VOICE_SEARCH_HANDS_FREE"), new Intent("android.search.action.GLOBAL_SEARCH").setPackage("com.google.android.katniss"), new Intent(Intent.ACTION_SEARCH_LONG_PRESS), new Intent(Intent.ACTION_WEB_SEARCH) };
+        for (Intent i: tries){ try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Exception e) {} }
+    }
+
+    void setFit(TextView t, String txt){ t.setText(txt); t.setSingleLine(true); t.setEllipsize(null); t.setHorizontallyScrolling(false); }
+    void tick(){ Date d = new Date(); setFit(clock, new SimpleDateFormat("h:mm a", Locale.US).format(d)); setFit(date, new SimpleDateFormat("EEE, MMM d", Locale.US).format(d)); h.postDelayed(this::tick, 15000); }
+
+    void place(View v, float x, float y, float w, float hh){ FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w<0?-2:p(w), hh<0?-2:p(hh)); lp.leftMargin=p(x); lp.topMargin=p(y); root.addView(v, lp); }
+    TextView text(String s, float size, int color, String font){ TextView t=new TextView(this); t.setText(s); ts(t,size); t.setTextColor(color); t.setTypeface(Typeface.create(font, Typeface.NORMAL)); t.setIncludeFontPadding(false); return t; }
+
+    void build(){
+        root = new FrameLayout(this);
+        root.setBackgroundResource(R.drawable.bg);
+        root.setClipChildren(false);
+
+        // Top bar
+        clock = text("", 17, Color.WHITE, "sans-serif-medium"); clock.setGravity(Gravity.END);
+        date = text("", 11.5f, Color.rgb(236,236,245), "sans-serif-medium"); date.setGravity(Gravity.END);
+        wxTemp = text("", 17, Color.WHITE, "sans-serif-medium"); wxTemp.setGravity(Gravity.END);
+        wxDesc = text("", 11.5f, Color.rgb(236,236,245), "sans-serif-medium"); wxDesc.setGravity(Gravity.END);
+        for (TextView tv: new TextView[]{clock,date,wxTemp,wxDesc}){ tv.setShadowLayer(p(3), 0, p(1), Color.argb(170,0,0,0)); tv.setMaxLines(1); tv.setGravity(Gravity.NO_GRAVITY); }
+        // v9: [weather, right-aligned] | [time / date, left-aligned]; rows share baselines
+        LinearLayout tr = new LinearLayout(this); tr.setBaselineAligned(true);
+        wxTemp.setGravity(Gravity.END); wxDesc.setGravity(Gravity.END); clock.setGravity(Gravity.START); date.setGravity(Gravity.START);
+        for (TextView tv: new TextView[]{clock,date,wxTemp,wxDesc}){ tv.setSingleLine(true); tv.setEllipsize(null); tv.setIncludeFontPadding(false); }
+        LinearLayout wc = new LinearLayout(this); wc.setOrientation(LinearLayout.VERTICAL); wc.setGravity(Gravity.END);
+        wc.addView(wxTemp, new LinearLayout.LayoutParams(-2,-2)); LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2,-2); sl.topMargin=p(6); sl.gravity=Gravity.END; wc.addView(wxDesc, sl);
+        LinearLayout cc = new LinearLayout(this); cc.setOrientation(LinearLayout.VERTICAL); cc.setGravity(Gravity.START);
+        cc.addView(clock, new LinearLayout.LayoutParams(-2,-2)); LinearLayout.LayoutParams sl2 = new LinearLayout.LayoutParams(-2,-2); sl2.topMargin=p(6); cc.addView(date, sl2);
+        wc.setBaselineAlignedChildIndex(0); cc.setBaselineAlignedChildIndex(0);
+        wxSep = new View(this); wxSep.setBackgroundColor(Color.argb(110,255,255,255)); wxSep.setVisibility(View.GONE);
+        tr.addView(wc); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(p(1), p(30)); sp.leftMargin=p(14); sp.rightMargin=p(14); sp.gravity=Gravity.CENTER_VERTICAL; tr.addView(wxSep, sp); tr.addView(cc);
+        View trf = tr;
+        root.addView(trf, lp(-2,-2,Gravity.TOP|Gravity.END,0,p(15),p(42),0));
+
+        // Quick settings gear + inline options
+        gear = new PillView(this, "", 5, false); gear.setOnClickListener(v->toggleQs()); place(gear, 50, 17, 28, 28);
+        PillView search = searchV = new PillView(this, "Search", 3, false);
+        search.setOnClickListener(v->openAssistant()); place(search, 86, 17, 104, 28);
+        qsPanel = new LinearLayout(this); qsPanel.setClipChildren(false); qsPanel.setVisibility(View.GONE);
+        qsDim = new PillView(this, "", 4, false); qsDim.setOnClickListener(v->{ int i=(dimIdx()+1)%DIMS.length; prefs().edit().putInt("dim", i).apply(); applyDim(); qsLabels(); });
+        LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
+        place(qsPanel, 88, 17, 290, 28); qsLabels();
+
+        // Hero
+        FrameLayout heroBox = new FrameLayout(this); heroBox.setClipChildren(false);
+        FrameLayout hero = new FrameLayout(this); hero.setClipToOutline(true);
+        GradientDrawable hb = new GradientDrawable(); hb.setCornerRadius(p(10)); hb.setColor(Color.rgb(10,10,20)); hero.setBackground(hb);
+        ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
+        hero.addView(art, new FrameLayout.LayoutParams(p(660), -1, Gravity.END)); hero.addView(heroArt2, new FrameLayout.LayoutParams(p(660), -1, Gravity.END));
+        View fade = new View(this); fade.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.rgb(10,10,20), Color.rgb(10,10,20), Color.argb(170,10,10,20), Color.TRANSPARENT}));
+        hero.addView(fade, new FrameLayout.LayoutParams(p(660), -1));
+        heroBox.addView(hero, new FrameLayout.LayoutParams(-1,-1));
+        heroBox.addView(heroLabel = text("FEATURED", 8, Color.rgb(190,188,205), "sans-serif-medium"), lp(-2,-2,Gravity.TOP|Gravity.START,p(30),p(52),0,0));
+        heroArt = art;
+        heroTitle = text("Your Library", 31, Color.WHITE, "sans-serif-medium"); heroTitle.setSingleLine(); heroTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        heroBox.addView(heroTitle, lp(p(440),-2,Gravity.TOP|Gravity.START,p(28),p(67),0,0));
+        heroSub = text("Movies and shows from your\nPlex Media Server", 12, Color.rgb(190,188,205), "sans-serif"); heroSub.setLineSpacing(p(3),1f); heroSub.setMaxLines(2); heroSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        heroBox.addView(heroSub, lp(p(400),-2,Gravity.TOP|Gravity.START,p(30),p(107),0,0));
+        heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f); heroBox.addView(heroBadge, lp(p(70),p(18),Gravity.BOTTOM|Gravity.START,p(30),0,0,p(12)));
+        heroG = focusable(heroBox, null, 10, 1.025f, ()->{ Object[] o=heroOnScreen; if (o==null) synchronized(heroLock){ o=heroItems.isEmpty()?null:heroItems.get(heroIdx); } if (o==null) launchPkg(installed("com.plexapp.android")?"com.plexapp.android":PLAY_PKGS[0]); else { try { startActivity(((Intent)o[4]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch(Exception e){ launchPkg((String)o[0]); } } });
+        place(heroG, 50, 66, 918, 227);
+
+        // Tabs
+        tabPlay = new PillView(this, "Play Next", 0, true); tabLive = new PillView(this, "Live TV", 1, false);
+        place(tabPlay, 52, 308, 129, 28); place(tabLive, 192, 308, 110, 28);
+        View.OnFocusChangeListener tl = (v,f)->{ if(f){ int t = v==tabPlay?0:1; if (t!=tab){ tab=t; tabPlay.setOn(tab==0); tabLive.setOn(tab==1); refreshCards(); } } };
+        tabPlay.setOnFocusChangeListener(tl); tabLive.setOnFocusChangeListener(tl);
+
+        // Cards row
+        cardRow = new LinearLayout(this); cardRow.setClipChildren(false); cardRow.setClipToPadding(false);
+        cardRow.setPadding(0,0,0,0); place(cardRow, 50, 350, 918, 116);
+
+        // Home apps: 11 most-used + Settings, 2 rows, nothing below
+        homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false);
+        place(homeGrid, 50, 474, 930, 90);
+        buildHomeGrid();
+
+        // App drawer overlay
+        drawer = new FrameLayout(this); drawer.setVisibility(View.GONE);
+        drawer.setBackgroundResource(R.drawable.bg);
+        TextView dt = drawerTitle = text("All Apps", 22, Color.WHITE, "sans-serif-medium");
+        drawer.addView(dt, lp(-2,-2,Gravity.TOP|Gravity.START,p(52),p(30),0,0));
+        ScrollView dsv = new ScrollView(this); dsv.setVerticalScrollBarEnabled(false); dsv.setClipToPadding(false); dsv.setPadding(p(44),p(16),p(38),p(40)); dsv.setClipChildren(false); drawer.setClipChildren(false);
+        drawerGrid = new GridLayout(this); drawerGrid.setColumnCount(6); drawerGrid.setClipChildren(false);
+        LinearLayout dcol = new LinearLayout(this); dcol.setOrientation(LinearLayout.VERTICAL); dcol.setClipChildren(false); dcol.addView(drawerGrid);
+        dsv.addView(dcol); drawerScroll = dsv; drawer.addView(dsv, lp(-1,-1,Gravity.TOP,0,p(66),0,0));
+        root.addView(drawer, new FrameLayout.LayoutParams(-1,-1));
+
+        setContentView(root);
+        tabPlay.setNextFocusDownId(View.NO_ID);
+        h.post(()->tabPlay.requestFocus());
+    }
+
+    // ---------- Pills with drawn icons ----------
+    class PillView extends View {
+        String label; int icon; boolean on; Drawable asst; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
+        PillView(Context c, String l, int ic, boolean o){ super(c); label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
+        void setOn(boolean o){ on=o; invalidate(); }
+        @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); setElevation(f?p(4):0); invalidate(); }
+        @Override protected void onDraw(Canvas c){
+            float w=getWidth(), hh=getHeight(), r=hh/2;
+            boolean lit = on || (icon==2 && isFocused());
+            pt.setStyle(Paint.Style.FILL);
+            boolean fo = isFocused();
+            if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
+            else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
+            else if (icon==5) pt.setColor(fo?Color.argb(120,200,200,225):Color.argb(70,190,190,215));
+            else pt.setColor(fo?Color.argb(150,120,118,140):Color.argb(110,70,68,88));
+            c.drawRoundRect(0,0,w,hh,r,r,pt);
+            if (icon==5 && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
+            if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
+            int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
+            pt.setColor(fg); pt.setStrokeWidth(p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
+            float cx = icon==3 ? p(19) : p(icon==2?18:28) - (icon==2?p(4):0), cy = hh/2;
+            if (icon==0){ c.drawCircle(cx,cy,p(6.5f),pt); Path tr=new Path(); tr.moveTo(cx-p(2),cy-p(3.2f)); tr.lineTo(cx+p(3.3f),cy); tr.lineTo(cx-p(2),cy+p(3.2f)); tr.close(); c.drawPath(tr,pt); }
+            else if (icon==1){ pt.setStyle(Paint.Style.FILL); c.drawCircle(cx,cy,p(1.6f),pt); pt.setStyle(Paint.Style.STROKE);
+                for (float rr: new float[]{4.5f,7.5f}){ RectF o=new RectF(cx-p(rr),cy-p(rr),cx+p(rr),cy+p(rr)); c.drawArc(o,-40,80,false,pt); c.drawArc(o,140,80,false,pt);} }
+            else if (icon==3){ // magnifier + mic
+                c.drawCircle(cx-p(1),cy-p(1),p(4.2f),pt); c.drawLine(cx+p(2),cy+p(2),cx+p(5),cy+p(5),pt);
+                if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
+                int ax=(int)(cx+p(8)); asst.setBounds(ax, (int)(cy-p(7.5f)), ax+p(15), (int)(cy+p(7.5f))); asst.draw(c); }
+            else if (icon==5){ float gx=w/2f; Path gp2=new Path();
+                for (int i=0;i<=240;i++){ double a=2*Math.PI*i/240; double cs=Math.cos(8*a); double t=Math.max(-1,Math.min(1,cs*2.4)); float rr=p(5.9f)+p(1.55f)*(float)t; float x=gx+(float)Math.cos(a)*rr, y=cy+(float)Math.sin(a)*rr; if(i==0) gp2.moveTo(x,y); else gp2.lineTo(x,y); }
+                gp2.close(); gp2.addCircle(gx,cy,p(2.3f),Path.Direction.CW); gp2.setFillType(Path.FillType.EVEN_ODD);
+                pt.setStyle(Paint.Style.FILL); c.drawPath(gp2,pt); }
+            else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
+            pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+            Paint.FontMetrics fm = pt.getFontMetrics();
+            if (icon==4) pt.setTextAlign(Paint.Align.CENTER); else pt.setTextAlign(Paint.Align.LEFT);
+            if (label.length()>0) c.drawText(label, icon==4? w/2f : p(icon==2?24:icon==3?46:43), cy-(fm.ascent+fm.descent)/2, pt);
+        }
+    }
+
+    // ---------- Focus helper: soft blue glow drawn outside the tile + scale ----------
+    class GlowFrame extends FrameLayout {
+        FrameLayout inner; View badgeV; float radius; Paint gp = new Paint(Paint.ANTI_ALIAS_FLAG), rp = new Paint(Paint.ANTI_ALIAS_FLAG); float glow=0;
+        GlowFrame(Context c, FrameLayout in, float r){ super(c); inner=in; radius=r; setClipChildren(false); setClipToPadding(false); setWillNotDraw(false);
+            addView(in, new FrameLayout.LayoutParams(-1,-1));
+            gp.setColor(Color.argb(170, 70, 150, 255)); gp.setMaskFilter(new BlurMaskFilter(p(9), BlurMaskFilter.Blur.NORMAL));
+            rp.setStyle(Paint.Style.STROKE); rp.setStrokeWidth(p(1.6f)); rp.setColor(Color.rgb(120,185,255)); }
+        @Override public void draw(Canvas c){
+            if (glow>0){ gp.setAlpha((int)(150*glow)); c.drawRoundRect(-p(3),-p(3),getWidth()+p(3),getHeight()+p(3),radius+p(3),radius+p(3),gp); }
+            super.draw(c);
+            if (glow>0){ rp.setAlpha((int)(255*glow)); float o=p(.8f); c.drawRoundRect(o,o,getWidth()-o,getHeight()-o,radius,radius,rp); }
+            if (badgeV!=null && badgeV.getAlpha()>0.01f){ c.saveLayerAlpha(badgeV.getLeft(), badgeV.getTop(), badgeV.getRight(), badgeV.getBottom(), Math.round(255*badgeV.getAlpha())); c.translate(badgeV.getLeft(), badgeV.getTop()); badgeV.draw(c); c.restore(); }
+        }
+    }
+    View focusable(final FrameLayout v, final GradientDrawable base, float radius, final Runnable click){ return focusable(v, base, radius, 1.07f, click); }
+    View focusable(final FrameLayout v, final GradientDrawable base, float radius, final float sc, final Runnable click){
+        final GlowFrame g = new GlowFrame(this, v, p(radius));
+        g.setFocusable(true); g.setClickable(true);
+        g.setOnFocusChangeListener((x,f)->{
+            x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).setDuration(sc<1.05f?260:180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+            x.setTranslationZ(f?p(6):0);
+            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(180);
+            va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.invalidate(); }); va.start();
+        });
+        g.setOnClickListener(x->click.run());
+        return g;
+    }
+
+    View appTile(final String pkg, String cls, String label){
+        FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(TILE); bg.setStroke(1, Color.argb(30,255,255,255)); f.setBackground(bg);
+        ImageView iv = new ImageView(this);
+        Drawable banner = null; ComponentName cn = new ComponentName(pkg, cls);
+        try { banner = pm.getActivityBanner(cn); if (banner==null) banner = pm.getApplicationBanner(pkg); } catch (Exception e) {}
+        boolean settings = pkg.equals("com.android.tv.settings");
+        if (banner != null && !settings){
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP); iv.setImageDrawable(banner);
+            bg.setColor(brandColor(banner, true)); bg.setStroke(0, 0);
+            f.addView(iv, new FrameLayout.LayoutParams(-1,-1));
+            View sheen = new View(this); sheen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.argb(28,255,255,255), Color.TRANSPARENT, Color.argb(40,0,0,0)}));
+            f.addView(sheen, new FrameLayout.LayoutParams(-1,-1));
+        } else {
+            Drawable icon = null; try { icon = pm.getActivityIcon(cn);} catch(Exception e){}
+            iv.setScaleType(ImageView.ScaleType.FIT_CENTER); iv.setImageDrawable(icon);
+            bg.setColor(settings ? TILE : brandColor(icon, false));
+            f.addView(iv, lp(p(30), p(30), Gravity.CENTER_HORIZONTAL|Gravity.TOP, 0, p(9), 0, 0));
+            TextView t = text(label, 11, Color.rgb(230,229,236), "sans-serif"); t.setSingleLine(); t.setEllipsize(android.text.TextUtils.TruncateAt.END); t.setGravity(Gravity.CENTER);
+            f.addView(t, lp(-1, -2, Gravity.BOTTOM, p(6), 0, p(6), p(8)));
+        }
+        final Intent li = new Intent(Intent.ACTION_MAIN).setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        View gv = focusable(f, bg, 8, ()->{ try{ startActivity(li);}catch(Exception e){} }); gv.setTag(pkg); return gv;
+    }
+    // Banner: use its edge colour so the banner blends into the tile. Icon: dominant (most saturated common) colour, darkened.
+    int brandColor(Drawable d, boolean edge){
+        if (d==null) return TILE;
+        try {
+            Bitmap bm = Bitmap.createBitmap(64, 36, Bitmap.Config.ARGB_8888); Canvas c = new Canvas(bm); d.setBounds(0,0,64,36); d.draw(c);
+            if (edge){ long r=0,g=0,b=0; int n=0;
+                for (int x=0;x<64;x++) for (int y: new int[]{0,1,34,35}){ int px=bm.getPixel(x,y); if (Color.alpha(px)<128) continue; r+=Color.red(px); g+=Color.green(px); b+=Color.blue(px); n++; }
+                for (int y=0;y<36;y++) for (int x: new int[]{0,1,62,63}){ int px=bm.getPixel(x,y); if (Color.alpha(px)<128) continue; r+=Color.red(px); g+=Color.green(px); b+=Color.blue(px); n++; }
+                if (n==0) return TILE; return Color.rgb((int)(r/n),(int)(g/n),(int)(b/n));
+            }
+            Map<Integer,Integer> hist = new HashMap<>(); int best=0, bestN=0;
+            for (int x=0;x<64;x++) for (int y=0;y<36;y++){ int px=bm.getPixel(x,y); if (Color.alpha(px)<200) continue; float[] hsv=new float[3]; Color.colorToHSV(px,hsv); if (hsv[1]<0.25f||hsv[2]<0.2f) continue;
+                int k = ((int)(hsv[0]/20)); int v=(hist.containsKey(k)?hist.get(k):0)+1; hist.put(k,v); if (v>bestN){bestN=v; best=px;} }
+            if (bestN==0) return TILE; float[] hsv=new float[3]; Color.colorToHSV(best,hsv); hsv[2]=Math.min(hsv[2],0.45f); hsv[1]=Math.min(hsv[1],0.75f); return Color.HSVToColor(hsv);
+        } catch (Exception e) { return TILE; }
+    }
+
+    // ---------- Usage ----------
+    Map<String,Long> usage = new HashMap<>();
+    long use(String p){ Long v = p==null?null:usage.get(p); long base = v==null?0:v; if ("com.google.android.youtube.tv".equals(p)) base = base*3+1; return base; }
+
+    GridLayout homeGrid, drawerGrid; FrameLayout drawer;
+    android.content.SharedPreferences prefs(){ return getSharedPreferences("home", MODE_PRIVATE); }
+    List<String[]> homeApps(){
+        List<String[]> all = apps(); List<String[]> rest=new ArrayList<>();
+        for (String[] a: all) if (!a[0].equals("com.android.tv.settings")) rest.add(a);
+        String saved = prefs().getString("order", null);
+        if (saved != null){
+            List<String[]> out = new ArrayList<>();
+            for (String key : saved.split(",")){ if (key.equals("_")){ out.add(null); continue; } for (String[] a: rest) if ((a[0]+"/"+a[1]).equals(key)) out.add(a); }
+            while (!out.isEmpty() && out.get(out.size()-1)==null && !editMode) out.remove(out.size()-1);
+            return out;
+        }
+        final List<String> pref = Arrays.asList(PLAY_PKGS);
+        Collections.sort(rest,(a,b)->{ long ua=use(a[0]), ub=use(b[0]); if (ua<300000L) ua=0; if (ub<300000L) ub=0; int c=Long.compare(ub,ua); if (c!=0) return c; int ia=pref.indexOf(a[0]), ib=pref.indexOf(b[0]); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib; });
+        return new ArrayList<>(rest.subList(0, Math.min(11, rest.size())));
+    }
+    void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (sb.length()>0) sb.append(','); if (a==null) sb.append('_'); else sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).apply(); }
+    // Visible row is 5 + Edit; tail of the saved order is kept on write.
+    void saveVisible(){
+        List<String[]> out=new ArrayList<>(slots);
+        Set<String> seen=new HashSet<>();
+        for (String[] a: slots) if (a!=null) seen.add(a[0]+"/"+a[1]);
+        if (fullOrder!=null) for (int i=5;i<fullOrder.size();i++){
+            String[] a=fullOrder.get(i);
+            if (a==null){ out.add(null); continue; }
+            String k=a[0]+"/"+a[1]; if (seen.add(k)) out.add(a);
+        }
+        fullOrder=out; saveHome(out);
+    }
+    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(141); gl.height=p(78); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
+    // ---------- Home rows: in-place edit mode + long-press drag ----------
+    List<String[]> slots = new ArrayList<>(); boolean editMode=false; int dragIdx=-1, pickSlot=-1;
+    TextView drawerTitle; ScrollView drawerScroll; boolean pickerMode=false;
+    List<View> editBlocked = new ArrayList<>(); View dimV;
+    View editTile(){
+        FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(editMode?Color.rgb(229,227,228):TILE); bg.setStroke(Math.max(1,p(.6f)), Color.argb(55,255,255,255)); f.setBackground(bg);
+        TextView t = text(editMode?"\u2713  Done":"\u270E  Edit", 13, editMode?Color.rgb(22,22,30):Color.rgb(235,234,242), "sans-serif-medium"); t.setGravity(Gravity.CENTER);
+        f.addView(t, new FrameLayout.LayoutParams(-1,-1));
+        return focusable(f, bg, 8, ()->{ if (editMode) exitEdit(); else enterEdit(); });
+    }
+    void buildHomeGrid(){ buildHomeGrid(-1); }
+    void buildHomeGrid(int focusIdx){
+        if (homeGrid==null) return;
+        List<String[]> all = homeApps(); while (all.size()>11) all.remove(all.size()-1);
+        fullOrder = all;
+        int nv = Math.min(5, all.size());
+        slots = new ArrayList<>(all.subList(0, nv));
+        String sig=(editMode?"E":"N")+"|"+dragIdx+"|";
+        for (String[] a: slots) sig += a==null?"_,":a[0]+"/"+a[1]+",";
+        if (focusIdx<0 && sig.equals(homeBindSig) && homeGrid.getChildCount()>0) return;
+        homeBindSig=sig;
+        homeGrid.removeAllViews();
+        for (int i=0;i<nv;i++){
+            String[] a = slots.get(i); View t;
+            if (a==null){ if (editMode) t = placeholderTile(i); else { t = new View(this); t.setFocusable(false); } }
+            else t = homeTile(a, i);
+            homeGrid.addView(t, gridLp(i));
+        }
+        int ei = nv; View et = editTile();
+        if (!editMode) downOpensDrawer(et, ei);
+        homeGrid.addView(et, gridLp(ei));
+        if (focusIdx>=0){ final int f = Math.min(focusIdx, homeGrid.getChildCount()-1); homeGrid.getChildAt(f).requestFocus(); h.post(()->homeGrid.getChildAt(f).requestFocus()); }
+    }
+    View badge(boolean plus){
+        TextView b = text(plus?"+":"\u2212", 15, Color.WHITE, "sans-serif-medium"); b.setGravity(Gravity.CENTER); b.setIncludeFontPadding(false);
+        GradientDrawable d = new GradientDrawable(); d.setShape(GradientDrawable.OVAL); d.setColor(Color.rgb(222,58,58)); d.setStroke(Math.max(1,p(1.2f)), Color.WHITE); b.setBackground(d);
+        b.setElevation(p(10)); return b;
+    }
+    View homeTile(final String[] a, final int i){
+        final GlowFrame g = (GlowFrame)appTile(a[0], a[1], a[2]);
+        if (editMode){
+            g.badgeV = badge(false); g.badgeV.setAlpha(badgeStart); g.addView(g.badgeV, lp(p(19), p(19), Gravity.TOP|Gravity.START, -p(7), -p(7), 0, 0));
+            g.setOnClickListener(v->{ if (dragIdx>=0) return; slots.set(i, null); saveVisible(); buildHomeGrid(i); });
+        }
+        g.setOnLongClickListener(v->{ if (!editMode) startDrag(i); return true; });
+        final View.OnFocusChangeListener base = g.getOnFocusChangeListener();
+        if (dragIdx==i){
+            g.glow=1f; g.setTranslationZ(p(18));
+            g.setOnFocusChangeListener((v,f)->{ base.onFocusChange(v,f); v.animate().scaleX(1.16f).scaleY(1.16f).translationY(-p(6)).setDuration(160).start(); });
+        } else if (dragIdx>=0) g.setAlpha(0.5f);
+        g.setOnKeyListener((v,k,e)->{
+            boolean dpad = k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT||k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN;
+            boolean ok = k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_NUMPAD_ENTER;
+            if (dragIdx==i){
+                if (e.getAction()!=KeyEvent.ACTION_DOWN) return dpad||ok;
+                if (ok){ if (e.getRepeatCount()==0) drop(i); return true; }
+                if (k==KeyEvent.KEYCODE_BACK){ drop(i); return true; }
+                int to = k==KeyEvent.KEYCODE_DPAD_LEFT? i-1 : k==KeyEvent.KEYCODE_DPAD_RIGHT? i+1 : k==KeyEvent.KEYCODE_DPAD_UP? i-6 : k==KeyEvent.KEYCODE_DPAD_DOWN? i+6 : -99;
+                if (to==-99) return false;
+                if (to>=0 && to<Math.min(5,slots.size())){ Collections.swap(slots, i, to); dragIdx=to; saveVisible(); buildHomeGrid(to); }
+                return true;
+            }
+            if (dragIdx<0 && ok && e.getAction()==KeyEvent.ACTION_DOWN && (e.isLongPress() || e.getRepeatCount()>=3)){ startDrag(i); return true; }
+            if (!editMode && k==KeyEvent.KEYCODE_DPAD_DOWN && e.getAction()==KeyEvent.ACTION_DOWN){ openDrawer(); return true; }
+            return false;
+        });
+        return g;
+    }
+    void startDrag(int i){ if (dragIdx>=0 || i>=slots.size() || slots.get(i)==null) return; dragIdx=i; buildHomeGrid(i); }
+    void drop(int i){ dragIdx=-1; saveVisible(); buildHomeGrid(i); }
+    View placeholderTile(final int i){
+        FrameLayout f = new FrameLayout(this);
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(Color.argb(14,255,255,255)); bg.setStroke(Math.max(1,p(1.2f)), Color.argb(90,255,255,255), p(6), p(4)); f.setBackground(bg);
+        TextView plus = text("+", 30, Color.argb(120,255,255,255), "sans-serif-light"); plus.setGravity(Gravity.CENTER);
+        f.addView(plus, new FrameLayout.LayoutParams(-1,-1));
+        View g = focusable(f, bg, 8, ()->openPicker(i));
+        g.setOnKeyListener((v,k,e)->{ if (dragIdx>=0 && e.getAction()==KeyEvent.ACTION_DOWN) return true; return false; });
+        return g;
+    }
+    void setEditDim(boolean on){
+        if (dimV==null){ dimV = new View(this); dimV.setBackgroundColor(Color.argb(150,4,4,10)); dimV.setAlpha(0f); dimV.setVisibility(View.GONE); root.addView(dimV, root.indexOfChild(homeGrid), new FrameLayout.LayoutParams(-1,-1)); }
+        dimV.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        if (on){ dimV.setVisibility(View.VISIBLE); dimV.animate().alpha(1f).setDuration(280).setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).withEndAction(null).start(); }
+        else dimV.animate().alpha(0f).setDuration(280).setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator()).withEndAction(()->dimV.setVisibility(View.GONE)).start();
+        if (on){ editBlocked.clear();
+            for (int i=0;i<root.getChildCount();i++){ View c=root.getChildAt(i); if (c==drawer||c==homeGrid||c==dimV) continue;
+                if (c instanceof ViewGroup){ ((ViewGroup)c).setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS); editBlocked.add(c); }
+                if (c.isFocusable()){ c.setFocusable(false); if (!editBlocked.contains(c)) editBlocked.add(c); } } }
+        else {
+            for (View c: editBlocked){ if (c instanceof ViewGroup) ((ViewGroup)c).setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS); if (!(c instanceof ViewGroup) || c instanceof PillView || c instanceof GlowFrame) c.setFocusable(true); } editBlocked.clear(); }
+    }
+    boolean editAnim=false; android.animation.ValueAnimator badgeAnim;
+    void fadeBadges(float from, float to, Runnable end){
+        if (badgeAnim!=null) badgeAnim.cancel();
+        badgeAnim = android.animation.ValueAnimator.ofFloat(from,to); badgeAnim.setDuration(280); badgeAnim.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        badgeAnim.addUpdateListener(a->{ float v=(Float)a.getAnimatedValue(); for (int i=0;i<homeGrid.getChildCount();i++){ View c=homeGrid.getChildAt(i); if (c instanceof GlowFrame && ((GlowFrame)c).badgeV!=null){ ((GlowFrame)c).badgeV.setAlpha(v); c.invalidate(); } } });
+        if (end!=null) badgeAnim.addListener(new android.animation.AnimatorListenerAdapter(){ boolean cx=false; public void onAnimationCancel(android.animation.Animator a){cx=true;} public void onAnimationEnd(android.animation.Animator a){ if(!cx) end.run(); } });
+        badgeAnim.start();
+    }
+    void enterEdit(){ if (editAnim) return; editMode=true; dragIdx=-1; setEditDim(true); badgeStart=0f; buildHomeGrid(99); badgeStart=1f; fadeBadges(0f,1f,null); }
+    void exitEdit(){ if (editAnim) return; editAnim=true; dragIdx=-1; saveVisible(); setEditDim(false);
+        fadeBadges(1f,0f,()->{ editMode=false; editAnim=false; buildHomeGrid(99); }); }
+    float badgeStart=1f;
+    View downOpensDrawer(View t, int i){
+        t.setOnKeyListener((v,k,e)->{ if (k==KeyEvent.KEYCODE_DPAD_DOWN && e.getAction()==KeyEvent.ACTION_DOWN){ openDrawer(); return true;} return false; });
+        return t;
+    }
+    GridLayout.LayoutParams dlp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(141); gl.height=p(78); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
+    void openPicker(int slot){ pickSlot=slot; pickerMode=true; fillDrawer(); }
+    void openDrawer(){ pickerMode=false; setHomeFocus(false); fillDrawer(); }
+    String drawerSig="";
+    String sig(List<String[]> l){ StringBuilder b=new StringBuilder(pickerMode?"P|":"A|"); for (String[] a: l) b.append(a[0]).append('/').append(a[1]).append(','); return b.toString(); }
+    String currentDrawerSig(){ List<String> on=new ArrayList<>(); for (String[] a: slots) if (a!=null) on.add(a[0]+"/"+a[1]); List<String[]> l=new ArrayList<>(); for (String[] a: apps()){ if (pickerMode){ if (!a[0].equals("com.android.tv.settings") && !on.contains(a[0]+"/"+a[1])) l.add(a);} else l.add(a);} return sig(l); }
+    // v15: fade one tile out, remove only it, slide the rest into place
+    void fadeRemove(final GridLayout g, final String pkg, final Runnable after){
+        View tv=null; for (int i=0;i<g.getChildCount();i++) if (pkg.equals(g.getChildAt(i).getTag())) { tv=g.getChildAt(i); break; }
+        if (tv==null || !tv.isFocusable()){ if (after!=null) after.run(); return; }
+        final View t=tv; final boolean hadFocus = t.hasFocus(); final int idx=g.indexOfChild(t);
+        t.setFocusable(false);
+        if (hadFocus){ int n=g.getChildCount(); View nb = idx+1<n ? g.getChildAt(idx+1) : idx-1>=0 ? g.getChildAt(idx-1) : null; if (nb!=null) nb.requestFocus(); }
+        t.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(250).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{
+            if (g!=drawerGrid){ if (after!=null) after.run(); return; }
+            final Map<View,int[]> old=new HashMap<>(); for (int i=0;i<g.getChildCount();i++){ View c=g.getChildAt(i); old.put(c,new int[]{c.getLeft(),c.getTop()}); }
+            g.removeView(t);
+            for (int i=0;i<g.getChildCount();i++) g.getChildAt(i).setLayoutParams(dlp(i));
+            g.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){ public boolean onPreDraw(){ g.getViewTreeObserver().removeOnPreDrawListener(this);
+                for (int i=0;i<g.getChildCount();i++){ View c=g.getChildAt(i); int[] o=old.get(c); if (o==null) continue; float dx=o[0]-c.getLeft(), dy=o[1]-c.getTop(); if (dx==0&&dy==0) continue;
+                    c.setTranslationX(dx); c.setTranslationY(dy); c.animate().translationX(0).translationY(0).setDuration(260).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); }
+                drawerSig = currentDrawerSig(); return true; } });
+            if (after!=null) after.run();
+        }).start();
+    }
+    void fillDrawer(){
+        drawer.setTranslationZ(p(20));
+        if (pickerMode) homeGrid.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        drawerGrid.removeAllViews();
+        drawerTitle.setText(pickerMode ? "Add to Home" : "All Apps");
+        List<String> on = new ArrayList<>(); for (String[] a: slots) if (a!=null) on.add(a[0]+"/"+a[1]);
+        List<String[]> all = apps(), list = new ArrayList<>();
+        for (String[] a: all){
+            if (pickerMode){ if (!a[0].equals("com.android.tv.settings") && !on.contains(a[0]+"/"+a[1])) list.add(a); }
+            else list.add(a);
+        }
+        for (int i=0;i<list.size();i++){
+            final String[] a = list.get(i);
+            View t = appTile(a[0], a[1], a[2]);
+            if (pickerMode) t.setOnClickListener(v->{ if (pickSlot>=0 && pickSlot<slots.size()) slots.set(pickSlot, a); else { int e=slots.indexOf(null); if (e>=0 && e<5) slots.set(e,a); else if (slots.size()<5) slots.add(a); } saveVisible(); closeDrawer(); });
+            if (!pickerMode) t.setOnLongClickListener(v->{ appInfo(a[0]); return true; });
+            final boolean[] lp={false};
+            t.setOnKeyListener((v,k,e)->{
+                if (drawerGrid.indexOfChild(v)>=0 && drawerGrid.indexOfChild(v)<6 && k==KeyEvent.KEYCODE_DPAD_UP && e.getAction()==KeyEvent.ACTION_DOWN){ closeDrawer(); return true;}
+                if (!pickerMode && (k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER)){
+                    if (e.getAction()==KeyEvent.ACTION_DOWN && (e.getRepeatCount()>0 || (e.getFlags()&KeyEvent.FLAG_LONG_PRESS)!=0)){ if (!lp[0]){ lp[0]=true; appInfo(a[0]);} return true; }
+                    if (e.getAction()==KeyEvent.ACTION_UP && lp[0]){ lp[0]=false; return true; } }
+                return false; });
+            drawerGrid.addView(t, dlp(i));
+        }
+        drawerSig = sig(list);
+        android.util.Log.i("ShieldHome","drawer picker="+pickerMode+" apps="+list.size());
+        drawerScroll.scrollTo(0,0);
+        drawer.setVisibility(View.VISIBLE); drawer.setTranslationY(root.getHeight()); drawer.setAlpha(0.6f);
+        drawer.animate().translationY(0).alpha(1f).setDuration(260).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        h.postDelayed(()->{ if (drawerGrid.getChildCount()>0) drawerGrid.getChildAt(0).requestFocus(); }, 60);
+    }
+    void appInfo(String pkg){ android.util.Log.i("ShieldHome","appinfo "+pkg); try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch(Exception e){ android.util.Log.w("ShieldHome","appinfo "+e); } }
+    void closeDrawer(){
+        final boolean picker = pickerMode;
+        drawer.animate().translationY(root.getHeight()).setDuration(260).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{
+            drawer.setVisibility(View.GONE); pickerMode=false;
+            if (picker){ homeGrid.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS); buildHomeGrid(Math.max(0,pickSlot)); }
+            else { setHomeFocus(true); if (homeGrid.getChildCount()>0) homeGrid.getChildAt(0).requestFocus(); }
+        }).start();
+    }
+    // ---------- Featured hero ----------
+    ImageView heroArt, heroBadge; TextView heroTitle, heroSub; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
+    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, 16000); return; } } showHero(); h.postDelayed(this, 16000); } };
+    ImageView heroArt2; boolean heroFront=true; android.animation.ObjectAnimator kb;
+    void loadHero(){ applyFeaturedCache(); }
+    void applyFeaturedCache(){
+        List<Object[]> feat=featuredCache;
+        if (feat==null) return;
+        String fs=heroSig(feat);
+        if (fs.equals(featuredBoundSig)) return;
+        featuredBoundSig=fs;
+        synchronized(heroLock){ heroItems.clear(); heroItems.addAll(feat); heroIdx=0; }
+        h.removeCallbacks(heroRotate);
+        if (!heroItems.isEmpty()){ showHero(); h.postDelayed(heroRotate, 16000); }
+        net.loadWhatsNew();
+    }
+    static String heroSig(List<Object[]> l){
+        StringBuilder b=new StringBuilder();
+        for (Object[] o: l) b.append(o[0]).append('|').append(o[1]).append('|').append(o[3]).append(',');
+        return b.toString();
+    }
+    // v14: focal point (fractions of the bitmap). Face detection on a downscaled copy, else top-weighted (x centre, y 30%).
+    float[] focal(Bitmap bm){
+        float[] f = {0.5f, 0.3f};
+        try { int w=320, hh=Math.max(2, Math.round(320f*bm.getHeight()/bm.getWidth())); if (hh%2==1) hh++;
+            Bitmap sm = Bitmap.createScaledBitmap(bm, w, hh, true).copy(Bitmap.Config.RGB_565, false);
+            android.media.FaceDetector.Face[] fs = new android.media.FaceDetector.Face[4];
+            int n = new android.media.FaceDetector(w, hh, 4).findFaces(sm, fs); float best=0; PointF pt=new PointF();
+            for (int i=0;i<n;i++){ if (fs[i]==null || fs[i].confidence()<0.4f) continue; float d=fs[i].eyesDistance(); if (d>best){ best=d; fs[i].getMidPoint(pt); f[0]=pt.x/w; f[1]=Math.min(1f,(pt.y+d*0.4f)/hh); } }
+            android.util.Log.i("ShieldHome","focal faces="+n+" f="+f[0]+","+f[1]);
+        } catch (Throwable t){ android.util.Log.w("ShieldHome","focal "+t); }
+        return f;
+    }
+    void focalCrop(ImageView iv, Bitmap bm, float[] f){
+        int vw = iv.getWidth()>0?iv.getWidth():p(660), vh = iv.getHeight()>0?iv.getHeight():p(227); float bw=bm.getWidth(), bh=bm.getHeight();
+        float sc = Math.max(vw/bw, vh/bh); float sw=bw*sc, sh=bh*sc;
+        boolean face = !(f[0]==0.5f && f[1]==0.3f);
+        float tx = face ? vw*0.6f - f[0]*sw : (vw-sw)/2f; tx = Math.max(vw-sw, Math.min(0, tx));
+        float ty = face ? vh*0.42f - f[1]*sh : -(sh-vh)*f[1]; ty = Math.max(vh-sh, Math.min(0, ty));
+        Matrix m = new Matrix(); m.setScale(sc, sc); m.postTranslate(tx, ty);
+        iv.setScaleType(ImageView.ScaleType.MATRIX); iv.setImageMatrix(m);
+        iv.setPivotX(Math.max(0, Math.min(vw, f[0]*sw+tx))); iv.setPivotY(Math.max(0, Math.min(vh, f[1]*sh+ty)));
+    }
+    void showHero(){
+        final Object[] o;
+        synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
+        final String uri = (String)o[3];
+        final int tw=p(660), th=p(227), g=++heroLoadGen;
+        pool.execute(()->{
+            Bitmap bm = uri==null||images==null?null:images.decode(uri, tw, th);
+            final float[] ff = bm==null? null : focal(bm);
+            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; heroFocal=ff; transitionHero(o, bm); });
+        });
+    }
+    float[] heroFocal;
+    void transitionHero(final Object[] o, Bitmap bm){
+        if (heroLabel!=null) heroLabel.setText(o.length>5 && "NEW".equals(o[5]) ? "NEW" : "FEATURED");
+        android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
+        final ImageView in = heroFront ? heroArt2 : heroArt, out = heroFront ? heroArt : heroArt2;
+        if (bm != null){
+            in.setImageBitmap(bm); focalCrop(in, bm, heroFocal==null?new float[]{0.5f,0.3f}:heroFocal); in.setScaleX(1f); in.setScaleY(1f); in.setAlpha(0f); in.bringToFront();
+            // keep the left fade on top of both art layers
+            ((ViewGroup)in.getParent()).getChildAt(0).bringToFront(); ((ViewGroup)in.getParent()).getChildAt(0);
+            for (int i=0;i<((ViewGroup)in.getParent()).getChildCount();i++){ View ch=((ViewGroup)in.getParent()).getChildAt(i); if (!(ch instanceof ImageView)) ch.bringToFront(); }
+            in.animate().alpha(1f).setDuration(1600).setInterpolator(ease).start();
+            out.animate().alpha(0f).setDuration(1600).setInterpolator(ease).start();
+            if (kb!=null) kb.cancel();
+            kb = android.animation.ObjectAnimator.ofPropertyValuesHolder(in, android.animation.PropertyValuesHolder.ofFloat("scaleX",1f,1.07f), android.animation.PropertyValuesHolder.ofFloat("scaleY",1f,1.07f));
+            kb.setDuration(17600); kb.setInterpolator(new android.view.animation.LinearInterpolator()); kb.start();
+            heroFront = !heroFront;
+        }
+        final View[] texts = {heroTitle, heroSub, heroBadge};
+        for (View t: texts) t.animate().alpha(0f).translationX(-p(10)).setDuration(450).setInterpolator(new android.view.animation.AccelerateInterpolator()).start();
+        h.postDelayed(()->{
+            heroTitle.setText((String)o[1]); heroSub.setText(o[2]==null?"":(String)o[2]);
+            try { Drawable bd = pm.getApplicationBanner((String)o[0]); if (bd==null) bd = pm.getApplicationIcon((String)o[0]); heroBadge.setImageBitmap(glyph((String)o[0], bd));} catch(Exception e){}
+            int d=200; for (View t: texts){ t.setTranslationX(p(16)); t.animate().alpha(t==heroBadge?0.7f:1f).translationX(0).setStartDelay(d).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); d+=90; }
+        }, 480);
+    }
+
+    Map<String,Bitmap> glyphs=new HashMap<>();
+    // v12: white monochrome mark extracted from the app banner (pixels that differ from the banner background become white, alpha by contrast), cropped, with a soft shadow
+    Bitmap glyph(String pkg, Drawable d){
+        Bitmap c=glyphs.get(pkg); if (c!=null) return c;
+        int W=320, H=Math.max(1,Math.round(320f*d.getIntrinsicHeight()/Math.max(1,d.getIntrinsicWidth()))); if (d.getIntrinsicWidth()<=0){ H=180; }
+        Bitmap src=Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888); android.graphics.Canvas cv=new android.graphics.Canvas(src); d.setBounds(0,0,W,H); d.draw(cv);
+        int[] px=new int[W*H]; src.getPixels(px,0,W,0,0,W,H);
+        int[] o=px.clone(); int x0=W,y0=H,x1=-1,y1=-1;
+        for (int i=0;i<px.length;i++){ int x=i%W, y=i/W, q=o[i]; int a=Color.alpha(q);
+            int[] refs={o[y*W+1],o[y*W+W-2],o[W+x],o[(H-2)*W+x]}; float dist=1f;
+            for (int r: refs){ float dd; if (Color.alpha(r)<40) dd=a/255f; else dd=(Math.abs(Color.red(q)-Color.red(r))+Math.abs(Color.green(q)-Color.green(r))+Math.abs(Color.blue(q)-Color.blue(r)))/(3*255f)*(a/255f); dist=Math.min(dist,dd); }
+            int al=Math.round(Math.min(1f,Math.max(0f,(dist-0.10f)*3.2f))*255);
+            px[i]=Color.argb(al,255,255,255);
+            if (al>40){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+        Bitmap w=Bitmap.createBitmap(px,W,H,Bitmap.Config.ARGB_8888);
+        if (x1>x0 && y1>y0) w=Bitmap.createBitmap(w,x0,y0,x1-x0+1,y1-y0+1);
+        int pad=8; Bitmap out=Bitmap.createBitmap(w.getWidth()+pad*2,w.getHeight()+pad*2,Bitmap.Config.ARGB_8888); android.graphics.Canvas oc=new android.graphics.Canvas(out);
+        android.graphics.Paint sh=new android.graphics.Paint(); sh.setMaskFilter(new android.graphics.BlurMaskFilter(5, android.graphics.BlurMaskFilter.Blur.NORMAL));
+        int[] off=new int[2]; Bitmap a=w.extractAlpha(sh,off); android.graphics.Paint sp=new android.graphics.Paint(); sp.setColor(Color.argb(150,0,0,0)); oc.drawBitmap(a,pad+off[0],pad+off[1]+2,sp);
+        oc.drawBitmap(w,pad,pad,null);
+        glyphs.put(pkg,out); return out; }
+
+    List<View> blocked = new ArrayList<>();
+    void setHomeFocus(boolean on){
+        if (!on){ blocked.clear();
+            for (int i=0;i<root.getChildCount();i++){ View c=root.getChildAt(i); if (c==drawer) continue;
+                if (c instanceof ViewGroup){ ((ViewGroup)c).setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS); blocked.add(c); }
+                if (c.isFocusable()){ c.setFocusable(false); blocked.add(c); } } }
+        else { for (View c: blocked){ if (c instanceof ViewGroup) ((ViewGroup)c).setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS); if (!(c instanceof ViewGroup) || c instanceof PillView || c instanceof GlowFrame) c.setFocusable(true); } blocked.clear(); }
+    }
+
+    void kickData(boolean postBind){
+        final int g=++dataGen;
+        dataFut=pool.submit(()->{
+            Map<String,Long> nextUse=tv.queryUsage();
+            List<String[]> apps=tv.queryApps();
+            usage=nextUse;
+            featuredCache=tv.collectFeatured(tv.queryPreviewFeatured());
+            wnPickCache=tv.collectWatchNext();
+            plutoIdsCache=tv.queryPlutoIds();
+            appsCache=apps;
+            StringBuilder sb=new StringBuilder(); List<String> keys=new ArrayList<>(usage.keySet()); Collections.sort(keys,(a,b)->Long.compare(use(b),use(a)));
+            for (int i=0;i<Math.min(15,keys.size());i++) sb.append(keys.get(i)).append('=').append(use(keys.get(i))/60000).append("m ");
+            android.util.Log.i("ShieldHome","usage "+sb);
+            if (postBind) h.post(()->{ if (g==dataGen) bindFromCache(); });
+            return null;
+        });
+    }
+    void awaitData(){
+        if (dataFut==null) return;
+        try { dataFut.get(4, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception e) { android.util.Log.w("ShieldHome","await "+e); }
+    }
+    void bindFromCache(){
+        if (cardRow==null) return;
+        buildHomeGrid();
+        refreshCards();
+        applyFeaturedCache();
+        if (focus!=null) focus.afterData();
+        if (drawer!=null && drawer.getVisibility()==View.VISIBLE) syncDrawer();
+    }
+    String cardSig(){
+        StringBuilder b=new StringBuilder(tab==0?"P|":"L|");
+        if (tab==0){ if (wnPickCache!=null) for (Object[] o: wnPickCache) b.append(o[0]).append('|').append(o[1]).append('|').append(o[2]).append(','); }
+        else { if (plutoIdsCache!=null) b.append(plutoIdsCache); b.append('|').append(plutoSlug.size()); }
+        return b.toString();
+    }
+    List<String[]> apps(){ return appsCache!=null?appsCache:tv.queryApps(); }
+
+    // ---------- Cards ----------
+    void addCard(View v, int i){ LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(p(177.2f), p(108)); lp.bottomMargin=p(8); lp.leftMargin = i==0?0:p(8); cardRow.addView(v, lp); }
+
+    View card(Drawable art, String artUri, boolean fitArt, String badgePkg, String caption, float progress, final Runnable click){
+        FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
+        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(8)); bg.setColor(Color.argb(60,190,185,220)); bg.setStroke(Math.max(1,p(.6f)), Color.argb(50,255,255,255)); f.setBackground(bg);
+        f.setOutlineProvider(ViewOutlineProvider.BACKGROUND); f.setElevation(p(7)); if (Build.VERSION.SDK_INT>=28){ f.setOutlineSpotShadowColor(Color.BLACK); f.setOutlineAmbientShadowColor(Color.BLACK); }
+        ImageView iv = new ImageView(this); iv.setScaleType(ImageView.ScaleType.CENTER_CROP); if (art!=null) iv.setImageDrawable(art); if (fitArt){ iv.setScaleType(ImageView.ScaleType.FIT_CENTER); iv.setPadding(p(30),p(18),p(30),p(30)); } loadInto(iv, artUri, fitArt);
+        f.addView(iv, new FrameLayout.LayoutParams(-1,-1));
+        View shade = new View(this); shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(70,0,0,0), Color.argb(160,0,0,0), Color.argb(204,0,0,0)}));
+        if (caption!=null || progress>=0) f.addView(shade, new FrameLayout.LayoutParams(-1, p(56), Gravity.BOTTOM));
+        if (badgePkg != null){
+            ImageView b = new ImageView(this); b.setScaleType(ImageView.ScaleType.CENTER_CROP); b.setClipToOutline(true);
+            GradientDrawable bb = new GradientDrawable(); bb.setCornerRadius(p(4)); bb.setColor(Color.BLACK); b.setBackground(bb);
+            try { Drawable d = pm.getApplicationBanner(badgePkg); if (d==null) d = pm.getApplicationIcon(badgePkg); b.setImageDrawable(d);} catch(Exception e){}
+            f.addView(b, lp(p(36), p(20), Gravity.END|Gravity.TOP, 0, p(7), p(7), 0));
+        }
+        if (caption != null){
+            TextView t = text(caption, 10.5f, Color.WHITE, "sans-serif-medium"); t.setSingleLine(); t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            f.addView(t, lp(-1,-2,Gravity.BOTTOM, p(9), 0, p(9), p(progress>=0?14:9)));
+        }
+        if (progress >= 0){
+            FrameLayout bar = new FrameLayout(this); bar.setBackgroundColor(Color.argb(90,255,255,255));
+            View fill = new View(this); fill.setBackgroundColor(Color.rgb(229,9,20));
+            bar.addView(fill, new FrameLayout.LayoutParams(Math.round(p(159)*progress), -1));
+            f.addView(bar, lp(p(159), p(2.5f), Gravity.BOTTOM, p(9), 0, 0, p(8)));
+        }
+        return focusable(f, bg, 8, click);
+    }
+
+    void refreshCards(){
+        if (cardRow==null) return;
+        String next=cardSig();
+        if (next.equals(cardsBindSig) && cardRow.getChildCount()>0) return;
+        cardsBindSig=next;
+        cardRow.removeAllViews();
+        int n = tab==0 ? loadWatchNext() : loadLive();
+        if (n>0) return;
+        int i=0;
+        for (final String pk : (tab==0?PLAY_PKGS:LIVE_PKGS)){
+            if (!installed(pk) || i>=5) continue;
+            Drawable art=null; try { art = pm.getApplicationBanner(pk); if (art==null){ Intent li=pm.getLeanbackLaunchIntentForPackage(pk); if(li!=null) art=pm.getActivityBanner(li);} if(art==null) art=pm.getApplicationIcon(pk);} catch(Exception e){}
+            String cap = tab==1 && pk.equals("com.google.android.tv") ? "Free channels" : null;
+            addCard(card(art, null, false, null, cap, -1, ()->launchPkg(pk)), i++);
+        }
+    }
+
+    int loadWatchNext(){
+        List<Object[]> pick=wnPickCache;
+        if (pick==null||pick.isEmpty()) return 0;
+        int n=0;
+        for (Object[] o: pick){ final Intent fi=new Intent((Intent)o[3]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); final String pk2=(String)o[0]; boolean isNew=o.length>5;
+            View v = card(null,(String)o[2],false,pk2,(String)o[1], isNew?-1f:(Float)o[4], ()->{try{startActivity(fi);}catch(Exception e){ launchPkg(pk2);} });
+            addCard(v, n++); }
+        android.util.Log.i("ShieldHome","playnext shown="+n);
+        return n;
+    }
+    List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
+    // Pluto doesn't publish programs to TvContract (0 readable rows), so read what's on now from Pluto's public guide.
+    void fillPlutoNow(final List<Object[]> caps){
+        final Runnable apply = ()->{ for (Object[] o: caps){ String t = plutoNow.get((String)o[1]); if (t!=null) ((TextView)o[0]).setText(o[1]+" \u00B7 "+t); } };
+        if (System.currentTimeMillis()-plutoAt < 10*60000L && !plutoNow.isEmpty()){ apply.run(); return; }
+        pool.execute(()->{ try {
+            SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US); f.setTimeZone(TimeZone.getTimeZone("UTC"));
+            long now = System.currentTimeMillis();
+            java.net.HttpURLConnection c=(java.net.HttpURLConnection)new java.net.URL("https://api.pluto.tv/v2/channels?start="+f.format(new Date(now))+"&stop="+f.format(new Date(now+60000))).openConnection();
+            c.setConnectTimeout(6000); c.setReadTimeout(20000);
+            java.io.InputStream in = c.getInputStream(); java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] buf=new byte[65536]; int r; while ((r=in.read(buf))>0) bo.write(buf,0,r); in.close();
+            org.json.JSONArray a = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>();
+            for (int i=0;i<a.length();i++){ org.json.JSONObject ch=a.getJSONObject(i); org.json.JSONArray tl=ch.optJSONArray("timelines"); if (tl!=null && tl.length()>0) m.put(ch.optString("name"), tl.getJSONObject(0).optString("title")); String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
+            android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels");
+            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoAt=System.currentTimeMillis(); apply.run(); });
+        } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); } });
+    }
+    static final String[] LIVE_SLUGS = {"cnn-headlines","nbc-news-now","abc-news-live","cbs-news"};
+    String slugify(String n){ return n.toLowerCase(Locale.US).replace("+","").replaceAll("[^a-z0-9]+","-").replaceAll("(^-|-$)",""); }
+    Intent plutoIntent(String slug){ return new Intent(Intent.ACTION_VIEW, Uri.parse("https://pluto.tv/live-tv"+(slug==null?"":"/"+slug))).setPackage("tv.pluto.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); }
+    void startSafe(Intent in, String fallbackPkg){ try { if (in.resolveActivity(pm)!=null){ startActivity(in); return; } } catch (Exception e){} try { launchPkg(fallbackPkg); } catch (Exception e){} }
+    int loadLive(){ plutoCaps.clear();
+        Map<String,Long> plutoIds = plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
+        int n=0;
+        if (installed("com.google.android.tvlauncher")) addCard(freeplayLiveTile(), n++);
+        if (installed("tv.pluto.android")) for (String slug: LIVE_SLUGS){
+            if (n>=4) break;
+            String nm=null; for (Map.Entry<String,String> en: plutoSlug.entrySet()) if (slug.equals(en.getValue())) nm=en.getKey();
+            if (nm==null) nm = slug.equals("cnn-headlines")?"CNN Headlines":slug.equals("nbc-news-now")?"NBC News NOW":slug.equals("abc-news-live")?"ABC News Live":"CBS News 24/7";
+            final Intent in = plutoIntent(slug); Long id = plutoIds.get(slugify(nm));
+            android.util.Log.i("ShieldHome","live pluto "+nm+" -> "+in.getData()+" tif="+id);
+            View v = card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android"));
+            ImageView big = (ImageView)((GlowFrame)v).inner.getChildAt(0); big.setPadding(p(40),p(16),p(40),p(32));
+            if (id!=null) loadInto(big, TvContract.buildChannelLogoUri(id).toString(), true);
+            for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView) plutoCaps.add(new Object[]{cv, nm}); }
+            addCard(v, n++);
+        }
+        if (!plutoCaps.isEmpty()) fillPlutoNow(plutoCaps);
+        if (installed("com.haystack.android")){ Drawable art=null; try { art=pm.getApplicationBanner("com.haystack.android"); } catch(Exception e){}
+            addCard(card(art, null, true, null, "Haystack News \u00B7 Live", -1, ()->startSafe(pm.getLeanbackLaunchIntentForPackage("com.haystack.android")==null?new Intent():pm.getLeanbackLaunchIntentForPackage("com.haystack.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "com.haystack.android")), n++); }
+        return n;
+    }
+    boolean installed(String p){ try { pm.getApplicationInfo(p,0); return true; } catch(Exception e){ return false; } }
+    void launchPkg(String pkg){ Intent i = pm.getLeanbackLaunchIntentForPackage(pkg); if (i==null) i = pm.getLaunchIntentForPackage(pkg); if (i!=null) startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+
+    // ---------- v6: quick settings, featured toggle, dimmer, weather ----------
+    PillView searchV; TextView heroLabel;
+    // v12: Google TV Freeplay via the stock launcher's exported TvContentIntentReceiver (tv://freeplay -> FreeplayActivity, resumes the last Freeplay channel)
+    void playFreeplay(){ try { Intent b=new Intent("com.google.android.tvlauncher.action.VIEW", Uri.parse("tv://freeplay")); b.setComponent(new android.content.ComponentName("com.google.android.tvlauncher","com.google.android.tvlauncher.TvContentIntentReceiver")); b.addFlags(Intent.FLAG_RECEIVER_FOREGROUND); sendBroadcast(b); android.util.Log.i("ShieldHome","freeplay broadcast sent"); } catch(Exception e){ android.util.Log.w("ShieldHome","freeplay "+e); } }
+    View freeplayLiveTile(){
+        Drawable ic=null; try { android.content.res.Resources r=pm.getResourcesForApplication("com.google.android.tvlauncher"); int id=r.getIdentifier("freeplay_icon","drawable","com.google.android.tvlauncher"); if (id!=0) ic=r.getDrawable(id,null); } catch(Exception e){}
+        View v=card(ic, null, true, null, "Google TV Freeplay \u00B7 Live", -1, ()->playFreeplay());
+        TextView tg=text("LIVE", 7, Color.WHITE, "sans-serif-medium"); tg.setLetterSpacing(.08f); tg.setPadding(p(5),p(2),p(5),p(2)); GradientDrawable gb=new GradientDrawable(); gb.setCornerRadius(p(3)); gb.setColor(Color.rgb(200,30,40)); tg.setBackground(gb);
+        ((GlowFrame)v).inner.addView(tg, lp(-2,-2,Gravity.TOP|Gravity.START,p(7),p(7),0,0));
+        return v; }
+    void useWhatsNew(String js){
+        List<Object[]> nl = new ArrayList<>();
+        try { org.json.JSONArray a = new org.json.JSONArray(js==null?"[]":js);
+            for (int i=0;i<a.length();i++){ org.json.JSONObject o=a.getJSONObject(i); String pkg=o.getString("pkg"); if (!installed(pkg) || o.optString("img").isEmpty()) continue;
+                int dd=o.optInt("dd"); String when;
+                try { Date d = new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(o.getString("date")); long diff = Math.round((d.getTime() - new SimpleDateFormat("yyyy-MM-dd",Locale.US).parse(new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date())).getTime())/86400000.0);
+                    when = diff==0?"New today":diff==1?"Coming tomorrow":diff==-1?"Added yesterday":diff<0?"Added "+new SimpleDateFormat("EEE",Locale.US).format(d):"Coming "+new SimpleDateFormat("EEEE",Locale.US).format(d); } catch (Exception e){ when="New"; }
+                String ep = o.optInt("season")>0 ? "  \u00B7  S"+o.optInt("season")+(o.optInt("num")>0?" E"+o.optInt("num"):"") : "";
+                String sum = o.optString("summary"); int dot = sum.indexOf(". "); if (dot>40) sum = sum.substring(0, dot+1);
+                Intent li = pm.getLeanbackLaunchIntentForPackage(pkg); if (li==null) li = pm.getLaunchIntentForPackage(pkg);
+                nl.add(new Object[]{pkg, o.getString("show"), when+" on "+o.optString("net")+ep+"\n"+sum, o.getString("img"), li, "NEW"});
+            }
+        } catch (Exception e){ android.util.Log.w("ShieldHome","whatsnew parse "+e); }
+        // v9: one hero, Featured + What's New randomly mixed in the same rotation
+        List<Object[]> mix = new ArrayList<>(); for (Object[] o: heroItems) if (o.length>5 && "FEATURED".equals(o[5])) mix.add(o);
+        int nf = mix.size(); Collections.shuffle(nl); for (int i=0;i<Math.min(8,nl.size());i++) mix.add(nl.get(i));
+        android.util.Log.i("ShieldHome","hero mix featured="+nf+" new="+(mix.size()-nf));
+        if (mix.size()==nf) return;
+        Collections.shuffle(mix);
+        synchronized(heroLock){ h.removeCallbacks(heroRotate); heroItems.clear(); heroItems.addAll(mix); heroIdx=0; }
+        showHero(); h.postDelayed(heroRotate, 16000);
+    }
+
+    PillView gear, qsDim; LinearLayout qsPanel; boolean qsOpen=false; View heroG, inAppDim;
+    static final int[] DIMS = {0,25,50,70,90};
+    TextView wxTemp, wxDesc; View wxSep;
+    int dimIdx(){ return Math.max(0, Math.min(DIMS.length-1, prefs().getInt("dim", 0))); }
+    void qsLabels(){ int d=DIMS[dimIdx()]; qsDim.label = "Dim: "+(d==0?"Off":d+"%"); qsDim.setOn(d>0); }
+    void toggleQs(){
+        qsOpen=!qsOpen; gear.setOn(qsOpen);
+        android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.2f,0f,0f,1f);
+        gear.animate().rotation(qsOpen?90f:0f).setDuration(420).setInterpolator(ease).start();
+        if (qsOpen){
+            searchV.animate().alpha(0f).translationX(p(12)).setDuration(200).setInterpolator(ease).withEndAction(()->{ searchV.setVisibility(View.INVISIBLE); }).start();
+            searchV.setFocusable(false);
+            qsPanel.setVisibility(View.VISIBLE); qsPanel.setAlpha(1f); qsPanel.setTranslationX(0);
+            int d=60; for (int i=0;i<qsPanel.getChildCount();i++){ View c=qsPanel.getChildAt(i); c.setAlpha(0f); c.setTranslationX(-p(36+16*i)); c.setScaleX(.92f); c.setScaleY(.92f);
+                c.animate().alpha(1f).translationX(0).scaleX(1f).scaleY(1f).setStartDelay(d).setDuration(380).setInterpolator(ease).start(); d+=70; }
+            h.postDelayed(()->{ if (qsOpen) qsDim.requestFocus(); }, 60); }
+        else { if (qsPanel.hasFocus()) gear.requestFocus();
+            for (int i=0;i<qsPanel.getChildCount();i++){ View c=qsPanel.getChildAt(i); c.animate().alpha(0f).translationX(-p(30+16*i)).setStartDelay(0).setDuration(220).setInterpolator(ease).start(); }
+            h.postDelayed(()->{ if (!qsOpen) qsPanel.setVisibility(View.GONE); }, 230);
+            searchV.setVisibility(View.VISIBLE); searchV.setFocusable(true); searchV.setTranslationX(p(12));
+            searchV.animate().alpha(1f).translationX(0).setDuration(300).setStartDelay(120).setInterpolator(ease).withEndAction(null).start(); }
+    }
+    void applyDim(){
+        int pct = DIMS[dimIdx()];
+        boolean overlay = android.provider.Settings.canDrawOverlays(this);
+        Intent si = new Intent(this, DimService.class).putExtra("pct", pct);
+        try { if (overlay){ if (pct>0) startForegroundService(si); else stopService(si); } } catch (Exception e){ android.util.Log.w("ShieldHome","dimsvc "+e); overlay=false; }
+        if (inAppDim==null){ inAppDim = new View(this); inAppDim.setBackgroundColor(Color.BLACK); inAppDim.setClickable(false); inAppDim.setFocusable(false); root.addView(inAppDim, new FrameLayout.LayoutParams(-1,-1)); inAppDim.setTranslationZ(p(60)); }
+        inAppDim.setAlpha(overlay?0f:pct/100f); inAppDim.setVisibility(!overlay && pct>0 ? View.VISIBLE : View.GONE);
+        android.util.Log.i("ShieldHome","dim pct="+pct+" overlay="+overlay);
+    }
+    final Runnable wxRun = this::weatherTick;
+    void weatherTick(){
+        h.removeCallbacks(wxRun);
+        long age = System.currentTimeMillis()-prefs().getLong("wx_at",0);
+        if (age > 30*60*1000L) net.fetchWeather();
+        h.postDelayed(wxRun, Math.max(60000L, 30*60*1000L-Math.min(age,30*60*1000L)+5000));
+    }
+    void showWeather(){
+        if (!prefs().contains("wx_at")) return;
+        int code=prefs().getInt("wx_code",0); boolean day=prefs().getInt("wx_day",1)==1;
+        String ic, d;
+        if (code==0){ ic=day?"\u2600\uFE0F":"\uD83C\uDF19"; d="Clear"; }
+        else if (code<=2){ ic=day?"\uD83C\uDF24\uFE0F":"\u2601\uFE0F"; d="Partly cloudy"; }
+        else if (code==3){ ic="\u2601\uFE0F"; d="Cloudy"; }
+        else if (code==45||code==48){ ic="\uD83C\uDF2B\uFE0F"; d="Fog"; }
+        else if (code>=51&&code<=57){ ic="\uD83C\uDF26\uFE0F"; d="Drizzle"; }
+        else if (code>=61&&code<=67){ ic="\uD83C\uDF27\uFE0F"; d="Rain"; }
+        else if (code>=71&&code<=77){ ic="\u2744\uFE0F"; d="Snow"; }
+        else if (code>=80&&code<=82){ ic="\uD83C\uDF26\uFE0F"; d="Showers"; }
+        else if (code==85||code==86){ ic="\uD83C\uDF28\uFE0F"; d="Snow showers"; }
+        else { ic="\u26C8\uFE0F"; d="Storms"; }
+        setFit(wxTemp, ic+"  "+prefs().getInt("wx_t",0)+"\u00B0F");
+        String city=prefs().getString("wx_city",""); setFit(wxDesc, city.isEmpty()?d:d+" \u00B7 "+city);
+        wxSep.setVisibility(View.VISIBLE);
+    }
+}
