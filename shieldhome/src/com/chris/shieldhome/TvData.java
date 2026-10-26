@@ -128,12 +128,6 @@ class TvData {
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "prev " + e); }
         String yt = "com.google.android.youtube.tv";
-        int ytPv = pvBy.containsKey(yt) ? pvBy.get(yt).size() : 0;
-        if (ytPv > 0 && wnBy.containsKey(yt)) {
-            List<Object[]> yl = wnBy.get(yt);
-            int cap = Math.max(0, ytPv - 1);
-            while (yl.size() > cap) yl.remove(yl.size() - 1);
-        }
         StringBuilder diag = new StringBuilder();
         Set<String> pk = new LinkedHashSet<>();
         pk.addAll(wnBy.keySet());
@@ -159,7 +153,7 @@ class TvData {
         List<Object[]> cwL = rr(order, cw, top, 12, seenT);
         List<Object[]> nwL = rr(order, nw, top, 12, seenT);
         int ytRec = 0; for (Object[] o : nwL) if (yt.equals(o[0])) ytRec++;
-        int ytCwMax = Math.max(0, ytRec - 1), ytCw = 0;
+        int ytCwMax = ytRec > 1 ? ytRec - 1 : 2, ytCw = 0;
         List<Object[]> cw2 = new ArrayList<>();
         for (Object[] o : cwL) { if (yt.equals(o[0])) { if (ytCw >= ytCwMax) continue; ytCw++; } cw2.add(o); }
         cwL = cw2;
