@@ -17,7 +17,7 @@ import java.util.*;
 
 public class MainActivity extends Activity {
     // All geometry is in mockup pixels (1024x576 reference), scaled to the real screen.
-    float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; View cardFade; TextView clock, date;
+    float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; TextView clock, date;
     PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255);
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
@@ -154,26 +154,23 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
         place(qsPanel, 88, 17, 290, 28); qsLabels();
 
-        // Hero: art continues p(72) past the focus box so the fade has no hard 288-line
-        FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true); artHost.setClickable(false); artHost.setFocusable(false);
+        // Hero: full-bleed top half, under the top bar (inserted at index 0)
+        FrameLayout hero = new FrameLayout(this);
+        FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
         ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        View bleed = new View(this); bleed.setFocusable(false); bleed.setClickable(false);
-        bleed.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(90,8,8,16), Color.argb(200,8,8,16), Color.rgb(8,8,16)}));
-        artHost.addView(bleed, lp(-1, p(120), Gravity.BOTTOM, 0,0,0,0));
-        root.addView(artHost, 0, lp(-1, p(360), Gravity.TOP, 0,0,0,0));
-        FrameLayout hero = new FrameLayout(this);
+        View botFade = new View(this);
+        botFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(140,8,8,16), Color.rgb(8,8,16)}));
+        artHost.addView(botFade, lp(-1, p(96), Gravity.BOTTOM, 0,0,0,0));
+        hero.addView(artHost, new FrameLayout.LayoutParams(-1,-1));
         View topScrim = new View(this);
         topScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.argb(170,0,0,0), Color.argb(70,0,0,0), Color.TRANSPARENT}));
-        hero.addView(topScrim, new FrameLayout.LayoutParams(-1,-1));
+        hero.addView(topScrim, lp(-1, p(80), Gravity.TOP, 0,0,0,0));
         View textScrim = new View(this);
         textScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BL_TR, new int[]{Color.argb(200,0,0,0), Color.argb(90,0,0,0), Color.TRANSPARENT}));
-        hero.addView(textScrim, new FrameLayout.LayoutParams(-1,-1));
-        View botFade = new View(this);
-        botFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.TRANSPARENT, Color.argb(70,0,0,0), Color.TRANSPARENT}));
-        hero.addView(botFade, new FrameLayout.LayoutParams(-1,-1));
+        hero.addView(textScrim, lp(p(640), p(190), Gravity.BOTTOM|Gravity.START, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroLabel = text("FEATURED", 8, Color.rgb(190,188,205), "sans-serif-medium");
         heroArt = art;
@@ -195,34 +192,29 @@ public class MainActivity extends Activity {
             heroFocus.animate().alpha(f?1f:0f).setDuration(180).start();
         });
         hero.setOnClickListener(x->{ Object[] o=heroOnScreen; if (o==null) synchronized(heroLock){ o=heroItems.isEmpty()?null:heroItems.get(heroIdx); } if (o==null) launchPkg(installed("com.plexapp.android")?"com.plexapp.android":PLAY_PKGS[0]); else { try { startActivity(((Intent)o[4]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch(Exception e){ launchPkg((String)o[0]); } } });
-        root.addView(hero, 1, lp(-1, p(288), Gravity.TOP, 0,0,0,0));
+        root.addView(hero, 0, lp(-1, p(288), Gravity.TOP, 0,0,0,0));
 
         // Tabs
         tabPlay = new PillView(this, "Play Next", 0, true); tabLive = new PillView(this, "Live TV", 1, false);
         place(tabPlay, 52, 308, 129, 28); place(tabLive, 192, 308, 110, 28);
-        View.OnFocusChangeListener tl = (v,f)->{ if(f){ int t = v==tabPlay?0:1; if (t!=tab){ tab=t; tabPlay.setOn(tab==0); tabLive.setOn(tab==1); refreshCards(); } } };
+        View.OnFocusChangeListener tl = (v,f)->{ if(f){ int t = v==tabPlay?0:1; if (t!=tab){ tab=t; tabPlay.setOn(tab==0); tabLive.setOn(tab==1); refreshCards(); resetCardRow(); } } };
         tabPlay.setOnFocusChangeListener(tl); tabLive.setOnFocusChangeListener(tl);
 
-        // Cards row: snap-scroll, hard clip, right-edge fade
+        // Cards row: 5-tile viewport; clip off so scale+glow can draw; 6th hidden by alpha
         FrameLayout cardWrap = new FrameLayout(this);
+        cardWrap.setClipChildren(false); cardWrap.setClipToPadding(false);
         cardScroll = new HorizontalScrollView(this){
             @Override protected int computeScrollDeltaToGetChildRectOnScreen(Rect r){ return 0; }
         };
         cardScroll.setHorizontalScrollBarEnabled(false);
         cardScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        cardWrap.setClipChildren(false);
-        cardScroll.setClipToPadding(false);
-        cardScroll.setPadding(0,p(18),0,p(18)); // vertical glow room; horizontal clip stays at the row edge
-        cardScroll.setClipChildren(true);
+        cardScroll.setClipChildren(false); cardScroll.setClipToPadding(false);
+        cardScroll.setPadding(p(20),p(20),p(20),p(20));
         cardRow = new LinearLayout(this); cardRow.setClipChildren(false); cardRow.setClipToPadding(false);
         cardScroll.addView(cardRow, new ViewGroup.LayoutParams(-2,-1));
         cardWrap.addView(cardScroll, new FrameLayout.LayoutParams(-1,-1));
-        cardFade = new View(this);
-        cardFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.TRANSPARENT, Color.rgb(8,8,16)}));
-        cardFade.setFocusable(false); cardFade.setClickable(false);
-        cardWrap.addView(cardFade, lp(p(48),-1,Gravity.END,0,p(18),0,p(18)));
-        place(cardWrap, 50, 332, 918, 152);
-        cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardFade);
+        place(cardWrap, 30, 330, 958, 156);
+        cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardAlphas);
 
         // Home apps: 11 most-used + Settings, 2 rows, nothing below
         homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false);
@@ -354,7 +346,7 @@ public class MainActivity extends Activity {
             f.addView(t, lp(-1, -2, Gravity.BOTTOM, p(6), 0, p(6), p(8)));
         }
         final Intent li = new Intent(Intent.ACTION_MAIN).setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        View gv = focusable(f, bg, 8, ()->{ try{ startActivity(li);}catch(Exception e){} }); gv.setTag(pkg); return gv;
+        View gv = focusable(f, bg, 8, ()->{ try{ startActivity(li);}catch(Exception e){} }); gv.setTag(pkg); tintCard(gv, pkg); return gv;
     }
     // Banner: use its edge colour so the banner blends into the tile. Icon: dominant (most saturated common) colour, darkened.
     int brandColor(Drawable d, boolean edge){
@@ -615,7 +607,7 @@ public class MainActivity extends Activity {
         return f;
     }
     void focalCrop(ImageView iv, Bitmap bm, float[] f){
-        int vw = iv.getWidth()>0?iv.getWidth():p(1024), vh = iv.getHeight()>0?iv.getHeight():p(360); float bw=bm.getWidth(), bh=bm.getHeight();
+        int vw = iv.getWidth()>0?iv.getWidth():p(1024), vh = iv.getHeight()>0?iv.getHeight():p(288); float bw=bm.getWidth(), bh=bm.getHeight();
         float sc = Math.max(vw/bw, vh/bh); float sw=bw*sc, sh=bh*sc;
         boolean face = !(f[0]==0.5f && f[1]==0.3f);
         float tx = face ? vw*0.6f - f[0]*sw : (vw-sw)/2f; tx = Math.max(vw-sw, Math.min(0, tx));
@@ -628,7 +620,7 @@ public class MainActivity extends Activity {
         final Object[] o;
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
         final String uri = (String)o[3];
-        final int tw=p(1024), th=p(360), g=++heroLoadGen;
+        final int tw=p(1024), th=p(288), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap bm = uri==null||images==null?null:images.decode(uri, tw, th);
             final float[] ff = bm==null? null : focal(bm);
@@ -738,16 +730,28 @@ public class MainActivity extends Activity {
     void snapCardRow(View v){
         if (cardScroll==null) return;
         int idx=cardRow.indexOfChild(v); if (idx<0) return;
-        int vis=cardScroll.getWidth()-cardScroll.getPaddingLeft()-cardScroll.getPaddingRight(); if (vis<=0) vis=p(918);
-        int x=snapX(cardScroll.getScrollX(), idx, p(177.2f), p(8), vis, cardRow.getChildCount());
-        if (x!=cardScroll.getScrollX()) cardScroll.smoothScrollTo(x,0); else updateCardFade();
+        int x=snapX(cardScroll.getScrollX(), idx, p(177.2f), p(8), p(918), cardRow.getChildCount());
+        if (x!=cardScroll.getScrollX()) cardScroll.smoothScrollTo(x,0); else updateCardAlphas();
     }
-    void updateCardFade(){
-        if (cardFade==null||cardScroll==null) return;
-        int vis=cardScroll.getWidth()-cardScroll.getPaddingLeft()-cardScroll.getPaddingRight(); if (vis<=0) vis=p(918);
-        int stride=p(177.2f)+p(8);
-        int nFit=Math.max(1,(vis+p(8))/stride);
-        cardFade.setVisibility(cardScroll.getScrollX()<Math.max(0,cardRow.getChildCount()-nFit)*stride-1 ? View.VISIBLE : View.GONE);
+    void resetCardRow(){
+        if (focus!=null) focus.lastIdx[3]=0;
+        if (cardScroll!=null) cardScroll.scrollTo(0,0);
+        if (cardRow!=null && cardRow.getChildCount()>0 && cardRow.indexOfChild(getCurrentFocus())>=0) cardRow.getChildAt(0).requestFocus();
+        updateCardAlphas();
+    }
+    void updateCardAlphas(){
+        if (cardRow==null) return;
+        int sx=cardScroll==null?0:cardScroll.getScrollX(), stride=p(177.2f)+p(8);
+        for (int i=0;i<cardRow.getChildCount();i++) cardRow.getChildAt(i).setAlpha(tileAlpha(i,sx,stride,5));
+    }
+    static float tileAlpha(int i, int sx, int stride, int nFit){
+        if (stride<=0) return 1f;
+        int b=sx/stride; float t=(sx-b*(float)stride)/stride;
+        if (i<b) return 0f;
+        if (i==b) return 1f-t;
+        if (i<b+nFit) return 1f;
+        if (i==b+nFit) return t;
+        return 0f;
     }
     static int snapX(int sx, int idx, int cardW, int gap, int vis, int n){
         int stride=cardW+gap;
@@ -799,7 +803,7 @@ public class MainActivity extends Activity {
         cardRow.removeAllViews();
         if (cardScroll!=null) cardScroll.scrollTo(0,0);
         int n = tab==0 ? loadWatchNext() : loadLive();
-        if (n>0){ h.post(this::updateCardFade); return; }
+        if (n>0){ h.post(this::updateCardAlphas); return; }
         int i=0;
         for (final String pk : (tab==0?PLAY_PKGS:LIVE_PKGS)){
             if (!installed(pk)) continue;
@@ -807,7 +811,7 @@ public class MainActivity extends Activity {
             String cap = tab==1 && pk.equals("com.google.android.tv") ? "Free channels" : null;
             View v=card(art, null, false, null, cap, -1, ()->launchPkg(pk)); tintCard(v, pk); addCard(v, i++);
         }
-        h.post(this::updateCardFade);
+        h.post(this::updateCardAlphas);
     }
 
     int loadWatchNext(){
