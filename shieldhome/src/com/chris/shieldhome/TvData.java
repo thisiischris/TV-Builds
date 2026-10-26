@@ -127,6 +127,13 @@ class TvData {
                 else pvBy.get(k).add(o);
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "prev " + e); }
+        String yt = "com.google.android.youtube.tv";
+        int ytPv = pvBy.containsKey(yt) ? pvBy.get(yt).size() : 0;
+        if (ytPv > 0 && wnBy.containsKey(yt)) {
+            List<Object[]> yl = wnBy.get(yt);
+            int cap = Math.max(0, ytPv - 1);
+            while (yl.size() > cap) yl.remove(yl.size() - 1);
+        }
         StringBuilder diag = new StringBuilder();
         Set<String> pk = new LinkedHashSet<>();
         pk.addAll(wnBy.keySet());
@@ -150,26 +157,26 @@ class TvData {
         for (String k : order) { Long m = a.usage.get(k); if (m != null) top = Math.max(top, m); }
         Set<String> seenT = new HashSet<>();
         List<Object[]> cwL = rr(order, cw, top, 12, seenT);
-        List<Object[]> nwL = new ArrayList<>();
-        for (Object[] o : mazeNew()) {
-            if (o[0] == null || o[1] == null) continue;
-            if (!seenT.add(o[0] + "|" + o[1])) continue;
-            nwL.add(o);
-        }
-        nwL.addAll(rr(order, nw, top, 12, seenT));
+        List<Object[]> nwL = rr(order, nw, top, 12, seenT);
+        int ytRec = 0; for (Object[] o : nwL) if (yt.equals(o[0])) ytRec++;
+        int ytCwMax = Math.max(0, ytRec - 1), ytCw = 0;
+        List<Object[]> cw2 = new ArrayList<>();
+        for (Object[] o : cwL) { if (yt.equals(o[0])) { if (ytCw >= ytCwMax) continue; ytCw++; } cw2.add(o); }
+        cwL = cw2;
         List<Object[]> pick = new ArrayList<>();
         final int MAX = 12;
-        int wantNew = Math.min(MAX * 2 / 5, nwL.size()), wantCw = Math.min(MAX - wantNew, cwL.size());
+        int wantNew = Math.min(MAX * 3 / 5, nwL.size()), wantCw = Math.min(MAX - wantNew, cwL.size());
         wantNew = Math.min(nwL.size(), MAX - wantCw);
         int ci = 0, ni = 0;
-        int[] pattern = {0, 0, 1, 0, 1};
+        int[] pattern = {1, 0, 1, 1, 0};
         for (int slot = 0; pick.size() < wantCw + wantNew; slot++) {
             boolean takeNew = pattern[slot % 5] == 1;
             if (takeNew && ni < wantNew) pick.add(tag(nwL.get(ni++)));
-            else if (ci < wantCw) pick.add(cwL.get(ci++));
+            else if (!takeNew && ci < wantCw) pick.add(cwL.get(ci++));
             else if (ni < wantNew) pick.add(tag(nwL.get(ni++)));
+            else if (ci < wantCw) pick.add(cwL.get(ci++));
         }
-        android.util.Log.i("ShieldHome", "playnext " + diag + "order=" + order + " picked=" + pick.size() + " cw=" + cwL.size() + " new=" + nwL.size() + " hist=" + histPkg);
+        android.util.Log.i("ShieldHome", "playnext " + diag + "order=" + order + " picked=" + pick.size() + " cw=" + cwL.size() + " rec=" + nwL.size() + " hist=" + histPkg);
         return pick;
     }
 
@@ -181,23 +188,6 @@ class TvData {
     String appName(String pkg) {
         try { return a.pm.getApplicationLabel(a.pm.getApplicationInfo(pkg, 0)).toString(); }
         catch (Exception e) { return null; }
-    }
-    List<Object[]> mazeNew() {
-        List<Object[]> out = new ArrayList<>();
-        try {
-            org.json.JSONArray arr = new org.json.JSONArray(a.prefs().getString("wn_json", "[]"));
-            for (int i = 0; i < arr.length(); i++) {
-                org.json.JSONObject o = arr.getJSONObject(i);
-                String pkg = o.getString("pkg"), show = o.optString("show"), img = o.optString("img");
-                if (!a.installed(pkg) || img.isEmpty() || show.isEmpty()) continue;
-                if (isNews(pkg, appName(pkg), null)) continue;
-                Intent li = a.pm.getLeanbackLaunchIntentForPackage(pkg);
-                if (li == null) li = a.pm.getLaunchIntentForPackage(pkg);
-                if (li == null) continue;
-                out.add(new Object[]{pkg, show, img, li, -1f});
-            }
-        } catch (Exception e) { android.util.Log.w("ShieldHome", "maze " + e); }
-        return out;
     }
     static boolean isNews(String pkg, String name, String genre) {
         if (genre != null && genre.toUpperCase(Locale.US).contains("NEWS")) return true;

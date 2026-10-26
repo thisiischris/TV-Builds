@@ -785,7 +785,7 @@ public class MainActivity extends Activity {
             if (a>0.01f && c instanceof GlowFrame){
                 View iv=((GlowFrame)c).inner.getChildAt(0);
                 if (iv instanceof ImageView){ Object tg=iv.getTag();
-                    if (tg instanceof String && ((String)tg).startsWith("pend:")) loadInto((ImageView)iv, ((String)tg).substring(5), true); }
+                    if (tg instanceof String && ((String)tg).startsWith("pend:")) loadInto((ImageView)iv, ((String)tg).substring(5), false); }
             }
         }
     }
@@ -872,22 +872,23 @@ public class MainActivity extends Activity {
         android.util.Log.i("ShieldHome","playnext shown="+n);
         return n;
     }
-    List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
+    List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); Map<String,String> plutoArt = new HashMap<>(); final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
     List<View> liveCache; final Set<String> liveSlugs = new LinkedHashSet<>();
     // Pluto doesn't publish programs to TvContract (0 readable rows), so read what's on now from Pluto's public guide.
     void fillPlutoNow(final List<Object[]> caps){
-        final Runnable apply = ()->{ for (Object[] o: caps){ String t = plutoNow.get((String)o[1]); if (t!=null) ((TextView)o[0]).setText(o[1]+" \u00B7 "+t); } };
-        if (System.currentTimeMillis()-plutoAt < 10*60000L && !plutoNow.isEmpty()){ apply.run(); return; }
+        if (System.currentTimeMillis()-plutoAt < 10*60000L && !plutoNow.isEmpty()){ applyLiveNow(); return; }
         pool.execute(()->{ try {
             SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US); f.setTimeZone(TimeZone.getTimeZone("UTC"));
             long now = System.currentTimeMillis();
             java.net.HttpURLConnection c=(java.net.HttpURLConnection)new java.net.URL("https://api.pluto.tv/v2/channels?start="+f.format(new Date(now))+"&stop="+f.format(new Date(now+60000))).openConnection();
             c.setConnectTimeout(6000); c.setReadTimeout(20000);
             java.io.InputStream in = c.getInputStream(); java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] buf=new byte[65536]; int r; while ((r=in.read(buf))>0) bo.write(buf,0,r); in.close();
-            org.json.JSONArray a = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>();
-            for (int i=0;i<a.length();i++){ org.json.JSONObject ch=a.getJSONObject(i); org.json.JSONArray tl=ch.optJSONArray("timelines"); if (tl!=null && tl.length()>0) m.put(ch.optString("name"), tl.getJSONObject(0).optString("title")); String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
-            android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels");
-            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoAt=System.currentTimeMillis(); apply.run();
+            org.json.JSONArray a = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>(), art = new HashMap<>();
+            for (int i=0;i<a.length();i++){ org.json.JSONObject ch=a.getJSONObject(i); org.json.JSONArray tl=ch.optJSONArray("timelines");
+                if (tl!=null && tl.length()>0){ org.json.JSONObject t0=tl.getJSONObject(0); m.put(ch.optString("name"), t0.optString("title")); String img=plutoGuideArt(t0); if (img!=null) art.put(ch.optString("name"), img); }
+                String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
+            android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels art="+art.size());
+            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoAt=System.currentTimeMillis(); applyLiveNow();
                 if (liveCache==null) return;
                 List<String[]> extra=new ArrayList<>();
                 for (Map.Entry<String,String> e: plutoSlug.entrySet()) if (!liveSlugs.contains(e.getValue())) extra.add(new String[]{e.getValue(), e.getKey()});
@@ -895,6 +896,18 @@ public class MainActivity extends Activity {
             });
         } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); } });
     }
+    static String plutoGuideArt(org.json.JSONObject t0){
+        org.json.JSONObject ep=t0.optJSONObject("episode"); if (ep==null) return null;
+        String u=jsonPath(ep.optJSONObject("featuredImage"));
+        org.json.JSONObject se=ep.optJSONObject("series");
+        if (u==null && se!=null) u=jsonPath(se.optJSONObject("featuredImage"));
+        if (u==null && se!=null) u=jsonPath(se.optJSONObject("poster16_9"));
+        if (u==null) u=jsonPath(ep.optJSONObject("poster16_9"));
+        if (u==null) u=jsonPath(ep.optJSONObject("thumbnail"));
+        if (u!=null && u.contains("default/vod.screenshot")) return null;
+        return u;
+    }
+    static String jsonPath(org.json.JSONObject o){ if (o==null) return null; String p=o.optString("path",""); return p.isEmpty()?null:p; }
     static final String[] LIVE_SLUGS = {"cnn-headlines","nbc-news-now","abc-news-live","cbs-news"};
     String slugify(String n){ return n.toLowerCase(Locale.US).replace("+","").replaceAll("[^a-z0-9]+","-").replaceAll("(^-|-$)",""); }
     Intent plutoIntent(String slug){ return new Intent(Intent.ACTION_VIEW, Uri.parse("https://pluto.tv/live-tv"+(slug==null?"":"/"+slug))).setPackage("tv.pluto.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); }
@@ -905,7 +918,7 @@ public class MainActivity extends Activity {
         return null;
     }
     int loadLive(){
-        if (liveCache!=null && !liveCache.isEmpty()){ showLiveCache(); return liveCache.size(); }
+        if (liveCache!=null && !liveCache.isEmpty()){ showLiveCache(); fillPlutoNow(plutoCaps); return liveCache.size(); }
         liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
         if (installed("com.google.android.tvlauncher")){ View v=freeplayLiveTile(); tintCard(v,"com.google.android.tvlauncher"); putLive(v, null); }
         List<String[]> rest=new ArrayList<>();
@@ -935,9 +948,10 @@ public class MainActivity extends Activity {
     }
     void putLive(View v, String slug){ if (slug!=null) liveSlugs.add(slug); liveCache.add(v); addCard(v, liveCache.size()-1); }
     void showLiveCache(){
-        if (cardRow.getChildCount()==liveCache.size() && cardRow.getChildCount()>0 && cardRow.getChildAt(0)==liveCache.get(0)) return;
+        if (cardRow.getChildCount()==liveCache.size() && cardRow.getChildCount()>0 && cardRow.getChildAt(0)==liveCache.get(0)){ applyLiveNow(); return; }
         cardRow.removeAllViews();
         int i=0; for (View v: liveCache){ if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v); addCard(v, i++); }
+        applyLiveNow();
     }
     void appendLive(List<String[]> rest, boolean hay){
         for (String[] e: rest){ if (liveSlugs.contains(e[0])) continue; View v=plutoTile(e[0], e[1], false); liveCache.add(v); liveSlugs.add(e[0]); if (tab==1) addCard(v, liveCache.size()-1); }
@@ -949,10 +963,61 @@ public class MainActivity extends Activity {
         Map<String,Long> plutoIds=plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
         final Intent in=plutoIntent(slug); Long id=plutoId(plutoIds, nm, slug);
         View v=card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android")); tintCard(v, "tv.pluto.android");
-        ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0); big.setPadding(p(40),p(16),p(40),p(32));
-        if (id!=null){ String uri=TvContract.buildChannelLogoUri(id).toString(); if (loadArt) loadInto(big, uri, true); else big.setTag("pend:"+uri); }
-        for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView) plutoCaps.add(new Object[]{cv, nm}); }
+        ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0);
+        TextView ov=text(nm, 8, Color.WHITE, "sans-serif-medium"); ov.setShadowLayer(p(3),0,p(1),Color.argb(180,0,0,0)); ov.setVisibility(View.GONE);
+        ((GlowFrame)v).inner.addView(ov, lp(-2,-2,Gravity.BOTTOM|Gravity.START,p(7),0,0,p(7)));
+        TextView cap=null;
+        for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView && cv!=ov) cap=(TextView)cv; }
+        String art=plutoArt.get(nm); if (art==null) art=tifNowArt(id);
+        if (art!=null && loadArt) setLiveArt(big, art, true); else if (art!=null) big.setTag("pend:"+art);
+        if (art!=null){ ov.setVisibility(View.VISIBLE); if (plutoNow.get(nm)!=null && cap!=null) cap.setText(plutoNow.get(nm)); }
+        plutoCaps.add(new Object[]{cap, nm, big, ov, id});
         return v;
+    }
+    void applyLiveNow(){
+        for (Object[] o: plutoCaps){
+            String nm=(String)o[1]; TextView cap=(TextView)o[0]; ImageView iv=o.length>2?(ImageView)o[2]:null; TextView ov=o.length>3?(TextView)o[3]:null;
+            Long id=o.length>4?(Long)o[4]:null;
+            String t=plutoNow.get(nm), art=plutoArt.get(nm); if (art==null) art=tifNowArt(id);
+            if (art!=null && !art.isEmpty()){
+                if (ov!=null) ov.setVisibility(View.VISIBLE);
+                if (cap!=null) cap.setText(t!=null?t:nm);
+                setLiveArt(iv, art, false);
+            } else {
+                if (ov!=null) ov.setVisibility(View.GONE);
+                if (cap!=null) cap.setText(t!=null?nm+" \u00B7 "+t:nm);
+            }
+        }
+        if (tab==1) updateCardAlphas();
+    }
+    void setLiveArt(ImageView iv, String uri, boolean now){
+        if (iv==null || uri==null) return;
+        Object old=iv.getTag(); if (uri.equals(old) || ("pend:"+uri).equals(old)) return;
+        iv.setPadding(0,0,0,0); iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        if (now || (tab==1 && iv.getAlpha()>0)) loadInto(iv, uri, false); else iv.setTag("pend:"+uri);
+    }
+    String tifNowArt(Long id){
+        if (id==null) return null;
+        long now=System.currentTimeMillis();
+        try (Cursor c=getContentResolver().query(TvContract.buildProgramsUriForChannel(id, now, now+60000), null, null, null, null)){
+            if (c!=null && c.moveToFirst()){
+                int i=c.getColumnIndex("poster_art_uri"); String a=i>=0&&!c.isNull(i)?c.getString(i):null;
+                if (a==null){ i=c.getColumnIndex("thumbnail_uri"); a=i>=0&&!c.isNull(i)?c.getString(i):null; }
+                return a;
+            }
+        } catch (Exception e){}
+        return null;
+    }
+    String freeplayNowArt(){
+        try (Cursor c=getContentResolver().query(TvContract.Channels.CONTENT_URI, null, null, null, null)){
+            while (c!=null && c.moveToNext()){
+                int pi=c.getColumnIndex("package_name"); String pkg=pi>=0&&!c.isNull(pi)?c.getString(pi):null;
+                if (pkg==null || !(pkg.contains("tvlauncher")||pkg.equals("com.google.android.tv"))) continue;
+                int i=c.getColumnIndex("_id"); if (i<0) continue;
+                String art=tifNowArt(c.getLong(i)); if (art!=null) return art;
+            }
+        } catch (Exception e){}
+        return null;
     }
     View haystackTile(){
         Drawable art=null; try { art=pm.getApplicationBanner("com.haystack.android"); } catch(Exception e){}
@@ -967,10 +1032,12 @@ public class MainActivity extends Activity {
     // v12: Google TV Freeplay via the stock launcher's exported TvContentIntentReceiver (tv://freeplay -> FreeplayActivity, resumes the last Freeplay channel)
     void playFreeplay(){ try { Intent b=new Intent("com.google.android.tvlauncher.action.VIEW", Uri.parse("tv://freeplay")); b.setComponent(new android.content.ComponentName("com.google.android.tvlauncher","com.google.android.tvlauncher.TvContentIntentReceiver")); b.addFlags(Intent.FLAG_RECEIVER_FOREGROUND); sendBroadcast(b); android.util.Log.i("ShieldHome","freeplay broadcast sent"); } catch(Exception e){ android.util.Log.w("ShieldHome","freeplay "+e); } }
     View freeplayLiveTile(){
-        Drawable ic=null; try { android.content.res.Resources r=pm.getResourcesForApplication("com.google.android.tvlauncher"); int id=r.getIdentifier("freeplay_icon","drawable","com.google.android.tvlauncher"); if (id!=0) ic=r.getDrawable(id,null); } catch(Exception e){}
-        View v=card(ic, null, true, null, "Google TV Freeplay \u00B7 Live", -1, ()->playFreeplay());
+        String art=freeplayNowArt();
+        Drawable ic=null; if (art==null) try { android.content.res.Resources r=pm.getResourcesForApplication("com.google.android.tvlauncher"); int id=r.getIdentifier("freeplay_icon","drawable","com.google.android.tvlauncher"); if (id!=0) ic=r.getDrawable(id,null); } catch(Exception e){}
+        View v=card(ic, art, art==null, null, "Google TV Freeplay \u00B7 Live", -1, ()->playFreeplay());
         TextView tg=text("LIVE", 7, Color.WHITE, "sans-serif-medium"); tg.setLetterSpacing(.08f); tg.setPadding(p(5),p(2),p(5),p(2)); GradientDrawable gb=new GradientDrawable(); gb.setCornerRadius(p(3)); gb.setColor(Color.rgb(200,30,40)); tg.setBackground(gb);
         ((GlowFrame)v).inner.addView(tg, lp(-2,-2,Gravity.TOP|Gravity.START,p(7),p(7),0,0));
+        if (art!=null){ TextView ov=text("Freeplay", 8, Color.WHITE, "sans-serif-medium"); ov.setShadowLayer(p(3),0,p(1),Color.argb(180,0,0,0)); ((GlowFrame)v).inner.addView(ov, lp(-2,-2,Gravity.BOTTOM|Gravity.START,p(7),0,0,p(7))); }
         return v; }
     void useWhatsNew(String js){
         List<Object[]> nl = new ArrayList<>();
@@ -994,8 +1061,6 @@ public class MainActivity extends Activity {
             synchronized(heroLock){ h.removeCallbacks(heroRotate); heroItems.clear(); heroItems.addAll(mix); heroIdx=0; }
             showHero(); h.postDelayed(heroRotate, 16000);
         }
-        final int g=dataGen;
-        pool.execute(()->{ List<Object[]> p=tv.collectWatchNext(); h.post(()->{ if (g==dataGen){ wnPickCache=p; refreshCards(); } }); });
     }
 
     PillView gear, qsDim; LinearLayout qsPanel; boolean qsOpen=false; View heroG, heroFocus, inAppDim;
