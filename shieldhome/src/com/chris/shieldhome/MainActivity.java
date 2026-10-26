@@ -679,7 +679,7 @@ public class MainActivity extends Activity {
     }
     void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
     // ---------- Featured hero ----------
-    ImageView heroArt, heroBadge; TextView heroTitle, heroSub; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
+    ImageView heroArt, heroBadge; TextView heroTitle, heroSub; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0; LinearLayout heroDots;
     final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, 16000); return; } } showHero(); h.postDelayed(this, 16000); } };
     ImageView heroArt2; boolean heroFront=true; android.animation.ObjectAnimator kb;
     void loadHero(){ applyFeaturedCache(); }
@@ -721,9 +721,41 @@ public class MainActivity extends Activity {
         iv.setScaleType(ImageView.ScaleType.MATRIX); iv.setImageMatrix(m);
         iv.setPivotX(Math.max(0, Math.min(vw, f[0]*sw+tx))); iv.setPivotY(Math.max(0, Math.min(vh, f[1]*sh+ty)));
     }
+    void heroStep(boolean next){
+        synchronized(heroLock){
+            int n=heroItems.size();
+            if (n<=1) return;
+            heroIdx = (heroIdx + (next?1:-1) + n) % n;
+        }
+        h.removeCallbacks(heroRotate);
+        showHero();
+        h.postDelayed(heroRotate, 16000);
+    }
+    void bindHeroDots(){
+        if (!(heroG instanceof ViewGroup)) return;
+        int n, ix;
+        synchronized(heroLock){ n=heroItems.size(); ix=heroIdx; }
+        if (heroDots==null){
+            heroDots=new LinearLayout(this); heroDots.setGravity(Gravity.CENTER);
+            ((ViewGroup)heroG).addView(heroDots, lp(-2,-2,Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0,0,p(12)));
+        }
+        heroDots.removeAllViews();
+        if (n<=1){ heroDots.setVisibility(View.GONE); return; }
+        heroDots.setVisibility(View.VISIBLE);
+        for (int i=0;i<n;i++){
+            View d=new View(this);
+            GradientDrawable g=new GradientDrawable(); g.setShape(GradientDrawable.OVAL);
+            g.setColor(i==ix?Color.argb(220,255,255,255):Color.argb(80,255,255,255));
+            d.setBackground(g);
+            LinearLayout.LayoutParams dp=new LinearLayout.LayoutParams(p(5),p(5));
+            dp.leftMargin=dp.rightMargin=p(3);
+            heroDots.addView(d, dp);
+        }
+    }
     void showHero(){
         final Object[] o;
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
+        bindHeroDots();
         final String uri = (String)o[3];
         final int tw=p(1024), th=p(288), g=++heroLoadGen;
         pool.execute(()->{

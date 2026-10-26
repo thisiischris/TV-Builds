@@ -79,6 +79,7 @@ class TvData {
         for (Object[] row : previewRows) {
             String pkg = (String) row[0];
             if (pkg == null || !VIDEO_APPS.contains(pkg)) continue;
+            if ("com.google.android.youtube.tv".equals(pkg)) continue; // YT recs live in Play Next only
             all.add(row);
         }
         Collections.sort(all, (x, y) -> Long.compare(a.use((String) y[0]), a.use((String) x[0])));
@@ -148,8 +149,34 @@ class TvData {
             pick.add(o);
             if (pick.size() >= 12) break;
         }
-        android.util.Log.i("ShieldHome", "playnext cw=" + pick.size() + " rows=" + rows.size() + " yt=" + ytN);
+        Object[] rec = ytPreviewRec(feat, seen);
+        if (rec != null) {
+            for (int i = pick.size() - 1; i >= 0 && ytN >= 4; i--)
+                if (yt.equals(pick.get(i)[0])) { pick.remove(i); ytN--; }
+            pick.add(0, rec);
+            ytN++;
+            if (pick.size() > 12) pick.remove(pick.size() - 1);
+        }
+        android.util.Log.i("ShieldHome", "playnext cw=" + pick.size() + " rows=" + rows.size() + " yt=" + ytN + " rec=" + (rec != null));
         return pick;
+    }
+    Object[] ytPreviewRec(Set<String> feat, Set<String> seen) {
+        String yt = "com.google.android.youtube.tv";
+        if (!a.installed(yt)) return null;
+        try (Cursor c = a.getContentResolver().query(TvContract.PreviewPrograms.CONTENT_URI, null, null, null, null)) {
+            while (c != null && c.moveToNext()) {
+                if (!yt.equals(s(c, "package_name")) || newsRow(c, yt)) continue;
+                Object[] o = prog(c, false);
+                if (o == null || o[2] == null) continue;
+                String title = clean(s(c, "title")), uri = "";
+                try { uri = ((Intent) o[3]).toUri(Intent.URI_INTENT_SCHEME); } catch (Exception e) {}
+                String pkTitle = yt + "|" + title;
+                if (title != null && (feat.contains(pkTitle) || seen.contains(pkTitle))) continue;
+                if (!uri.isEmpty() && (feat.contains(uri) || seen.contains(uri))) continue;
+                return o;
+            }
+        } catch (Exception e) { android.util.Log.w("ShieldHome", "ytrec " + e); }
+        return null;
     }
     static boolean nearEnd(long pos, long dur) { return dur > 0 && pos * 10 >= dur * 9; }
 
