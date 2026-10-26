@@ -56,12 +56,8 @@ class TvData {
             while (c != null && c.moveToNext()) {
                 String pkg = s(c, "package_name");
                 if (pkg == null || !VIDEO_APPS.contains(pkg)) continue;
-                String pa = s(c, "poster_art_uri"), th = s(c, "thumbnail_uri");
-                float rp = arVal(s(c, "poster_art_aspect_ratio")), rt = arVal(s(c, "thumbnail_aspect_ratio"));
-                String art;
-                if (pa == null) art = th;
-                else if (th == null) art = pa;
-                else art = Math.abs(Math.log(rp / 2.9)) <= Math.abs(Math.log(rt / 2.9)) ? pa : th;
+                String art = s(c, "thumbnail_uri");
+                if (art == null) art = s(c, "poster_art_uri");
                 if (art == null) continue;
                 Intent in;
                 try {
@@ -231,10 +227,6 @@ class TvData {
         if (t == null) return null;
         t = t.replaceAll("(?i)\\s*[\\-\u00B7:|]?\\s*continue watching\\s*[\\-\u00B7:|]?\\s*", " ").trim();
         return t.isEmpty() ? null : t;
-    }
-    static float arVal(String code) {
-        if (code == null) return 1.78f;
-        switch (code) { case "0": return 1.78f; case "1": return 1.5f; case "2": return 1.33f; case "3": return 1f; case "4": return 0.67f; case "5": return 0.69f; default: return 1.78f; }
     }
     static String s(Cursor c, String col) { int i = c.getColumnIndex(col); return i < 0 || c.isNull(i) ? null : c.getString(i); }
     static long l(Cursor c, String col) { int i = c.getColumnIndex(col); return i < 0 || c.isNull(i) ? 0 : c.getLong(i); }
