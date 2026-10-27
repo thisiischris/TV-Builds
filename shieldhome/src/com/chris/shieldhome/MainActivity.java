@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
     final Object heroLock=new Object(); Object[] heroOnScreen;
     void loadInto(final ImageView iv, String uri0, final boolean fit){
         if (images==null||uri0==null) return;
-        images.load(iv, uri0, fit, iv.getWidth()>0?iv.getWidth():p(177), iv.getHeight()>0?iv.getHeight():p(108));
+        images.load(iv, uri0, fit, iv.getWidth()>0?iv.getWidth():p(184.4f), iv.getHeight()>0?iv.getHeight():p(112));
     }
     int p(float v){ return Math.round(v*u); }
     void ts(TextView t, float v){ t.setTextSize(TypedValue.COMPLEX_UNIT_PX, v*u); }
@@ -154,16 +154,16 @@ public class MainActivity extends Activity {
         wxSep = new View(this); wxSep.setBackgroundColor(Color.argb(110,255,255,255)); wxSep.setVisibility(View.GONE);
         tr.addView(wc); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(p(1), p(30)); sp.leftMargin=p(14); sp.rightMargin=p(14); sp.gravity=Gravity.CENTER_VERTICAL; tr.addView(wxSep, sp); tr.addView(cc);
         clk = tr;
-        root.addView(clk, lp(-2,-2,Gravity.TOP|Gravity.END,0,p(15),p(66),0));
+        root.addView(clk, lp(-2,-2,Gravity.TOP|Gravity.END,0,p(15),p(46),0));
 
         // Quick settings gear + inline options
-        gear = new PillView(this, "", 5, false); gear.setOnClickListener(v->toggleQs()); place(gear, 50, 17, 28, 28);
+        gear = new PillView(this, "", 5, false); gear.setOnClickListener(v->toggleQs()); place(gear, 35, 17, 28, 28);
         PillView search = searchV = new PillView(this, "Search", 3, false);
-        search.setOnClickListener(v->openAssistant()); place(search, 86, 17, 104, 28);
+        search.setOnClickListener(v->openAssistant()); place(search, 71, 17, 104, 28);
         qsPanel = new LinearLayout(this); qsPanel.setClipChildren(false); qsPanel.setVisibility(View.GONE);
         qsDim = new PillView(this, "", 4, false); qsDim.setOnClickListener(v->{ int i=(dimIdx()+1)%DIMS.length; prefs().edit().putInt("dim", i).apply(); applyDim(); qsLabels(); });
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
-        place(qsPanel, 88, 17, 290, 28); qsLabels();
+        place(qsPanel, 73, 17, 290, 28); qsLabels();
 
         // Hero: full-bleed top half, under the top bar (inserted at index 0)
         FrameLayout hero = new FrameLayout(this);
@@ -195,7 +195,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams mf = new LinearLayout.LayoutParams(p(40), Math.max(2,p(1.4f))); mf.topMargin=p(6); meta.addView(heroFocus, mf);
         LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(p(400),-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
         LinearLayout.LayoutParams mb = new LinearLayout.LayoutParams(p(70),p(18)); mb.topMargin=p(10); meta.addView(heroBadge, mb);
-        hero.addView(meta, lp(p(500),-2,Gravity.BOTTOM|Gravity.START,p(50),0,0,p(18)));
+        hero.addView(meta, lp(p(500),-2,Gravity.BOTTOM|Gravity.START,p(35),0,0,p(18)));
         heroG = hero; hero.setFocusable(true); hero.setClickable(true);
         hero.setOnFocusChangeListener((x,f)->{
             heroTitle.setTextColor(f?Color.WHITE:Color.rgb(220,220,230));
@@ -207,7 +207,7 @@ public class MainActivity extends Activity {
 
         // Tabs
         tabPlay = new PillView(this, "Play Next", 0, true); tabLive = new PillView(this, "Live TV", 1, false);
-        place(tabPlay, 52, 308, 129, 28); place(tabLive, 192, 308, 110, 28);
+        place(tabPlay, 35, 308, 129, 28); place(tabLive, 175, 308, 110, 28);
         View.OnFocusChangeListener tl = (v,f)->{ if(f){ int t = v==tabPlay?0:1; if (t!=tab){ tab=t; tabPlay.setOn(tab==0); tabLive.setOn(tab==1); refreshCards(); resetCardRow(); } } };
         tabPlay.setOnFocusChangeListener(tl); tabLive.setOnFocusChangeListener(tl);
 
@@ -224,11 +224,11 @@ public class MainActivity extends Activity {
         cardRow = new LinearLayout(this); cardRow.setClipChildren(false); cardRow.setClipToPadding(false);
         cardScroll.addView(cardRow, new ViewGroup.LayoutParams(-2,-1));
         cardWrap.addView(cardScroll, new FrameLayout.LayoutParams(-1,-1));
-        place(cardWrap, 30, 330, 958, 156);
+        place(cardWrap, 15, 330, 994, 160);
         cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardAlphas);
 
         homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false);
-        place(homeGrid, 50, 474, 930, 90);
+        place(homeGrid, 35, 474, 954, 93);
         buildHomeGrid();
 
         setContentView(root);
@@ -438,8 +438,8 @@ public class MainActivity extends Activity {
         return out;
     }
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).apply(); }
-    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(141); gl.height=p(78); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
-    int rowH(){ return p(90); }
+    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(147); gl.height=p(81); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
+    int rowH(){ return p(93); }
     View[] slideViews(){ return new View[]{clk, gear, searchV, qsPanel, heroG, tabPlay, tabLive, cardWrap, homeGrid}; }
     void setDrawer(boolean on){ drawerOpen=on; slideHome(); }
     void fadeChrome(boolean hide){
@@ -592,20 +592,7 @@ public class MainActivity extends Activity {
         try { int f=pm.getApplicationInfo(pkg,0).flags; return (f&(ApplicationInfo.FLAG_SYSTEM|ApplicationInfo.FLAG_UPDATED_SYSTEM_APP))!=0; }
         catch (Exception e){ return true; }
     }
-    class LineIcon extends View {
-        int kind, color=Color.WHITE;
-        LineIcon(Context c, int k){ super(c); kind=k; }
-        void tint(int c){ color=c; invalidate(); }
-        @Override protected void onDraw(Canvas c){
-            Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-            pt.setColor(color); pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(p(1.4f)); pt.setStrokeCap(Paint.Cap.ROUND); pt.setStrokeJoin(Paint.Join.ROUND);
-            float w=getWidth(), hh=getHeight(), m=w*0.2f;
-            if (kind==0){ c.drawLine(m, hh-m, w-m, m, pt); c.drawLine(w-m-p(3), m, w-m, m+p(3), pt); }
-            else if (kind==1) c.drawRect(m+p(2), m+p(2), w-m-p(2), hh-m-p(2), pt);
-            else if (kind==2){ c.drawLine(m, m+p(4), w-m, m+p(4), pt); c.drawRect(m+p(2), m+p(4), w-m-p(2), hh-m, pt); c.drawLine(m+p(4), m+p(1), w-m-p(4), m+p(1), pt); }
-            else { c.drawCircle(w/2, hh/2, w/2-m, pt); c.drawLine(w/2, hh/2-p(1), w/2, hh/2+p(4), pt); pt.setStyle(Paint.Style.FILL); c.drawCircle(w/2, m+p(3), p(1.2f), pt); }
-        }
-    }
+    static final int[] MENU_ICONS={R.drawable.ic_menu_edit,R.drawable.ic_menu_stop,R.drawable.ic_menu_delete,R.drawable.ic_menu_info};
     void appMenu(View anchor, String[] a, int idx){
         if (editMode) return;
         if (focus!=null) focus.remember();
@@ -629,9 +616,11 @@ public class MainActivity extends Activity {
             boolean off=id==2 && sys;
             LinearLayout row=new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(p(10),0,p(10),0);
             row.setFocusable(!off); row.setClickable(!off);
-            final LineIcon li=new LineIcon(this, n);
-            row.addView(li, new LinearLayout.LayoutParams(p(16),p(16)));
-            final TextView t=text(labs[n], 12, off?Color.argb(80,255,255,255):(id==2?Color.rgb(224,112,112):Color.WHITE), "sans-serif");
+            final ImageView li=new ImageView(this); li.setImageResource(MENU_ICONS[n]); li.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            int idle=off?Color.argb(80,255,255,255):(id==2?Color.rgb(224,112,112):Color.WHITE);
+            li.setColorFilter(idle, PorterDuff.Mode.SRC_IN);
+            row.addView(li, new LinearLayout.LayoutParams(p(18),p(18)));
+            final TextView t=text(labs[n], 12, idle, "sans-serif");
             LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(-2,-2); tp.leftMargin=p(10);
             row.addView(t, tp);
             row.setOnFocusChangeListener((v,f)->{
@@ -639,7 +628,7 @@ public class MainActivity extends Activity {
                 pill.setColor(f?Color.argb(240,255,255,255):Color.TRANSPARENT);
                 row.setBackground(pill);
                 int fg=off?Color.argb(80,255,255,255):(f?Color.rgb(22,22,30):(id==2?Color.rgb(224,112,112):Color.WHITE));
-                t.setTextColor(fg); li.tint(fg);
+                t.setTextColor(fg); li.setColorFilter(fg, PorterDuff.Mode.SRC_IN);
             });
             if (!off) row.setOnClickListener(v->menuAct(id, a, idx));
             row.setOnKeyListener((v,k,e)->{ if (k==KeyEvent.KEYCODE_BACK && e.getAction()==KeyEvent.ACTION_DOWN){ closeMenu(); return true; } return false; });
@@ -846,7 +835,7 @@ public class MainActivity extends Activity {
         tabPlay.setVisibility(pn?View.VISIBLE:View.GONE);
         tabPlay.setFocusable(pn);
         if (tabLive.getLayoutParams() instanceof FrameLayout.LayoutParams){
-            ((FrameLayout.LayoutParams)tabLive.getLayoutParams()).leftMargin=p(pn?192:52);
+            ((FrameLayout.LayoutParams)tabLive.getLayoutParams()).leftMargin=p(pn?175:35);
             tabLive.requestLayout();
         }
         if (!pn){
@@ -864,7 +853,7 @@ public class MainActivity extends Activity {
 
     // ---------- Cards ----------
     void addCard(View v, int i){
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(p(177.2f), p(108)); lp.bottomMargin=p(8); lp.leftMargin = i==0?0:p(8);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(p(184.4f), p(112)); lp.bottomMargin=p(8); lp.leftMargin = i==0?0:p(8);
         if (v.getParent()==cardRow){ v.setLayoutParams(lp); return; }
         if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v);
         if (!(v.getLayoutParams() instanceof LinearLayout.LayoutParams)){
@@ -872,12 +861,12 @@ public class MainActivity extends Activity {
             v.setOnFocusChangeListener((x,f)->{ if (base!=null) base.onFocusChange(x,f); if (f) snapCardRow(x); });
         }
         cardRow.addView(v, lp);
-        if (v instanceof GlowFrame) ((GlowFrame)v).warm(p(177.2f), p(108));
+        if (v instanceof GlowFrame) ((GlowFrame)v).warm(p(184.4f), p(112));
     }
     void snapCardRow(View v){
         if (cardScroll==null) return;
         int idx=cardRow.indexOfChild(v); if (idx<0) return;
-        int x=snapX(cardScroll.getScrollX(), idx, p(177.2f), p(8), p(918), cardRow.getChildCount());
+        int x=snapX(cardScroll.getScrollX(), idx, p(184.4f), p(8), p(954), cardRow.getChildCount());
         if (x!=cardScroll.getScrollX()) cardScroll.smoothScrollTo(x,0); else updateCardAlphas();
     }
     void resetCardRow(){
@@ -888,7 +877,7 @@ public class MainActivity extends Activity {
     }
     void updateCardAlphas(){
         if (cardRow==null) return;
-        int sx=cardScroll==null?0:cardScroll.getScrollX(), stride=p(177.2f)+p(8);
+        int sx=cardScroll==null?0:cardScroll.getScrollX(), stride=p(184.4f)+p(8);
         for (int i=0;i<cardRow.getChildCount();i++){
             View c=cardRow.getChildAt(i); float a=tileAlpha(i,sx,stride,5);
             if (c instanceof GlowFrame){
@@ -946,8 +935,8 @@ public class MainActivity extends Activity {
         if (progress >= 0){
             FrameLayout bar = new FrameLayout(this); bar.setBackgroundColor(Color.argb(90,255,255,255));
             View fill = new View(this); fill.setBackgroundColor(Color.rgb(229,9,20));
-            bar.addView(fill, new FrameLayout.LayoutParams(Math.round(p(159)*progress), -1));
-            f.addView(bar, lp(p(159), p(2.5f), Gravity.BOTTOM, p(9), 0, 0, p(8)));
+            bar.addView(fill, new FrameLayout.LayoutParams(Math.round(p(166)*progress), -1));
+            f.addView(bar, lp(p(166), p(2.5f), Gravity.BOTTOM, p(9), 0, 0, p(8)));
         }
         View g = focusable(f, bg, TILE_R, click);
         if (badgePkg!=null) tintCard(g, badgePkg);
