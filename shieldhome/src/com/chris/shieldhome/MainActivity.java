@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
 
     FrameLayout.LayoutParams lp(int w,int h,int g,int l,int t,int r,int b){ FrameLayout.LayoutParams x=new FrameLayout.LayoutParams(w,h,g); x.setMargins(l,t,r,b); return x; }
     java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
-    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards; HeroController hero; SearchDimController searchDim; HomeLayout layout;
+    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards; HeroController hero; SearchDimController searchDim; AppGridController grid; HomeLayout layout;
     java.util.concurrent.Future<?> dataFut; int dataGen, heroLoadGen;
     List<String[]> appsCache, fullOrder=new ArrayList<>();
     List<Object[]> featuredCache, wnPickCache;
@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
         cards = new CardsController(this);
         hero = new HeroController(this);
         searchDim = new SearchDimController(this);
+        grid = new AppGridController(this);
         layout = new HomeLayout(this);
         prefs().edit().remove("heromode").remove("featured").apply(); // v9: card mode removed
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
@@ -275,67 +276,6 @@ public class MainActivity extends Activity {
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).commit(); }
     GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(APP_W); gl.height=p(APP_H); gl.rightMargin = (i%6==5)?0:p(APP_HG); gl.bottomMargin = p(APP_VG); return gl; }
     int rowH(){ return p(APP_H+APP_VG); }
-    View[] slideViews(){ return new View[]{clk, gear, searchV, searchSplit, searchField, dimBar, heroG, tabBar, cardWrap, homeGrid}; }
-    void setDrawer(boolean on){ boolean edge=drawerOpen!=on; drawerOpen=on; slideHome(edge); }
-    void fadeChrome(boolean hide){
-        float a=hide?0f:1f;
-        for (View v: new View[]{clk, gear, searchV, searchSplit, searchField, dimBar}){
-            if (v==null) continue;
-            if (v==dimBar && !dimSlide) continue;
-            if (v==searchSplit && !searchOpen) continue;
-            if (v==searchField && !searchTyping) continue;
-            v.setVisibility(View.VISIBLE);
-            v.animate().alpha(a).setDuration(600).setInterpolator(drawerIp).withEndAction(()->{ if (drawerOpen) v.setVisibility(View.INVISIBLE); }).start();
-        }
-        if (gear!=null) gear.setFocusable(!hide);
-        if (searchV!=null) searchV.setFocusable(!hide && !dimSlide && !searchOpen);
-        if (speakV!=null){ speakV.setFocusable(!hide && searchOpen && !dimSlide); typeV.setFocusable(!hide && searchOpen && !dimSlide); }
-    }
-    void boxLayer(View v, boolean on){ if (v!=null) v.setLayerType(on?View.LAYER_TYPE_HARDWARE:View.LAYER_TYPE_NONE, null); }
-    void staggerDrawer(boolean open){
-        if (homeGrid==null) return;
-        int n=homeGrid.getChildCount(), rows=Math.max(1,(n+5)/6);
-        for (int row=2; row<rows; row++){ // row 1 is the peek; leave it visible when closed
-            int delay=open?(row-1)*40:(rows-1-row)*40;
-            for (int c=0;c<6;c++){
-                int i=row*6+c; if (i>=n) break;
-                View t=homeGrid.getChildAt(i); t.animate().cancel();
-                if (open){ t.setAlpha(0f); t.setTranslationY(p(12)); }
-                t.animate().alpha(open?1f:0f).translationY(open?0:p(12)).setStartDelay(delay).setDuration(600).setInterpolator(drawerIp).start();
-            }
-        }
-    }
-    void slideHome(){ slideHome(false); }
-    void slideHome(boolean edge){
-        if (focus!=null && !editMode) focus.remember();
-        int r=0; View f=getCurrentFocus();
-        if (f!=null && homeGrid!=null && f.getParent()==homeGrid) r=Math.max(0, (editMode?tileIx(f):homeGrid.indexOfChild(f))/6);
-        final boolean open=drawerOpen;
-        float y = open ? -(p(APP_GRID_Y-17)+Math.max(0, r-4)*rowH()) : 0;
-        fadeChrome(open);
-        if (open){
-            for (View v: new View[]{tabBar, cardWrap, homeGrid}) if (v!=null) v.bringToFront();
-        } else {
-            if (clk!=null) clk.bringToFront();
-            if (gear!=null) gear.bringToFront();
-            if (searchV!=null) searchV.bringToFront();
-            if (searchSplit!=null && searchOpen) searchSplit.bringToFront();
-            if (searchField!=null && searchTyping) searchField.bringToFront();
-            if (dimBar!=null && dimSlide) dimBar.bringToFront();
-        }
-        if (editMode) stackEditDim();
-        for (View v: slideViews()){
-            if (v==null) continue;
-            boolean up=v==heroG||v==tabBar||v==cardWrap;
-            if (v==heroG) boxLayer(v, true);
-            android.view.ViewPropertyAnimator an=v.animate().translationY(y).setDuration(600).setInterpolator(drawerIp);
-            if (up) an.alpha(open?0f:1f).scaleX(open?0.98f:1f).scaleY(open?0.98f:1f);
-            if (v==homeGrid) an.withEndAction(()->{ if (!editMode && getCurrentFocus()==null && focus!=null) focus.restore(); });
-            else if (v==heroG) an.withEndAction(()->boxLayer(v, false));
-            an.start();
-        }
-        if (edge) staggerDrawer(open);
-    }
     void buildHomeGrid(){ buildHomeGrid(-1); }
     void buildHomeGrid(int focusIdx){
         if (editMode) return;
@@ -370,7 +310,7 @@ public class MainActivity extends Activity {
                 int to = k==KeyEvent.KEYCODE_DPAD_LEFT? ix-1 : k==KeyEvent.KEYCODE_DPAD_RIGHT? ix+1 : k==KeyEvent.KEYCODE_DPAD_UP? ix-6 : k==KeyEvent.KEYCODE_DPAD_DOWN? ix+6 : -99;
                 if (to==-99) return false;
                 if (to>=0 && to<fullOrder.size()) moveDrag(ix, to);
-                else if (k==KeyEvent.KEYCODE_DPAD_UP && ix<6 && drawerOpen) setDrawer(false);
+                else if (k==KeyEvent.KEYCODE_DPAD_UP && ix<6 && drawerOpen) grid.setDrawer(false);
                 return true;
             }
             if (editMode) return false;
@@ -446,7 +386,7 @@ public class MainActivity extends Activity {
         slotW=p(APP_W)+p(APP_HG); slotH=rowH(); liftY=p(6);
         for (int j=0;j<n;j++){ tiles[j]=homeGrid.getChildAt(j); tgtX[j]=0; tgtY[j]=0; }
         dragIdx=i; dragV=tiles[i];
-        if (i>=6 && !drawerOpen) setDrawer(true);
+        if (i>=6 && !drawerOpen) grid.setDrawer(true);
         layer(dragV, true);
         for (int j=0;j<n;j++){
             View c=tiles[j];
@@ -466,8 +406,8 @@ public class MainActivity extends Activity {
         Collections.swap(fullOrder, from, to);
         View tmp=tiles[from]; tiles[from]=tiles[to]; tiles[to]=tmp;
         dragIdx=to; dragV=tmp;
-        if (to>=6 && !drawerOpen) setDrawer(true);
-        else if (to<6 && from>=6 && drawerOpen) setDrawer(false);
+        if (to>=6 && !drawerOpen) grid.setDrawer(true);
+        else if (to<6 && from>=6 && drawerOpen) grid.setDrawer(false);
         retarget(from); retarget(to); kickGlide();
     }
     void drop(int i){

@@ -76,7 +76,7 @@ class FocusController {
     void restoreNow() {
         if (savedSec < 0) return;
         if (a.appMenu != null || a.editMode) return;
-        if (savedSec >= 5) a.setDrawer(true);
+        if (savedSec >= 5) a.grid.setDrawer(true);
         restore();
     }
 
@@ -108,8 +108,8 @@ class FocusController {
             t.requestFocus();
             if (t.getParent() == a.homeGrid){
                 int i = a.homeGrid.indexOfChild(t);
-                if (a.drawerOpen && i < 6) a.setDrawer(false);
-                else a.slideHome();
+                if (a.drawerOpen && i < 6) a.grid.setDrawer(false);
+                else a.grid.slideHome();
             }
             android.util.Log.i("ShieldHome", "nav " + name(f) + " -> " + name(t));
         }
@@ -122,7 +122,7 @@ class FocusController {
         if (a.searchTyping) { a.closeSearchField(); if (a.searchV!=null) a.searchV.requestFocus(); return true; }
         if (a.dimSlide) { a.closeDimSlide(); return true; }
         if (a.editMode || a.dragIdx >= 0) { a.exitEdit(); return true; }
-        if (a.drawerOpen) { a.setDrawer(false); focusHomeApp(); return true; }
+        if (a.drawerOpen) { a.grid.setDrawer(false); focusHomeApp(); return true; }
         return false;
     }
 
@@ -168,7 +168,7 @@ class FocusController {
 
     void focusHomeApp() {
         if (a.homeGrid == null) return;
-        if (a.drawerOpen) a.setDrawer(false);
+        if (a.drawerOpen) a.grid.setDrawer(false);
         lastIdx[4] = 0;
         for (int i = 0; i < a.homeGrid.getChildCount(); i++) {
             View c = a.homeGrid.getChildAt(i);
@@ -267,7 +267,7 @@ class FocusController {
             int ti = s2 == 3 ? lastIdx[3] : (s2 == 4 && sec == 3) ? 0 : (multi ? ix : (s2 < lastIdx.length ? lastIdx[s2] : 0));
             View dest = it.get(Math.max(0, Math.min(ti, it.size() - 1)));
             if (s2 == 3 && a.cardScroll != null) a.cardScroll.scrollTo(lastCardX, 0);
-            if (s2 >= 5) a.setDrawer(true);
+            if (s2 >= 5) a.grid.setDrawer(true);
             return dest;
         }
         return f;
