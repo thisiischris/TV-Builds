@@ -125,7 +125,6 @@ class FocusController {
         if (a.dimSlide) { a.closeDimSlide(); return true; }
         if (a.editMode || a.dragIdx >= 0) { a.exitEdit(); return true; }
         if (a.drawerOpen) { a.setDrawer(false); a.focusHomeApp(); return true; }
-        if (a.qsOpen) { a.toggleQs(); return true; }
         return false;
     }
 
@@ -159,8 +158,7 @@ class FocusController {
         List<View> o = new ArrayList<>();
         if (sec == 0) {
             if (a.gear != null) o.add(a.gear);
-            if (a.qsOpen) o.add(a.qsDim);
-            else if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
+            if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
         } else if (sec == 1) { if (a.heroShown() && a.heroBtn != null) o.add(a.heroBtn); }
         else if (sec == 2) { if (a.tabPlay.getVisibility()==View.VISIBLE) o.add(a.tabPlay); o.add(a.tabLive); }
         else if (sec == 3) {
@@ -193,7 +191,7 @@ class FocusController {
     int secOf(View f) {
         if (a.homeGrid == null || a.cardRow == null) return -1;
         for (View x = f; x != null; x = x.getParent() instanceof View ? (View) x.getParent() : null) {
-            if (x == a.gear || x == a.searchV || x == a.qsDim || x == a.qsPanel) return 0;
+            if (x == a.gear || x == a.searchV) return 0;
             if (x == a.heroG) return 1;
             if (x == a.tabPlay || x == a.tabLive) return 2;
             if (x.getParent() == a.cardRow) return 3;
@@ -204,13 +202,13 @@ class FocusController {
 
     int topIdx(View v) {
         if (v == a.gear) return 0;
-        if (v == a.searchV || v == a.qsDim) return 1;
+        if (v == a.searchV) return 1;
         return -1;
     }
     View savedView() {
         if (savedSec == 0) {
             if (savedIdx == 0) return a.gear;
-            return a.qsOpen ? a.qsDim : a.searchV;
+            return a.searchV;
         }
         List<View> it = secItems(savedSec);
         int s2 = savedSec;
@@ -219,7 +217,7 @@ class FocusController {
         return it.get(Math.min(savedIdx, it.size() - 1));
     }
     View tabV() { return a.tab == 0 && a.tabPlay.getVisibility()==View.VISIBLE ? a.tabPlay : a.tabLive; }
-    View topTarget() { return a.qsOpen ? a.qsDim : (a.searchV.getVisibility() == View.VISIBLE ? a.searchV : a.gear); }
+    View topTarget() { return a.searchV.getVisibility() == View.VISIBLE ? a.searchV : a.gear; }
 
     View navTarget(View f, int sec, boolean up) {
         View fr = secRoot(f, sec);
@@ -231,7 +229,7 @@ class FocusController {
         for (int s2 = sec + (up ? -1 : 1); s2 >= 0 && s2 < nSecs(); s2 += up ? -1 : 1) {
             List<View> it = secItems(s2);
             if (it.isEmpty()) continue;
-            if (s2 == 0) return (sec == 1 && !a.qsOpen) ? a.gear : topTarget();
+            if (s2 == 0) return (sec == 1) ? a.gear : topTarget();
             if (s2 == 2) return tabV();
             int ti = s2 == 3 ? lastIdx[3] : (s2 == 4 && sec == 3) ? 0 : (multi ? ix : (s2 < lastIdx.length ? lastIdx[s2] : 0));
             View dest = it.get(Math.max(0, Math.min(ti, it.size() - 1)));
@@ -245,7 +243,6 @@ class FocusController {
     String name(View v) {
         if (v == a.gear) return "gear";
         if (v == a.searchV) return "search";
-        if (v == a.qsDim) return "qsDim";
         if (v == a.heroG || v == a.heroBtn) return "hero";
         if (v == a.tabPlay) return "tabPlay";
         if (v == a.tabLive) return "tabLive";

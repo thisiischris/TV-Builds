@@ -153,15 +153,12 @@ public class MainActivity extends Activity {
         root.addView(clk, lp(-2,-2,Gravity.TOP|Gravity.END,0,p(17),p(46),0));
 
         // Quick settings gear + inline options
-        gear = new PillView(this, "", 5, false); gear.setOnClickListener(v->toggleQs()); place(gear, 35, 17, 28, 28);
+        gear = new PillView(this, "", 5, false); gear.setId(View.generateViewId());
+        gear.setOnClickListener(v->openDimSlide());
+        gear.setOnFocusChangeListener((v,f)->{ if (!f && dimSlide) closeDimSlide(); });
+        place(gear, 35, 17, 28, 28);
         PillView search = searchV = new PillView(this, "Search", 3, false);
         search.setOnClickListener(v->openAssistant()); place(search, 71, 17, 104, 28);
-        qsPanel = new LinearLayout(this); qsPanel.setClipChildren(false); qsPanel.setVisibility(View.GONE);
-        qsDim = new PillView(this, "", 4, false); qsDim.setId(View.generateViewId());
-        qsDim.setOnClickListener(v->openDimSlide());
-        qsDim.setOnFocusChangeListener((v,f)->{ if (!f && dimSlide) closeDimSlide(); });
-        LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
-        place(qsPanel, 73, 17, 290, 28); qsLabels();
 
         // Hero: NVIDIA-style featured art, upper-right, fade into bg
         FrameLayout hero = new FrameLayout(this); hero.setClipChildren(false);
@@ -251,18 +248,21 @@ public class MainActivity extends Activity {
             boolean fo = isFocused();
             if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
             else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
-            else if (icon==5) pt.setColor(fo?Color.argb(120,200,200,225):Color.argb(70,190,190,215));
-            else pt.setColor(fo?Color.argb(150,120,118,140):Color.argb(110,70,68,88));
+            else if (icon==5) pt.setColor(fo?Color.argb(155,170,170,191):Color.argb(95,162,162,183));
+            else pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
             c.drawRoundRect(0,0,w,hh,r,r,pt);
             if (icon==5 && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
             if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
             int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
-            if (this==qsDim && w>p(112)){
-                float pad=p(12), th=p(6), tw=w-pad*2, ty=(hh-th)/2, rr=th/2, t=Math.max(0, Math.min(1, dimFill/0.9f));
-                pt.setStyle(Paint.Style.FILL);
+            if (this==gear && w>p(40)){
+                pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+                float labW=pt.measureText("90%"), pad=p(12), gap=p(8), th=p(6), tw=w-pad*2-gap-labW, ty=(hh-th)/2, rr=th/2, t=Math.max(0, Math.min(1, dimFill/0.9f));
                 pt.setColor(Color.argb(50, Color.red(fg), Color.green(fg), Color.blue(fg)));
                 c.drawRoundRect(pad, ty, pad+tw, ty+th, rr, rr, pt);
                 if (t>0){ pt.setColor(fg); c.drawRoundRect(pad, ty, pad+Math.max(t*tw, th), ty+th, rr, rr, pt); }
+                pt.setColor(fg); pt.setTextAlign(Paint.Align.LEFT);
+                Paint.FontMetrics fm=pt.getFontMetrics();
+                c.drawText(dimPct()+"%", pad+tw+gap, hh/2f-(fm.ascent+fm.descent)/2, pt);
                 return;
             }
             pt.setColor(fg); pt.setStrokeWidth(p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
@@ -496,7 +496,7 @@ public class MainActivity extends Activity {
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).commit(); }
     GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(APP_W); gl.height=p(APP_H); gl.rightMargin = (i%6==5)?0:p(APP_HG); gl.bottomMargin = p(APP_VG); return gl; }
     int rowH(){ return p(APP_H+APP_VG); }
-    View[] slideViews(){ return new View[]{clk, gear, searchV, qsPanel, heroG, tabPlay, tabLive, cardWrap, homeGrid}; }
+    View[] slideViews(){ return new View[]{clk, gear, searchV, heroG, tabPlay, tabLive, cardWrap, homeGrid}; }
     void setDrawer(boolean on){ boolean edge=drawerOpen!=on; drawerOpen=on; slideHome(edge); }
     void fadeChrome(boolean hide){
         float a=hide?0f:1f;
@@ -506,11 +506,7 @@ public class MainActivity extends Activity {
             v.animate().alpha(a).setDuration(600).setInterpolator(drawerIp).withEndAction(()->{ if (drawerOpen) v.setVisibility(View.INVISIBLE); }).start();
         }
         if (gear!=null) gear.setFocusable(!hide);
-        if (searchV!=null) searchV.setFocusable(!hide && !qsOpen);
-        if (qsPanel!=null){
-            if (hide) qsPanel.animate().alpha(0f).setDuration(600).setInterpolator(drawerIp).withEndAction(()->{ if (drawerOpen) qsPanel.setVisibility(View.GONE); }).start();
-            else if (qsOpen){ qsPanel.setVisibility(View.VISIBLE); qsPanel.animate().alpha(1f).setDuration(600).setInterpolator(drawerIp).start(); }
-        }
+        if (searchV!=null) searchV.setFocusable(!hide && !dimSlide);
     }
     void boxLayer(View v, boolean on){ if (v!=null) v.setLayerType(on?View.LAYER_TYPE_HARDWARE:View.LAYER_TYPE_NONE, null); }
     void staggerDrawer(boolean open){
@@ -540,7 +536,6 @@ public class MainActivity extends Activity {
             if (clk!=null) clk.bringToFront();
             if (gear!=null) gear.bringToFront();
             if (searchV!=null) searchV.bringToFront();
-            if (qsPanel!=null && qsOpen) qsPanel.bringToFront();
         }
         if (editMode) stackEditDim();
         for (View v: slideViews()){
@@ -859,7 +854,7 @@ public class MainActivity extends Activity {
             else if (c instanceof PillView){
                 if (on) c.setFocusable(false);
                 else if (c==gear) c.setFocusable(!drawerOpen);
-                else if (c==searchV) c.setFocusable(!drawerOpen && !qsOpen);
+                else if (c==searchV) c.setFocusable(!drawerOpen && !dimSlide);
                 else c.setFocusable(true);
             }
         }
@@ -1442,28 +1437,27 @@ public class MainActivity extends Activity {
         }
     }
 
-    PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false, dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim;
+    PillView gear, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim;
     float dimFill; android.animation.ValueAnimator dimFillAnim, dimWAnim;
     int dimPct(){ return Math.max(0, Math.min(90, prefs().getInt("dim_pct",0))); }
-    void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); qsLabels(); }
-    void qsLabels(){ int d=dimPct(); if (qsDim==null) return; qsDim.label="Dim: "+(d==0?"Off":d+"%"); qsDim.setOn(d>0); qsDim.invalidate(); }
+    void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); }
     void syncDimFill(boolean anim){
         float to=dimPct()/100f;
-        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); if (qsDim!=null) qsDim.invalidate(); return; }
+        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); return; }
         if (dimFillAnim!=null) dimFillAnim.cancel();
         dimFillAnim=android.animation.ValueAnimator.ofFloat(dimFill, to); dimFillAnim.setDuration(200);
-        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); if (qsDim!=null) qsDim.invalidate(); });
+        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); });
         dimFillAnim.start();
     }
     void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); }
     void animDimW(int to){
-        if (qsDim==null) return;
-        ViewGroup.LayoutParams lp=qsDim.getLayoutParams();
+        if (gear==null) return;
+        ViewGroup.LayoutParams lp=gear.getLayoutParams();
         if (dimWAnim!=null) dimWAnim.cancel();
         dimWAnim=android.animation.ValueAnimator.ofInt(lp.width, to);
         dimWAnim.setDuration(200);
         dimWAnim.setInterpolator(new android.view.animation.DecelerateInterpolator());
-        dimWAnim.addUpdateListener(a->{ lp.width=(Integer)a.getAnimatedValue(); qsDim.setLayoutParams(lp); });
+        dimWAnim.addUpdateListener(a->{ lp.width=(Integer)a.getAnimatedValue(); gear.setLayoutParams(lp); });
         dimWAnim.start();
     }
     void hideSearch(boolean hide){
@@ -1471,44 +1465,26 @@ public class MainActivity extends Activity {
         android.view.animation.Interpolator ease=new android.view.animation.DecelerateInterpolator();
         if (hide){
             searchV.setFocusable(false);
-            searchV.animate().alpha(0f).setDuration(200).setInterpolator(ease).withEndAction(()->{ if (dimSlide||qsOpen) searchV.setVisibility(View.INVISIBLE); }).start();
-        } else if (!qsOpen){
+            searchV.animate().alpha(0f).setDuration(200).setInterpolator(ease).withEndAction(()->{ if (dimSlide) searchV.setVisibility(View.INVISIBLE); }).start();
+        } else {
             searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen);
             searchV.animate().alpha(1f).setDuration(200).setInterpolator(ease).start();
         }
     }
     void openDimSlide(){
-        if (dimSlide || qsDim==null) return;
+        if (dimSlide || gear==null) return;
         dimSlide=true; dimSlideIgnore=true;
-        qsDim.setNextFocusLeftId(qsDim.getId()); qsDim.setNextFocusRightId(qsDim.getId());
+        gear.setNextFocusLeftId(gear.getId()); gear.setNextFocusRightId(gear.getId());
         hideSearch(true);
         animDimW(p(200));
-        qsDim.requestFocus();
+        gear.requestFocus();
     }
     void closeDimSlide(){
         if (!dimSlide) return;
         dimSlide=false; dimSlideIgnore=false;
-        qsDim.setNextFocusLeftId(View.NO_ID); qsDim.setNextFocusRightId(View.NO_ID);
-        animDimW(p(104));
+        gear.setNextFocusLeftId(View.NO_ID); gear.setNextFocusRightId(View.NO_ID);
+        animDimW(p(28));
         hideSearch(false);
-    }
-    void toggleQs(){
-        if (dimSlide) closeDimSlide();
-        qsOpen=!qsOpen; gear.setOn(qsOpen);
-        android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.2f,0f,0f,1f);
-        gear.animate().alpha(qsOpen?0.75f:1f).setDuration(160).setInterpolator(ease).start();
-        if (qsOpen){
-            searchV.animate().alpha(0f).translationX(p(12)).setDuration(200).setInterpolator(ease).withEndAction(()->{ searchV.setVisibility(View.INVISIBLE); }).start();
-            searchV.setFocusable(false);
-            qsPanel.setVisibility(View.VISIBLE); qsPanel.setAlpha(1f); qsPanel.setTranslationX(0);
-            int d=60; for (int i=0;i<qsPanel.getChildCount();i++){ View c=qsPanel.getChildAt(i); c.setAlpha(0f); c.setTranslationX(-p(36+16*i)); c.setScaleX(.92f); c.setScaleY(.92f);
-                c.animate().alpha(1f).translationX(0).scaleX(1f).scaleY(1f).setStartDelay(d).setDuration(380).setInterpolator(ease).start(); d+=70; }
-            h.postDelayed(()->{ if (qsOpen) qsDim.requestFocus(); }, 60); }
-        else { if (qsPanel.hasFocus()) gear.requestFocus();
-            for (int i=0;i<qsPanel.getChildCount();i++){ View c=qsPanel.getChildAt(i); c.animate().alpha(0f).translationX(-p(30+16*i)).setStartDelay(0).setDuration(220).setInterpolator(ease).start(); }
-            h.postDelayed(()->{ if (!qsOpen) qsPanel.setVisibility(View.GONE); }, 230);
-            searchV.setVisibility(View.VISIBLE); searchV.setFocusable(true); searchV.setTranslationX(p(12));
-            searchV.animate().alpha(1f).translationX(0).setDuration(300).setStartDelay(120).setInterpolator(ease).withEndAction(null).start(); }
     }
     void applyDim(){
         int pct = dimPct(); syncDimFill(true);
