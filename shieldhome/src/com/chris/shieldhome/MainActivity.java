@@ -76,10 +76,11 @@ public class MainActivity extends Activity {
         focus.prepare();
         if (appsCache==null){ if (dataFut==null) kickData(false); awaitData(); }
         bindFromCache();
+        if (!editMode) resetAllLifts(false, null);
         kickData(true);
         tick(); showWeather(); weatherTick(); applyDim();
     }
-    @Override protected void onPause(){ super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(heroRotate); h.removeCallbacks(wxRun); }
+    @Override protected void onPause(){ if (editMode) exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(heroRotate); h.removeCallbacks(wxRun); }
     boolean heroShown(){ return heroG!=null && heroG.getVisibility()==View.VISIBLE; }
     View tabV(){ return focus!=null?focus.tabV():(tab==0?tabPlay:tabLive); }
     String name(View v){ return focus!=null?focus.name(v):"?"; }
@@ -304,9 +305,11 @@ public class MainActivity extends Activity {
         final GlowFrame g = new GlowFrame(this, v, p(radius));
         g.setFocusable(true); g.setClickable(true);
         g.setOnFocusChangeListener((x,f)->{
-            x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).setDuration(sc<1.05f?260:180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
-            x.setTranslationZ(f?p(6):0);
-            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(180);
+            boolean lift=x==dragV;
+            if (x.getParent()==null) return;
+            x.animate().scaleX(lift?1.16f:(f?sc:1f)).scaleY(lift?1.16f:(f?sc:1f)).translationX(0).translationY(lift?-p(6):0).rotation(lift?x.getRotation():0).setDuration(sc<1.05f?260:180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+            x.setTranslationZ(lift?p(18):(f?p(6):0));
+            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, (lift||f)?1f:0f); va.setDuration(180);
             va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.invalidate(); }); va.start();
         });
         g.setOnClickListener(x->click.run());
@@ -411,7 +414,7 @@ public class MainActivity extends Activity {
     Map<String,Long> usage = new HashMap<>();
     long use(String p){ Long v = p==null?null:usage.get(p); long base = v==null?0:v; if ("com.google.android.youtube.tv".equals(p)) base = base*3+1; return base; }
 
-    GridLayout homeGrid; boolean drawerOpen, editMode; int dragIdx=-1;
+    GridLayout homeGrid; boolean drawerOpen, editMode; int dragIdx=-1; View dragV; android.animation.ObjectAnimator wig;
     LinearLayout appMenu; List<View> editBlocked = new ArrayList<>(); View dimV;
     android.content.SharedPreferences prefs(){ return getSharedPreferences("home", MODE_PRIVATE); }
     List<String[]> homeApps(){
@@ -500,30 +503,23 @@ public class MainActivity extends Activity {
     }
     View homeTile(final String[] a, final int i){
         final GlowFrame g = (GlowFrame)appTile(a[0], a[1], a[2]);
-        g.setOnLongClickListener(v->{ if (!editMode) appMenu(g, a, i); return true; });
-        final View.OnFocusChangeListener base = g.getOnFocusChangeListener();
-        if (dragIdx==i){
-            g.glow=1f; g.setTranslationZ(p(18));
-            g.setOnFocusChangeListener((v,f)->{ base.onFocusChange(v,f); v.animate().scaleX(1.16f).scaleY(1.16f).translationY(-p(6)).setDuration(160).start(); });
-        } else if (dragIdx>=0) g.setAlpha(0.5f);
+        g.setOnLongClickListener(v->{ if (!editMode) appMenu(g, a, homeGrid.indexOfChild(g)); return true; });
         g.setOnKeyListener((v,k,e)->{
+            int ix=homeGrid.indexOfChild(v);
             boolean dpad = k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT||k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN;
             boolean ok = k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_NUMPAD_ENTER;
-            if (dragIdx==i){
+            if (dragIdx==ix){
                 if (e.getAction()!=KeyEvent.ACTION_DOWN) return dpad||ok;
-                if (ok){ if (e.getRepeatCount()==0) drop(i); return true; }
-                if (k==KeyEvent.KEYCODE_BACK){ drop(i); return true; }
-                int to = k==KeyEvent.KEYCODE_DPAD_LEFT? i-1 : k==KeyEvent.KEYCODE_DPAD_RIGHT? i+1 : k==KeyEvent.KEYCODE_DPAD_UP? i-6 : k==KeyEvent.KEYCODE_DPAD_DOWN? i+6 : -99;
+                if (ok){ if (e.getRepeatCount()==0) drop(ix); return true; }
+                if (k==KeyEvent.KEYCODE_BACK){ drop(ix); return true; }
+                int to = k==KeyEvent.KEYCODE_DPAD_LEFT? ix-1 : k==KeyEvent.KEYCODE_DPAD_RIGHT? ix+1 : k==KeyEvent.KEYCODE_DPAD_UP? ix-6 : k==KeyEvent.KEYCODE_DPAD_DOWN? ix+6 : -99;
                 if (to==-99) return false;
-                if (to>=0 && to<fullOrder.size()){
-                    Collections.swap(fullOrder, i, to); dragIdx=to; saveHome(fullOrder);
-                    if (to>=6) setDrawer(true); else if (k==KeyEvent.KEYCODE_DPAD_UP && i<6) setDrawer(false);
-                    buildHomeGrid(to);
-                } else if (k==KeyEvent.KEYCODE_DPAD_UP && i<6 && drawerOpen) setDrawer(false);
+                if (to>=0 && to<fullOrder.size()) moveDrag(ix, to);
+                else if (k==KeyEvent.KEYCODE_DPAD_UP && ix<6 && drawerOpen) setDrawer(false);
                 return true;
             }
             if (editMode) return false;
-            if (ok && e.getAction()==KeyEvent.ACTION_DOWN && (e.isLongPress() || e.getRepeatCount()>=3)){ appMenu(g, a, i); return true; }
+            if (ok && e.getAction()==KeyEvent.ACTION_DOWN && (e.isLongPress() || e.getRepeatCount()>=3)){ appMenu(g, a, ix); return true; }
             return false;
         });
         return g;
@@ -533,38 +529,91 @@ public class MainActivity extends Activity {
         if (fullOrder!=null) for (String[] a: fullOrder) sig += a[0]+"/"+a[1]+",";
         homeBindSig=sig;
     }
+    void startWiggle(View v){
+        if (wig!=null){ wig.cancel(); wig=null; }
+        if (v==null) return;
+        wig=android.animation.ObjectAnimator.ofFloat(v, View.ROTATION, -1.5f, 1.5f);
+        wig.setDuration(72); wig.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        wig.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        wig.setInterpolator(new android.view.animation.LinearInterpolator());
+        wig.start();
+    }
+    void stopWiggle(){ if (wig!=null){ wig.cancel(); wig=null; } }
+    void clearLift(View v, boolean settle){
+        if (v==null) return;
+        if (wig!=null && wig.getTarget()==v) stopWiggle();
+        v.animate().cancel();
+        boolean foc=v.isFocused() && !editMode;
+        float sc=foc?1.07f:1f;
+        v.setRotation(0);
+        if (settle) v.animate().scaleX(sc).scaleY(sc).translationX(0).translationY(0).rotation(0).setDuration(180).setInterpolator(new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f)).start();
+        else { v.setScaleX(sc); v.setScaleY(sc); v.setTranslationX(0); v.setTranslationY(0); }
+        v.setTranslationZ(foc?p(6):0);
+        if (v instanceof GlowFrame){ GlowFrame g=(GlowFrame)v; if (!foc){ g.glow=0; g.invalidate(); } }
+    }
+    void resetAllLifts(boolean settle, View keep){
+        stopWiggle();
+        if (homeGrid==null) return;
+        for (int j=0;j<homeGrid.getChildCount();j++){
+            View c=homeGrid.getChildAt(j);
+            c.setAlpha(1f);
+            clearLift(c, settle && c==keep);
+        }
+    }
     void enterEdit(int i){ if (editMode) return; closeMenu(false); editMode=true; setEditDim(true); startDrag(i); }
     void startDrag(int i){
         if (i<0 || i>=fullOrder.size() || homeGrid==null) return;
         dragIdx=i;
-        if (i>=6) setDrawer(true);
+        if (i>=6 && !drawerOpen) setDrawer(true);
         View v=homeGrid.getChildAt(i);
         if (v==null) return;
+        dragV=v;
         for (int j=0;j<homeGrid.getChildCount();j++){
             View c=homeGrid.getChildAt(j);
             if (c==v){
                 if (c instanceof GlowFrame){ GlowFrame g=(GlowFrame)c; g.glow=1f; g.invalidate(); g.setTranslationZ(p(18)); }
-                c.animate().scaleX(1.16f).scaleY(1.16f).translationY(-p(6)).setDuration(160).start();
+                c.animate().scaleX(1.16f).scaleY(1.16f).translationY(-p(6)).rotation(0).setDuration(180).setInterpolator(new android.view.animation.DecelerateInterpolator()).withEndAction(()->{ if (dragIdx>=0 && homeGrid!=null && homeGrid.getChildAt(dragIdx)==c) startWiggle(c); }).start();
             } else c.setAlpha(0.5f);
         }
         v.requestFocus();
         markHomeSig();
     }
+    void moveDrag(int from, int to){
+        if (homeGrid==null || from==to || to<0 || to>=fullOrder.size()) return;
+        Collections.swap(fullOrder, from, to); dragIdx=to; saveHome(fullOrder);
+        if (to>=6 && !drawerOpen) setDrawer(true);
+        else if (to<6 && from>=6 && drawerOpen) setDrawer(false);
+        int n=homeGrid.getChildCount();
+        final View[] was=new View[n]; final int[] ox=new int[n], oy=new int[n];
+        for (int i=0;i<n;i++){ was[i]=homeGrid.getChildAt(i); ox[i]=was[i].getLeft(); oy[i]=was[i].getTop(); }
+        View lift=was[from]; dragV=lift; View[] next=was.clone(); View tmp=next[from]; next[from]=next[to]; next[to]=tmp;
+        homeGrid.removeAllViews();
+        for (int i=0;i<n;i++) homeGrid.addView(next[i], gridLp(i));
+        final View hold=lift;
+        homeGrid.post(()->{
+            android.view.animation.Interpolator ip=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
+            for (int i=0;i<n;i++){
+                View v=next[i]; int old=0; while (old<n && was[old]!=v) old++;
+                if (old>=n) continue;
+                float dx=ox[old]-v.getLeft(), dy=oy[old]-v.getTop();
+                if (dx==0 && dy==0) continue;
+                boolean L=v==hold;
+                v.setScaleX(L?1.16f:1f); v.setScaleY(L?1.16f:1f);
+                v.setTranslationX(dx); v.setTranslationY(dy+(L?-p(6):0));
+                v.animate().translationX(0).translationY(L?-p(6):0).setDuration(200).setInterpolator(ip).start();
+            }
+            if (hold.getParent()!=null) hold.requestFocus();
+        });
+        markHomeSig();
+    }
     void drop(int i){
-        dragIdx=-1; editMode=false; saveHome(fullOrder); setEditDim(false);
+        View keep=homeGrid!=null && i>=0 && i<homeGrid.getChildCount()? homeGrid.getChildAt(i):null;
+        dragV=null; dragIdx=-1; editMode=false; saveHome(fullOrder); setEditDim(false);
         if (drawerOpen){ if (gear!=null) gear.setFocusable(false); if (searchV!=null) searchV.setFocusable(false); }
-        if (homeGrid!=null){
-            for (int j=0;j<homeGrid.getChildCount();j++){
-                View c=homeGrid.getChildAt(j);
-                c.setAlpha(1f);
-                c.animate().scaleX(1f).scaleY(1f).translationY(0).setDuration(160).start();
-                if (c instanceof GlowFrame) ((GlowFrame)c).setTranslationZ(c.isFocused()?p(6):0);
-            }
-            if (i>=0 && i<homeGrid.getChildCount()){
-                final View t=homeGrid.getChildAt(i);
-                if (focus!=null){ focus.savedSec=4+i/6; focus.savedIdx=i%6; }
-                t.post(()->t.requestFocus());
-            }
+        resetAllLifts(true, keep);
+        if (keep!=null){
+            if (focus!=null){ focus.savedSec=4+i/6; focus.savedIdx=i%6; }
+            keep.post(()->keep.requestFocus());
         }
         markHomeSig();
     }
