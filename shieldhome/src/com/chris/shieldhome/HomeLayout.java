@@ -113,7 +113,7 @@ class HomeLayout {
         a.heroBtn.setOnClickListener(v->a.hero.heroAction());
         hero.addView(a.heroBtn, a.lp(a.p(138), a.p(34), Gravity.TOP|Gravity.START, a.p(35), a.p(237), 0, 0));
         a.heroDots = new HeroDots(a);
-        hero.addView(a.heroDots, a.lp(-2, a.p(28), Gravity.TOP|Gravity.START, 0, a.p(270), 0, 0));
+        hero.addView(a.heroDots, a.lp(-2, a.p(HeroDots.PILL_H), Gravity.TOP|Gravity.START, 0, a.p(HeroDots.PILL_CENTER_Y-HeroDots.PILL_H/2), 0, 0));
         View.OnLayoutChangeListener dotsLay=(v,a,b,c,d,e,f,g,h2)->HomeLayout.this.a.placeDots();
         hero.addOnLayoutChangeListener(dotsLay);
         a.heroDots.addOnLayoutChangeListener(dotsLay);
