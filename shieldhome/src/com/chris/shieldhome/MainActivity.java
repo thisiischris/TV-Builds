@@ -137,9 +137,16 @@ public class MainActivity extends Activity {
     void expandSearch(){
         if (searchOpen || dimSlide || searchTyping || searchSplit==null) return;
         searchOpen=true;
-        searchV.setFocusable(false); searchV.setVisibility(View.INVISIBLE);
+        searchV.animate().cancel();
+        searchV.setFocusable(false); searchV.setAlpha(1f); searchV.setVisibility(View.INVISIBLE);
         searchSplit.setVisibility(View.VISIBLE); searchSplit.setAlpha(1f);
         speakV.setFocusable(true); typeV.setFocusable(true);
+        float mid=p(28);
+        android.view.animation.Interpolator ip=new android.view.animation.OvershootInterpolator(1.2f);
+        for (PillView pv: new PillView[]{speakV,typeV}){ pv.animate().cancel(); pv.setScaleX(0.86f); pv.setScaleY(0.86f); pv.setAlpha(0.35f); }
+        speakV.setTranslationX(mid); typeV.setTranslationX(-mid);
+        speakV.animate().translationX(0).scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).setInterpolator(ip).start();
+        typeV.animate().translationX(0).scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).setInterpolator(ip).start();
         speakV.requestFocus();
     }
     void maybeCollapseSearch(){
@@ -172,8 +179,8 @@ public class MainActivity extends Activity {
     void openSearchField(){
         if (searchTyping || dimSlide || searchField==null) return;
         searchTyping=true; searchOpen=false;
+        if (speakV!=null){ speakV.animate().cancel(); typeV.animate().cancel(); speakV.setFocusable(false); typeV.setFocusable(false); }
         if (searchSplit!=null) searchSplit.setVisibility(View.GONE);
-        if (speakV!=null){ speakV.setFocusable(false); typeV.setFocusable(false); }
         if (searchV!=null){ searchV.setVisibility(View.INVISIBLE); searchV.setFocusable(false); }
         searchField.setText(""); searchField.setVisibility(View.VISIBLE); searchField.bringToFront();
         searchField.requestFocus(); showKb();
@@ -186,9 +193,24 @@ public class MainActivity extends Activity {
     }
     void collapseSearch(){
         searchOpen=false;
-        if (searchSplit!=null) searchSplit.setVisibility(View.GONE);
         if (speakV!=null){ speakV.setFocusable(false); typeV.setFocusable(false); }
-        if (!dimSlide && searchV!=null){ searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen); }
+        if (searchSplit==null || searchSplit.getVisibility()!=View.VISIBLE){
+            if (!dimSlide && searchV!=null){ searchV.setVisibility(View.VISIBLE); searchV.setAlpha(1f); searchV.setFocusable(!drawerOpen); }
+            return;
+        }
+        float mid=p(28);
+        android.view.animation.Interpolator ip=new android.view.animation.DecelerateInterpolator();
+        speakV.animate().cancel(); typeV.animate().cancel();
+        speakV.animate().translationX(mid).scaleX(0.86f).scaleY(0.86f).alpha(0f).setDuration(280).setInterpolator(ip).start();
+        typeV.animate().translationX(-mid).scaleX(0.86f).scaleY(0.86f).alpha(0f).setDuration(280).setInterpolator(ip).withEndAction(()->{
+            if (searchOpen) return;
+            searchSplit.setVisibility(View.GONE);
+            if (!dimSlide && searchV!=null){
+                searchV.animate().cancel();
+                searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen);
+                searchV.setAlpha(0f); searchV.animate().alpha(1f).setDuration(160).start();
+            }
+        }).start();
     }
 
     void tick(){ setPill(timePill, new SimpleDateFormat("h:mm a", Locale.US).format(new Date())); h.postDelayed(this::tick, 15000); }
@@ -274,7 +296,6 @@ public class MainActivity extends Activity {
         dimBar.setPivotX(p(100)); dimBar.setPivotY(p(14));
         place(dimBar, 71, 17, 200, 28);
 
-        // Hero: NVIDIA-style featured art, upper-right, fade into bg
         FrameLayout hero = new FrameLayout(this); hero.setClipChildren(false);
         FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
         ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -282,6 +303,15 @@ public class MainActivity extends Activity {
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
         hero.addView(artHost, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
+        heroWash = new View(this){
+            @Override protected void onSizeChanged(int w,int h,int ow,int oh){
+                if (heroWashBm!=null && !heroWashBm.isRecycled()) heroWashBm.recycle();
+                heroWashBm=null;
+            }
+            @Override protected void onDraw(Canvas c){ Bitmap b=heroWashBmp(); if (b!=null) c.drawBitmap(b,0,0,null); }
+        };
+        heroWash.setWillNotDraw(false); heroWash.setFocusable(false); heroWash.setClickable(false);
+        hero.addView(heroWash, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroArt = art;
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
@@ -309,7 +339,6 @@ public class MainActivity extends Activity {
         hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
         heroDots = new HeroDots();
         hero.addView(heroDots, lp(-1, p(10), Gravity.TOP, 0, p(280), 0, 0));
-        art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
         root.addView(hero, 0, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
@@ -513,29 +542,24 @@ public class MainActivity extends Activity {
     }
 
     class HeroDots extends View {
-        int n, cur; float ax, aw; android.animation.ValueAnimator an;
+        int n, cur; float[] al; android.animation.ValueAnimator an;
         HeroDots(){ super(MainActivity.this); setAlpha(0f); setVisibility(GONE); setFocusable(false); }
-        float slot(int i){ return i*(p(5)+p(7)); }
+        void snap(int i){ if (al==null||al.length!=n) al=new float[Math.max(1,n)]; for (int k=0;k<n;k++) al[k]=k==i?1f:0.35f; cur=i; invalidate(); }
         void bind(int nn, int i, boolean anim){
             n=Math.max(0,nn); i=n==0?0:Math.max(0, Math.min(i,n-1));
-            float to=slot(i), tw=p(13);
-            if (!anim || getAlpha()<0.05f || n<=1){ cur=i; ax=to; aw=tw; invalidate(); return; }
+            if (!anim || getAlpha()<0.05f || n<=1 || al==null || al.length!=n){ snap(i); return; }
             if (an!=null) an.cancel();
-            float x0=ax, w0=aw; cur=i;
+            final float[] from=al.clone(); cur=i;
             an=android.animation.ValueAnimator.ofFloat(0,1); an.setDuration(200);
             an.setInterpolator(new android.view.animation.DecelerateInterpolator());
-            an.addUpdateListener(a->{ float u=(Float)a.getAnimatedValue(); ax=x0+(to-x0)*u; aw=w0+(tw-w0)*u; invalidate(); });
+            an.addUpdateListener(a->{ float u=(Float)a.getAnimatedValue(); for (int k=0;k<n;k++) al[k]=from[k]+((k==cur?1f:0.35f)-from[k])*u; invalidate(); });
             an.start();
         }
         @Override protected void onDraw(Canvas c){
-            if (n<=1) return;
+            if (n<=1 || al==null) return;
             float d=p(5), g=p(7), row=(n-1)*(d+g)+d, x0=(getWidth()-row)/2f, cy=getHeight()/2f;
             Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-            pt.setColor(Color.argb(89,255,255,255));
-            for (int i=0;i<n;i++) c.drawCircle(x0+slot(i)+d/2, cy, d/2, pt);
-            pt.setColor(Color.WHITE);
-            float px=x0+ax+d/2-aw/2;
-            c.drawRoundRect(px, cy-d/2, px+aw, cy+d/2, d/2, d/2, pt);
+            for (int i=0;i<n;i++){ pt.setColor(Color.argb(Math.round(255*al[i]),255,255,255)); c.drawCircle(x0+i*(d+g)+d/2, cy, d/2, pt); }
         }
     }
 
@@ -1085,43 +1109,21 @@ public class MainActivity extends Activity {
         if (back && focus!=null) focus.restore();
     }
     void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
-    Bitmap vigMask; final Map<String,Bitmap> heroMasked=new HashMap<>();
-    Bitmap alphaMask(int w, int h){
-        if (vigMask!=null && vigMask.getWidth()==w && vigMask.getHeight()==h) return vigMask;
+    View heroWash; Bitmap heroWashBm;
+    Bitmap heroWashBmp(){
+        int w=heroWash==null?0:heroWash.getWidth(), h=heroWash==null?0:heroWash.getHeight();
+        if (w<=0||h<=0) return null;
+        if (heroWashBm!=null && !heroWashBm.isRecycled() && heroWashBm.getWidth()==w && heroWashBm.getHeight()==h) return heroWashBm;
         Bitmap bm=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(bm);
-        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
-        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*0.24f, botEnd=artB-artH*0.40f;
-        // left: 90% at the edge, ~60% through the text column, then into the art
-        float mid=leftEnd<=0?0.4f:Math.min(0.7f, Math.max(0.2f, artL*0.82f/leftEnd));
-        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{0xE6050507,0xA0050507,0x00050507}, new float[]{0, mid, 1}, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,leftEnd,h,p);
-        p.setShader(new LinearGradient(0,0,0,h, new int[]{0x28050507,0x00050507,0x3A050507}, new float[]{0, 0.42f, 1}, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,leftEnd,h,p);
-        // bottom: full width, ~60% into the art, 0 at the canvas edge (no hard cut)
-        float botSpan=Math.max(1,h-botEnd), artStop=Math.max(0, Math.min(1,(artB-botEnd)/botSpan));
-        p.setShader(new LinearGradient(0,botEnd,0,h, new int[]{0xA0050507,0x8C050507,0x00050507}, new float[]{0, artStop, 1}, Shader.TileMode.CLAMP));
-        c.drawRect(0,botEnd,w,h,p);
-        p.setShader(new LinearGradient(0,0,0,artH*0.064f, 0x1A050507, 0x00050507, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,w,artH*0.064f,p);
-        float rad=artH*0.37f;
-        p.setShader(new RadialGradient(artL, artB, rad, new int[]{0xE6050507,0x8C050507,0x00050507}, new float[]{0, 0.45f, 1}, Shader.TileMode.CLAMP));
-        c.drawRect(Math.max(0,artL-rad), artB-rad, Math.min(w, artL+rad), Math.min(h, artB+rad), p);
-        vigMask=bm; return bm;
-    }
-    Bitmap maskHero(String key, Bitmap src, int tw, int th){
-        if (tw<=0||th<=0||src==null) return src;
-        Bitmap hit=heroMasked.get(key);
-        if (hit!=null && !hit.isRecycled() && hit.getWidth()==tw && hit.getHeight()==th) return hit;
-        Bitmap out=Bitmap.createBitmap(tw,th,Bitmap.Config.ARGB_8888);
-        Canvas c=new Canvas(out);
-        float artW=Math.min(tw,p(758)), artH=Math.min(th,p(360)), artL=tw-artW;
-        float s=Math.max(artW/src.getWidth(), artH/src.getHeight());
-        float dw=src.getWidth()*s, dh=src.getHeight()*s, cx=artL+artW/2f, cy=artH/2f;
-        c.drawBitmap(src, null, new RectF(cx-dw/2,cy-dh/2,cx+dw/2,cy+dh/2), null);
-        Paint xp=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); xp.setDither(true);
-        c.drawBitmap(alphaMask(tw,th),0,0,xp);
-        heroMasked.put(key, out); return out;
+        Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); pt.setDither(true);
+        pt.setShader(new LinearGradient(0,0,w*0.60f,0, new int[]{0xD9050507,0x99050507,0x33050507,0x00050507}, new float[]{0,0.20f,0.50f,1}, Shader.TileMode.CLAMP));
+        c.drawRect(0,0,w,h,pt);
+        pt.setShader(new LinearGradient(0,h,0,h*0.60f, new int[]{0xFF080810,0xB3080810,0x00080810}, new float[]{0,0.38f,1}, Shader.TileMode.CLAMP));
+        c.drawRect(0,h*0.60f,w,h,pt);
+        pt.setShader(new LinearGradient(0,0,0,h*0.10f, 0x28000000, 0x00000000, Shader.TileMode.CLAMP));
+        c.drawRect(0,0,w,h*0.10f,pt);
+        heroWashBm=bm; return bm;
     }
     // ---------- Featured hero ----------
     ImageView heroArt, heroBadge; TextView heroTitle, heroSub; LinearLayout heroMeta; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
@@ -1213,8 +1215,7 @@ public class MainActivity extends Activity {
         final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=heroG!=null&&heroG.getHeight()>0?heroG.getHeight():p(400), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
-            Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
-            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, bm); });
+            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, raw); });
         });
     }
     void transitionHero(final Object[] o, Bitmap bm){
@@ -1664,7 +1665,8 @@ public class MainActivity extends Activity {
         if (hide){
             if (searchTyping){ searchTyping=false; hideKb(); if (searchField!=null){ searchField.setVisibility(View.GONE); searchField.setText(""); } }
             searchOpen=false;
-            if (searchSplit!=null){ searchSplit.setVisibility(View.GONE); if (speakV!=null){ speakV.setFocusable(false); typeV.setFocusable(false); } }
+            if (speakV!=null){ speakV.animate().cancel(); typeV.animate().cancel(); speakV.setFocusable(false); typeV.setFocusable(false); }
+            if (searchSplit!=null) searchSplit.setVisibility(View.GONE);
             searchV.setFocusable(false);
             searchV.animate().alpha(0f).setDuration(180).setInterpolator(ease).withEndAction(()->{ if (dimSlide) searchV.setVisibility(View.INVISIBLE); }).start();
         } else {
