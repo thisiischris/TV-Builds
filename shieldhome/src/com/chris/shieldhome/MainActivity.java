@@ -21,6 +21,7 @@ public class MainActivity extends Activity {
     PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255);
     static final int TILE_R = 11;
+    static final float APP_FOCUS=1.13f, APP_HOLD=1.16f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
 
@@ -228,7 +229,7 @@ public class MainActivity extends Activity {
         place(cardWrap, 15, 330, 994, 160);
         cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardAlphas);
 
-        homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false);
+        homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false); homeGrid.setClipToPadding(false);
         place(homeGrid, 35, 474, 954, 93);
         ensureDim();
         buildHomeGrid();
@@ -280,21 +281,22 @@ public class MainActivity extends Activity {
 
     // ---------- Focus helper: soft blue glow drawn outside the tile + scale ----------
     class GlowFrame extends FrameLayout {
-        FrameLayout inner; View badgeV; float radius; Paint gp = new Paint(Paint.ANTI_ALIAS_FLAG), rp = new Paint(Paint.ANTI_ALIAS_FLAG), bp = new Paint(); float glow=0, fade=1; Bitmap glowBm; int glowPad;
+        FrameLayout inner; View badgeV; float radius; Paint gp = new Paint(Paint.ANTI_ALIAS_FLAG), rp = new Paint(Paint.ANTI_ALIAS_FLAG), bp = new Paint(); float glow=0, fade=1; Bitmap glowBm, shBm; int glowPad, shPad; boolean drop;
         GlowFrame(Context c, FrameLayout in, float r){ super(c); inner=in; radius=r; setClipChildren(false); setClipToPadding(false); setWillNotDraw(false);
             addView(in, new FrameLayout.LayoutParams(-1,-1));
             in.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             rp.setStyle(Paint.Style.STROKE); rp.setStrokeWidth(p(1.6f));
-            glowPad=p(18);
+            glowPad=p(18); shPad=p(28);
             tint(FOCUS); }
         void tint(int c){
             gp.setColor(Color.argb(155, Color.red(c), Color.green(c), Color.blue(c)));
             rp.setColor(Color.rgb(Math.min(255,Color.red(c)+40), Math.min(255,Color.green(c)+40), Math.min(255,Color.blue(c)+40)));
             glowBm=null; }
-        void warm(int w, int h){ if (w<=0||h<=0) return; glowBm=glowBmp(w,h,gp.getColor(),radius); }
-        @Override protected void onSizeChanged(int w, int h, int ow, int oh){ super.onSizeChanged(w,h,ow,oh); if (w>0&&h>0) warm(w,h); }
+        void warm(int w, int h){ if (w<=0||h<=0) return; glowBm=glowBmp(w,h,gp.getColor(),radius); if (drop) shBm=shadowBmp(w,h,radius); }
+        @Override protected void onSizeChanged(int w, int h, int ow, int oh){ super.onSizeChanged(w,h,ow,oh); shBm=null; if (w>0&&h>0) warm(w,h); }
         @Override public void draw(Canvas c){
             float g=glow*fade;
+            if (g>0 && drop){ if (shBm==null) shBm=shadowBmp(getWidth(),getHeight(),radius); if (shBm!=null){ bp.setAlpha((int)(102*g)); c.drawBitmap(shBm,-shPad,-shPad+p(8),bp); } }
             if (g>0){ if (glowBm==null) warm(getWidth(),getHeight()); if (glowBm!=null){ bp.setAlpha((int)(150*g)); c.drawBitmap(glowBm,-glowPad,-glowPad,bp); } }
             super.draw(c);
             if (g>0){ rp.setAlpha((int)(255*g)); c.drawRoundRect(0,0,getWidth(),getHeight(),radius,radius,rp); }
@@ -309,7 +311,7 @@ public class MainActivity extends Activity {
             if (x.getParent()==null) return;
             if (editMode){ if (x==dragV) x.setTranslationZ(p(18)); return; }
             x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(sc<1.05f?260:180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
-            x.setTranslationZ(f?p(6):0);
+            x.setTranslationZ(f?(sc>=1.12f?p(8):p(6)):0);
             android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(180);
             va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.invalidate(); }); va.start();
         });
@@ -326,6 +328,17 @@ public class MainActivity extends Activity {
         Canvas c=new Canvas(bm);
         Paint bl=new Paint(Paint.ANTI_ALIAS_FLAG);
         bl.setColor(color); bl.setMaskFilter(new BlurMaskFilter(p(9), BlurMaskFilter.Blur.NORMAL));
+        c.drawRoundRect(pad, pad, pad+w, pad+h, r, r, bl);
+        glowBmps.put(k, bm); return bm;
+    }
+    Bitmap shadowBmp(int w, int h, float r){
+        String k="sh:"+w+"x"+h+":"+(int)r;
+        Bitmap hit=glowBmps.get(k); if (hit!=null && !hit.isRecycled()) return hit;
+        int pad=p(28);
+        Bitmap bm=Bitmap.createBitmap(Math.max(1,w+pad*2), Math.max(1,h+pad*2), Bitmap.Config.ARGB_8888);
+        Canvas c=new Canvas(bm);
+        Paint bl=new Paint(Paint.ANTI_ALIAS_FLAG);
+        bl.setColor(Color.BLACK); bl.setMaskFilter(new BlurMaskFilter(p(16), BlurMaskFilter.Blur.NORMAL));
         c.drawRoundRect(pad, pad, pad+w, pad+h, r, r, bl);
         glowBmps.put(k, bm); return bm;
     }
@@ -392,7 +405,8 @@ public class MainActivity extends Activity {
             f.addView(t, lp(-1, -2, Gravity.BOTTOM, p(6), 0, p(6), p(8)));
         }
         final Intent li = new Intent(Intent.ACTION_MAIN).setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        View gv = focusable(f, bg, TILE_R, ()->{ try{ startActivity(li);}catch(Exception e){} }); gv.setTag(pkg); tintCard(gv, pkg); return gv;
+        View gv = focusable(f, bg, TILE_R, APP_FOCUS, ()->{ try{ startActivity(li);}catch(Exception e){} });
+        ((GlowFrame)gv).drop=true; gv.setTag(pkg); tintCard(gv, pkg); return gv;
     }
     // Banner: use its edge colour so the banner blends into the tile. Icon: dominant (most saturated common) colour, darkened.
     int brandColor(Drawable d, boolean edge){
@@ -568,7 +582,7 @@ public class MainActivity extends Activity {
         if (v==null) return;
         v.animate().cancel();
         boolean foc=v.isFocused() && !editMode;
-        float sc=foc?1.07f:1f;
+        float sc=foc?APP_FOCUS:1f;
         v.setRotation(0);
         if (settle) v.animate().scaleX(sc).scaleY(sc).translationX(0).translationY(0).rotation(0).setDuration(180).setInterpolator(dragIp).start();
         else { v.setScaleX(sc); v.setScaleY(sc); v.setTranslationX(0); v.setTranslationY(0); v.setRotation(0); }
@@ -612,7 +626,7 @@ public class MainActivity extends Activity {
                 float from=c.getScaleX();
                 c.setRotation(0); c.setTranslationY(-liftY); tgtY[j]=-liftY;
                 c.setScaleX(from); c.setScaleY(from);
-                c.animate().scaleX(1.16f).scaleY(1.16f).setDuration(160).setInterpolator(dragIp).start();
+                c.animate().scaleX(APP_HOLD).scaleY(APP_HOLD).setDuration(160).setInterpolator(dragIp).start();
             } else c.setAlpha(0.5f);
         }
         if (!dragV.isFocused()) dragV.requestFocus();
