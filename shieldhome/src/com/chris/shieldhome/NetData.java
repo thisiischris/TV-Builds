@@ -25,14 +25,14 @@ class NetData {
     void loadWhatsNew() {
         String cached = a.prefs().getString("wn_json", null);
         long at = a.prefs().getLong("wn_at", 0);
-        if (cached != null && System.currentTimeMillis() - at < 6 * 3600 * 1000L) { a.useWhatsNew(cached); return; }
+        if (cached != null && System.currentTimeMillis() - at < 6 * 3600 * 1000L) { a.hero.useWhatsNew(cached); return; }
         final int g = a.dataGen;
         a.pool.execute(() -> {
             String js = null;
             try { js = fetchWhatsNew(); } catch (Exception e) { android.util.Log.w("ShieldHome", "whatsnew " + e); }
             final String fj = js != null ? js : cached;
             if (js != null) a.prefs().edit().putString("wn_json", js).putLong("wn_at", System.currentTimeMillis()).apply();
-            a.h.post(() -> { if (g == a.dataGen) a.useWhatsNew(fj); });
+            a.h.post(() -> { if (g == a.dataGen) a.hero.useWhatsNew(fj); });
         });
     }
 

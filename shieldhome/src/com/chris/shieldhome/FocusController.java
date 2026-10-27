@@ -91,7 +91,7 @@ class FocusController {
         int sec = f == null ? -1 : secOf(f);
         if (sec < 0) return false;
         if (e.getAction() != KeyEvent.ACTION_DOWN) return false; // ponytail: let ACTION_UP through
-        if (sec == 1 && hz) { a.heroStep(k == KeyEvent.KEYCODE_DPAD_RIGHT); return true; }
+        if (sec == 1 && hz) { a.hero.heroStep(k == KeyEvent.KEYCODE_DPAD_RIGHT); return true; }
         if (k == KeyEvent.KEYCODE_DPAD_DOWN && sec >= 4 && sec == nSecs() - 1)
             return true;
         View t;

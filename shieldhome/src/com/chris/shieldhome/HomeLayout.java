@@ -110,16 +110,16 @@ class HomeLayout {
         hero.addView(meta, a.lp(a.p(360),-2,Gravity.TOP|Gravity.START,a.p(35),a.p(72),0,0));
         a.heroBtn = new PillView(a, a, "Play Now", 4, true);
         a.heroBtn.setAlpha(0f); a.heroBtn.setTranslationY(a.p(8));
-        a.heroBtn.setOnClickListener(v->a.heroAction());
+        a.heroBtn.setOnClickListener(v->a.hero.heroAction());
         hero.addView(a.heroBtn, a.lp(a.p(138), a.p(34), Gravity.TOP|Gravity.START, a.p(35), a.p(237), 0, 0));
         a.heroDots = new HeroDots(a);
         hero.addView(a.heroDots, a.lp(-2, a.p(28), Gravity.TOP|Gravity.START, 0, a.p(270), 0, 0));
         View.OnLayoutChangeListener dotsLay=(v,a,b,c,d,e,f,g,h2)->HomeLayout.this.a.placeDots();
         hero.addOnLayoutChangeListener(dotsLay);
         a.heroDots.addOnLayoutChangeListener(dotsLay);
-        art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(a.maskHero("hero", src, w, h)); } } });
+        art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(a.hero.maskHero("hero", src, w, h)); } } });
         a.heroG = hero; hero.setFocusable(false); hero.setClickable(false);
-        a.heroBtn.setOnFocusChangeListener((x,f)-> a.showHeroAction(f));
+        a.heroBtn.setOnFocusChangeListener((x,f)-> a.hero.showHeroAction(f));
         a.root.addView(hero, 0, a.lp(-1, a.p(400), Gravity.TOP, 0,0,0,0));
 
         a.tabBar = new SegBar(a); a.tabPlay=a.tabBar.play; a.tabLive=a.tabBar.live;
