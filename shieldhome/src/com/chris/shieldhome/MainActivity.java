@@ -19,7 +19,7 @@ public class MainActivity extends Activity {
     // All geometry is in mockup pixels (1024x576 reference), scaled to the real screen.
     float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; FrameLayout cardWrap; TextView clock, date; View clk;
     PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
-    static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255);
+    static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255), BG = Color.rgb(8, 8, 16);
     static final int TILE_R = 11;
     static final float APP_FOCUS=1.13f, APP_HOLD=1.16f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
@@ -168,20 +168,20 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
         place(qsPanel, 73, 17, 290, 28); qsLabels();
 
-        // Hero: full-screen backdrop under everything
-        FrameLayout hero = new FrameLayout(this);
+        // Hero: NVIDIA-style featured art, upper-right, fade into bg
+        FrameLayout hero = new FrameLayout(this); hero.setClipChildren(false);
         FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
         ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        hero.addView(artHost, new FrameLayout.LayoutParams(-1,-1));
+        View leftFade = new View(this);
+        leftFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{BG, Color.argb(220,8,8,16), Color.argb(90,8,8,16), Color.TRANSPARENT}));
+        artHost.addView(leftFade, lp(p(300), -1, Gravity.START, 0,0,0,0));
         View botFade = new View(this);
-        botFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(204,8,8,16)}));
-        hero.addView(botFade, lp(-1, p(346), Gravity.BOTTOM, 0,0,0,0));
-        View topScrim = new View(this);
-        topScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.argb(140,0,0,0), Color.TRANSPARENT}));
-        hero.addView(topScrim, lp(-1, p(72), Gravity.TOP, 0,0,0,0));
+        botFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(70,8,8,16), Color.argb(170,8,8,16), BG}));
+        artHost.addView(botFade, lp(-1, p(156), Gravity.BOTTOM, 0,0,0,0));
+        hero.addView(artHost, lp(p(640), p(328), Gravity.TOP|Gravity.END, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroLabel = text("FEATURED", 8, Color.rgb(190,188,205), "sans-serif-medium");
         heroArt = art;
@@ -192,11 +192,11 @@ public class MainActivity extends Activity {
         heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(0f);
         for (TextView tv: new TextView[]{heroLabel, heroTitle, heroSub}) tv.setShadowLayer(p(6), 0, p(2), Color.argb(180,0,0,0));
         meta.addView(heroLabel, new LinearLayout.LayoutParams(-2,-2));
-        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(p(500),-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
+        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(p(340),-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
         LinearLayout.LayoutParams mf = new LinearLayout.LayoutParams(p(40), Math.max(2,p(1.4f))); mf.topMargin=p(6); meta.addView(heroFocus, mf);
-        LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(p(460),-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
+        LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(p(340),-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
         LinearLayout.LayoutParams mb = new LinearLayout.LayoutParams(p(56),p(15)); mb.topMargin=p(10); meta.addView(heroBadge, mb);
-        hero.addView(meta, lp(p(520),-2,Gravity.TOP|Gravity.START,p(35),p(148),0,0));
+        hero.addView(meta, lp(p(360),-2,Gravity.TOP|Gravity.START,p(35),p(72),0,0));
         heroG = hero; hero.setFocusable(true); hero.setClickable(true);
         hero.setOnFocusChangeListener((x,f)->{
             heroTitle.setTextColor(f?Color.WHITE:Color.rgb(220,220,230));
@@ -205,7 +205,7 @@ public class MainActivity extends Activity {
             fadeHeroDots(f);
         });
         hero.setOnClickListener(x->{ Object[] o=heroOnScreen; if (o==null) synchronized(heroLock){ o=heroItems.isEmpty()?null:heroItems.get(heroIdx); } if (o==null) launchPkg(installed("com.plexapp.android")?"com.plexapp.android":PLAY_PKGS[0]); else { try { startActivity(((Intent)o[4]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch(Exception e){ launchPkg((String)o[0]); } } });
-        root.addView(hero, 0, new FrameLayout.LayoutParams(-1,-1));
+        root.addView(hero, 0, lp(-1, p(328), Gravity.TOP, 0,0,0,0));
 
         // Tabs
         tabPlay = new PillView(this, "Play Next", 0, true); tabLive = new PillView(this, "Live TV", 1, false);
@@ -281,23 +281,33 @@ public class MainActivity extends Activity {
 
     // ---------- Focus helper: soft blue glow drawn outside the tile + scale ----------
     class GlowFrame extends FrameLayout {
-        FrameLayout inner; View badgeV; float radius; Paint gp = new Paint(Paint.ANTI_ALIAS_FLAG), rp = new Paint(Paint.ANTI_ALIAS_FLAG), bp = new Paint(); float glow=0, fade=1; Bitmap glowBm, shBm; int glowPad, shPad; boolean drop;
-        GlowFrame(Context c, FrameLayout in, float r){ super(c); inner=in; radius=r; setClipChildren(false); setClipToPadding(false); setWillNotDraw(false);
+        FrameLayout inner; ImageView halo; View badgeV; float radius; Paint gp = new Paint(Paint.ANTI_ALIAS_FLAG), rp = new Paint(Paint.ANTI_ALIAS_FLAG), sp = new Paint(); float glow=0, fade=1; Bitmap glowBm, shBm; int glowPad, shPad; boolean drop;
+        GlowFrame(Context c, FrameLayout in, float r){ super(c); inner=in; radius=r; setClipChildren(false); setClipToPadding(false); setClipToOutline(false); setWillNotDraw(false); setLayerType(View.LAYER_TYPE_NONE, null); forceHasOverlappingRendering(false);
+            glowPad=p(18); shPad=p(28);
+            halo=new ImageView(c); halo.setScaleType(ImageView.ScaleType.FIT_XY); halo.setFocusable(false); halo.setVisibility(INVISIBLE);
+            FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-1,-1); hp.setMargins(-glowPad,-glowPad,-glowPad,-glowPad);
+            addView(halo, hp);
             addView(in, new FrameLayout.LayoutParams(-1,-1));
             in.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             rp.setStyle(Paint.Style.STROKE); rp.setStrokeWidth(p(1.6f));
-            glowPad=p(18); shPad=p(28);
             tint(FOCUS); }
         void tint(int c){
             gp.setColor(Color.argb(155, Color.red(c), Color.green(c), Color.blue(c)));
             rp.setColor(Color.rgb(Math.min(255,Color.red(c)+40), Math.min(255,Color.green(c)+40), Math.min(255,Color.blue(c)+40)));
-            glowBm=null; }
-        void warm(int w, int h){ if (w<=0||h<=0) return; glowBm=glowBmp(w,h,gp.getColor(),radius); if (drop) shBm=shadowBmp(w,h,radius); }
+            glowBm=null; syncHalo(); }
+        void warm(int w, int h){ if (w<=0||h<=0) return; glowBm=glowBmp(w,h,gp.getColor(),radius); if (drop) shBm=shadowBmp(w,h,radius); syncHalo(); }
+        void syncHalo(){
+            float g=glow*fade;
+            if (halo==null) return;
+            if (g>0.02f && glowBm==null && getWidth()>0) glowBm=glowBmp(getWidth(),getHeight(),gp.getColor(),radius);
+            halo.setImageBitmap(glowBm);
+            halo.setImageAlpha((int)(150*g));
+            halo.setVisibility(g>0.02f?VISIBLE:INVISIBLE);
+        }
         @Override protected void onSizeChanged(int w, int h, int ow, int oh){ super.onSizeChanged(w,h,ow,oh); shBm=null; if (w>0&&h>0) warm(w,h); }
         @Override public void draw(Canvas c){
             float g=glow*fade;
-            if (g>0 && drop){ if (shBm==null) shBm=shadowBmp(getWidth(),getHeight(),radius); if (shBm!=null){ bp.setAlpha((int)(102*g)); c.drawBitmap(shBm,-shPad,-shPad+p(8),bp); } }
-            if (g>0){ if (glowBm==null) warm(getWidth(),getHeight()); if (glowBm!=null){ bp.setAlpha((int)(150*g)); c.drawBitmap(glowBm,-glowPad,-glowPad,bp); } }
+            if (g>0 && drop){ if (shBm==null) shBm=shadowBmp(getWidth(),getHeight(),radius); if (shBm!=null){ sp.setAlpha((int)(102*g)); c.drawBitmap(shBm,-shPad,-shPad+p(8),sp); } }
             super.draw(c);
             if (g>0){ rp.setAlpha((int)(255*g)); c.drawRoundRect(0,0,getWidth(),getHeight(),radius,radius,rp); }
             if (badgeV!=null && badgeV.getAlpha()>0.01f){ c.saveLayerAlpha(badgeV.getLeft(), badgeV.getTop(), badgeV.getRight(), badgeV.getBottom(), Math.round(255*badgeV.getAlpha())); c.translate(badgeV.getLeft(), badgeV.getTop()); badgeV.draw(c); c.restore(); }
@@ -313,7 +323,7 @@ public class MainActivity extends Activity {
             x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(sc<1.05f?260:180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
             x.setTranslationZ(f?(sc>=1.12f?p(8):p(6)):0);
             android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(180);
-            va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.invalidate(); }); va.start();
+            va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.syncHalo(); g.invalidate(); }); va.start();
         });
         g.setOnClickListener(x->click.run());
         return g;
@@ -475,7 +485,7 @@ public class MainActivity extends Activity {
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).commit(); }
     GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(147); gl.height=p(81); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
     int rowH(){ return p(93); }
-    View[] slideViews(){ return new View[]{clk, gear, searchV, qsPanel, tabPlay, tabLive, cardWrap, homeGrid}; }
+    View[] slideViews(){ return new View[]{clk, gear, searchV, qsPanel, heroG, tabPlay, tabLive, cardWrap, homeGrid}; }
     void setDrawer(boolean on){ drawerOpen=on; slideHome(); }
     void fadeChrome(boolean hide){
         float a=hide?0f:1f;
@@ -569,7 +579,7 @@ public class MainActivity extends Activity {
     }
     int slotX(int i){ return (i%6)*slotW; }
     int slotY(int i){ return (i/6)*slotH; }
-    void layer(View v, boolean on){ if (v!=null) v.setLayerType(on?View.LAYER_TYPE_HARDWARE:View.LAYER_TYPE_NONE, null); }
+    void layer(View v, boolean on){ View t=v instanceof GlowFrame? ((GlowFrame)v).inner:v; if (t!=null) t.setLayerType(on?View.LAYER_TYPE_HARDWARE:View.LAYER_TYPE_NONE, null); }
     void retarget(int i){
         View v=tiles[i];
         tgtX[i]=slotX(i)-v.getLeft();
@@ -588,7 +598,7 @@ public class MainActivity extends Activity {
         if (settle) v.animate().scaleX(sc).scaleY(sc).translationX(0).translationY(0).rotation(0).setDuration(180).setInterpolator(dragIp).start();
         else { v.setScaleX(sc); v.setScaleY(sc); v.setTranslationX(0); v.setTranslationY(0); v.setRotation(0); }
         v.setTranslationZ(foc?p(6):0);
-        if (v instanceof GlowFrame){ GlowFrame g=(GlowFrame)v; if (!foc){ g.glow=0; g.invalidate(); } }
+        if (v instanceof GlowFrame){ GlowFrame g=(GlowFrame)v; g.glow=foc?1f:0f; g.syncHalo(); g.invalidate(); }
     }
     void resetAllLifts(boolean settle, View keep){
         if (homeGrid==null) return;
@@ -622,7 +632,7 @@ public class MainActivity extends Activity {
         for (int j=0;j<n;j++){
             View c=tiles[j];
             if (c==dragV){
-                if (c instanceof GlowFrame){ GlowFrame g=(GlowFrame)c; g.glow=1f; g.setTranslationZ(p(18)); }
+                if (c instanceof GlowFrame){ GlowFrame g=(GlowFrame)c; g.glow=1f; g.syncHalo(); g.setTranslationZ(p(18)); }
                 c.animate().cancel();
                 float from=c.getScaleX();
                 c.setRotation(0); c.setTranslationY(-liftY); tgtY[j]=-liftY;
@@ -840,7 +850,7 @@ public class MainActivity extends Activity {
         synchronized(heroLock){ n=heroItems.size(); ix=heroIdx; }
         if (heroDots==null){
             heroDots=new LinearLayout(this); heroDots.setGravity(Gravity.CENTER); heroDots.setAlpha(0f);
-            ((ViewGroup)heroG).addView(heroDots, lp(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL,0,p(268),0,0));
+            ((ViewGroup)heroG).addView(heroDots, lp(-2,-2,Gravity.TOP|Gravity.START,p(35),p(292),0,0));
         }
         heroDots.removeAllViews();
         if (n<=1){ heroDots.setVisibility(View.GONE); return; }
@@ -868,7 +878,7 @@ public class MainActivity extends Activity {
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
         bindHeroDots();
         final String uri = (String)o[3];
-        final int tw=root.getWidth()>0?root.getWidth():p(1024), th=root.getHeight()>0?root.getHeight():p(576), g=++heroLoadGen;
+        final int tw=p(640), th=p(328), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap bm = uri==null||images==null?null:images.decode(uri, tw, th);
             h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, bm); });
@@ -997,7 +1007,7 @@ public class MainActivity extends Activity {
         for (int i=0;i<cardRow.getChildCount();i++){
             View c=cardRow.getChildAt(i); float a=tileAlpha(i,sx,stride,5);
             if (c instanceof GlowFrame){
-                GlowFrame g=(GlowFrame)c; g.fade=a; g.setAlpha(1f); g.inner.setAlpha(a); g.invalidate();
+                GlowFrame g=(GlowFrame)c; g.fade=a; g.setAlpha(1f); g.inner.setAlpha(a); g.syncHalo(); g.invalidate();
                 if (a>0.01f){
                     View iv=g.inner.getChildAt(0);
                     if (iv instanceof ImageView){ Object tg=iv.getTag();
