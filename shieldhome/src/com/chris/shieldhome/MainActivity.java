@@ -20,6 +20,8 @@ public class MainActivity extends Activity {
     float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; FrameLayout cardWrap; View clk;
     SegBar tabBar; TextView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255), BG = Color.rgb(8, 8, 16);
+    static final int HERO_SCRIM_RGB=0x050507; // darker than BG 0x080810 so the wash doesn't read as wallpaper
+    static final float HERO_LEFT_FADE=0.24f;
     static final int TILE_R = 11;
     static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
@@ -1132,8 +1134,8 @@ public class MainActivity extends Activity {
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*0.38f, botEnd=artB-artH*0.40f, botRange=h-botEnd;
-        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:Math.min(1,(artL+artW*0.10f)/leftEnd), 1}, Shader.TileMode.CLAMP));
+        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*HERO_LEFT_FADE, botEnd=artB-artH*0.40f, botRange=h-botEnd;
+        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,h,0,botEnd, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, botRange<=0?0:(h-artB)/botRange, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
@@ -1157,6 +1159,10 @@ public class MainActivity extends Activity {
         Paint xp=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); xp.setDither(true);
         xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
         c.drawBitmap(alphaMask(tw,th),0,0,xp);
+        float leftEnd=artL+artW*HERO_LEFT_FADE;
+        xp.setXfermode(null);
+        xp.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{0xE6000000|HERO_SCRIM_RGB,0xC2000000|HERO_SCRIM_RGB,HERO_SCRIM_RGB}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
+        c.drawRect(0,0,leftEnd,th,xp);
         heroMasked.put(key, out); return out;
     }
     // ---------- Featured hero ----------
