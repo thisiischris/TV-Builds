@@ -30,12 +30,12 @@ public class MainActivity extends Activity {
 
     FrameLayout.LayoutParams lp(int w,int h,int g,int l,int t,int r,int b){ FrameLayout.LayoutParams x=new FrameLayout.LayoutParams(w,h,g); x.setMargins(l,t,r,b); return x; }
     java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
-    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards;
+    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards; HeroController hero;
     java.util.concurrent.Future<?> dataFut; int dataGen, heroLoadGen;
     List<String[]> appsCache, fullOrder=new ArrayList<>();
     List<Object[]> featuredCache, wnPickCache;
     
-    String homeBindSig="", featuredBoundSig="";
+    String homeBindSig="";
     final Object heroLock=new Object(); Object[] heroOnScreen;
     void loadInto(final ImageView iv, String uri0, final boolean fit){
         if (images==null||uri0==null) return;
@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
         tv = new TvData(this);
         net = new NetData(this);
         cards = new CardsController(this);
+        hero = new HeroController(this);
         prefs().edit().remove("heromode").remove("featured").apply(); // v9: card mode removed
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         DisplayMetricsHolder();
@@ -85,7 +86,7 @@ public class MainActivity extends Activity {
         kickData(true);
         tick(); showWeather(); weatherTick(); applyDim();
     }
-    @Override protected void onPause(){ if (editMode) exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(heroRotate); h.removeCallbacks(wxRun); }
+    @Override protected void onPause(){ if (editMode) exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(hero.heroRotate); h.removeCallbacks(wxRun); }
     boolean heroShown(){ return heroG!=null && heroG.getVisibility()==View.VISIBLE; }
     View tabV(){ return focus!=null?focus.tabV():(tab==0?tabPlay:tabLive); }
     String name(View v){ return focus!=null?focus.name(v):"?"; }
@@ -1242,25 +1243,10 @@ public class MainActivity extends Activity {
         try { if (o[4] instanceof Intent) startActivity(((Intent)o[4]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); else launchPkg((String)o[0]); }
         catch(Exception e){ launchPkg((String)o[0]); }
     }
-    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, HERO_ROTATE_MS); return; } } showHero(); h.postDelayed(this, HERO_ROTATE_MS); } };
-    ImageView heroArt2; boolean heroFront=true;
-    void loadHero(){ applyFeaturedCache(); }
-    void applyFeaturedCache(){
-        List<Object[]> feat=featuredCache;
-        if (feat==null) return;
-        String fs=heroSig(feat);
-        if (fs.equals(featuredBoundSig)) return;
-        featuredBoundSig=fs;
-        synchronized(heroLock){ heroItems.clear(); heroItems.addAll(feat); heroIdx=0; }
-        h.removeCallbacks(heroRotate);
-        if (!heroItems.isEmpty()){ showHero(); h.postDelayed(heroRotate, HERO_ROTATE_MS); }
-        net.loadWhatsNew();
-    }
-    static String heroSig(List<Object[]> l){
-        StringBuilder b=new StringBuilder();
-        for (Object[] o: l) b.append(o[0]).append('|').append(o[1]).append('|').append(o[3]).append(',');
-        return b.toString();
-    }
+    ImageView heroArt2;
+    void loadHero(){ hero.loadHero(); }
+    void applyFeaturedCache(){ hero.applyFeaturedCache(); }
+    static String heroSig(List<Object[]> l){ return HeroController.heroSig(l); }
     long heroGate;
     void heroStep(boolean next){
         if (android.os.SystemClock.uptimeMillis()<heroGate) return;
@@ -1269,47 +1255,12 @@ public class MainActivity extends Activity {
             if (n<=1) return;
             heroIdx = (heroIdx + (next?1:-1) + n) % n;
         }
-        h.removeCallbacks(heroRotate);
+        h.removeCallbacks(hero.heroRotate);
         showHero();
-        h.postDelayed(heroRotate, HERO_ROTATE_MS);
+        h.postDelayed(hero.heroRotate, HERO_ROTATE_MS);
     }
-    void showHero(){
-        final Object[] o;
-        synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
-        heroGate=android.os.SystemClock.uptimeMillis()+650;
-        if (heroBtn==null || !heroBtn.isFocused()) bindHeroAction(o);
-        final String uri = (String)o[3];
-        final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=heroG!=null&&heroG.getHeight()>0?heroG.getHeight():p(400), g=++heroLoadGen;
-        pool.execute(()->{
-            Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
-            Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
-            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, bm); });
-        });
-    }
-    void transitionHero(final Object[] o, Bitmap bm){
-        android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
-        final ImageView in = heroFront ? heroArt2 : heroArt, out = heroFront ? heroArt : heroArt2;
-        if (bm != null){
-            in.setScaleType(ImageView.ScaleType.FIT_XY);
-            in.setImageBitmap(bm); in.setScaleX(1f); in.setScaleY(1f); in.setAlpha(0f); in.bringToFront();
-            in.animate().alpha(1f).setDuration(1600).setInterpolator(ease).start();
-            out.animate().alpha(0f).setDuration(1600).setInterpolator(ease).start();
-            heroFront = !heroFront;
-        }
-        final View[] texts = {heroTitle, heroSub, heroBadge, heroFocus, heroLabel};
-        android.view.animation.Interpolator outIp=new android.view.animation.AccelerateInterpolator();
-        for (View t: texts) t.animate().alpha(0f).translationX(-p(10)).setDuration(450).setInterpolator(outIp).start();
-        final boolean ctaOn=heroBtn!=null && heroBtn.isFocused();
-        if (ctaOn){ heroBtn.animate().cancel(); heroBtn.animate().alpha(0f).setStartDelay(0).setDuration(450).setInterpolator(outIp).start(); }
-        h.postDelayed(()->{
-            bindHeroCopy(o);
-            try { Drawable bd = pm.getApplicationBanner((String)o[0]); if (bd==null) bd = pm.getApplicationIcon((String)o[0]); heroBadge.setImageBitmap(glyph((String)o[0], bd));} catch(Exception e){}
-            fitHeroMeta();
-            if (heroDots!=null && heroDots.getVisibility()==View.VISIBLE){ int n; synchronized(heroLock){ n=heroItems.size(); } heroDots.bind(n, heroIdx, true); }
-            int d=200; for (View t: texts){ t.setTranslationX(p(16)); t.animate().alpha(t==heroBadge?0.7f:1f).translationX(0).setStartDelay(d).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); d+=90; }
-            if (ctaOn && heroBtn!=null && heroBtn.isFocused()){ heroBtn.animate().cancel(); heroBtn.setAlpha(0f); heroBtn.animate().alpha(1f).setStartDelay(200).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); }
-        }, 480);
-    }
+    void showHero(){ hero.showHero(); }
+    void transitionHero(final Object[] o, Bitmap bm){ hero.transitionHero(o,bm); }
 
     Map<String,Bitmap> glyphs=new HashMap<>();
     // v12: white monochrome mark extracted from the app banner (pixels that differ from the banner background become white, alpha by contrast), cropped, with a soft shadow
@@ -1388,34 +1339,7 @@ public class MainActivity extends Activity {
 
     // ---------- v6: quick settings, featured toggle, dimmer, weather ----------
     PillView searchV, speakV, typeV; LinearLayout searchSplit; EditText searchField; TextView heroLabel;
-    void useWhatsNew(String js){
-        List<Object[]> nl = new ArrayList<>();
-        try { org.json.JSONArray a = new org.json.JSONArray(js==null?"[]":js);
-            SimpleDateFormat whatsNewDateFormat=new SimpleDateFormat("yyyy-MM-dd",Locale.US);
-            SimpleDateFormat whatsNewDayFormat=new SimpleDateFormat("EEE",Locale.US);
-            SimpleDateFormat whatsNewWeekdayFormat=new SimpleDateFormat("EEEE",Locale.US);
-            Date whatsNewToday=whatsNewDateFormat.parse(whatsNewDateFormat.format(new Date()));
-            for (int i=0;i<a.length();i++){ org.json.JSONObject o=a.getJSONObject(i); String pkg=o.getString("pkg"); if (!installed(pkg) || o.optString("img").isEmpty()) continue;
-                int dd=o.optInt("dd"); String when; Date itemDate=null;
-                try { itemDate = whatsNewDateFormat.parse(o.getString("date")); long diff = Math.round((itemDate.getTime() - whatsNewToday.getTime())/86400000.0);
-                    when = diff==0?"New today":diff==1?"Coming tomorrow":diff==-1?"Added yesterday":diff<0?"Added "+whatsNewDayFormat.format(itemDate):"Coming "+whatsNewWeekdayFormat.format(itemDate); } catch (Exception e){ when="New"; }
-                String ep = o.optInt("season")>0 ? "  \u00B7  S"+o.optInt("season")+(o.optInt("num")>0?" E"+o.optInt("num"):"") : "";
-                String sum = firstSentence(o.optString("summary"));
-                Intent li = pm.getLeanbackLaunchIntentForPackage(pkg); if (li==null) li = pm.getLaunchIntentForPackage(pkg);
-                long avail=0; if (itemDate!=null && itemDate.getTime()>System.currentTimeMillis()) avail=itemDate.getTime();
-                nl.add(new Object[]{pkg, o.getString("show"), when+" on "+o.optString("net")+ep+"\n"+sum, o.getString("img"), li, "NEW", avail});
-            }
-        } catch (Exception e){ android.util.Log.w("ShieldHome","whatsnew parse "+e); }
-        // v9: one hero, Featured + What's New randomly mixed in the same rotation
-        List<Object[]> mix = new ArrayList<>(); for (Object[] o: heroItems) if (o.length>5 && "FEATURED".equals(o[5])) mix.add(o);
-        int nf = mix.size(); Collections.shuffle(nl); for (int i=0;i<Math.min(8,nl.size());i++) mix.add(nl.get(i));
-        android.util.Log.i("ShieldHome","hero mix featured="+nf+" new="+(mix.size()-nf));
-        if (mix.size()!=nf){
-            Collections.shuffle(mix);
-            synchronized(heroLock){ h.removeCallbacks(heroRotate); heroItems.clear(); heroItems.addAll(mix); heroIdx=0; }
-            showHero(); h.postDelayed(heroRotate, HERO_ROTATE_MS);
-        }
-    }
+    void useWhatsNew(String js){ hero.useWhatsNew(js); }
 
     PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false, heroCtaOn; View heroG, heroFocus, inAppDim; HeroDots heroDots;
     float dimFill; android.animation.ValueAnimator dimFillAnim;
