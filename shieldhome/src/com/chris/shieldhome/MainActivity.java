@@ -1455,9 +1455,9 @@ public class MainActivity extends Activity {
         p.setBackground(bg); p.setPadding(p(10),p(12),p(10),p(12)); p.setElevation(p(4)); p.setTranslationZ(p(80));
         dimSlideLab=text("90%", 12, Color.WHITE, "sans-serif-medium"); dimSlideLab.setGravity(Gravity.CENTER);
         dimSlideLab.setSingleLine(true); dimSlideLab.setMaxLines(1);
-        dimSlideLab.measure(0,0); int lw=dimSlideLab.getMeasuredWidth();
-        dimSlideLab.setText(dimPct()+"%");
+        int lw=Math.round(dimSlideLab.getPaint().measureText("90%"));
         p.addView(dimSlideLab, new LinearLayout.LayoutParams(lw,-2));
+        dimSlideLab.setText(dimPct()+"%");
         dimSlideTrack=new View(this){
             @Override protected void onDraw(Canvas c){
                 float w=getWidth(), hh=getHeight(), rr=w/2f, t=Math.max(0, Math.min(1, dimFill/0.9f));
