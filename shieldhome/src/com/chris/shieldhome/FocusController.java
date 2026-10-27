@@ -122,7 +122,7 @@ class FocusController {
         if (a.searchTyping) { a.closeSearchField(); if (a.searchV!=null) a.searchV.requestFocus(); return true; }
         if (a.dimSlide) { a.closeDimSlide(); return true; }
         if (a.editMode || a.dragIdx >= 0) { a.exitEdit(); return true; }
-        if (a.drawerOpen) { a.setDrawer(false); a.focusHomeApp(); return true; }
+        if (a.drawerOpen) { a.setDrawer(false); focusHomeApp(); return true; }
         return false;
     }
 
@@ -144,12 +144,40 @@ class FocusController {
     boolean keyUp(int k, KeyEvent e) {
         if (k != KeyEvent.KEYCODE_BACK) return false;
         if (e.isTracking()) {
-            if (!backLong && !e.isCanceled() && !closeOverlay()) a.back();
+            if (!backLong && !e.isCanceled() && !closeOverlay()) back();
             backLong = false;
             return true;
         }
         if (backLong) { backLong = false; return true; }
         return false;
+    }
+
+    void back() {
+        if (closeOverlay()) return;
+        View f = a.getCurrentFocus();
+        if (f != null && a.cardRow != null && f.getParent() == a.cardRow) {
+            int i = a.cardRow.indexOfChild(f);
+            if (i > 0 || (a.cardScroll != null && a.cardScroll.getScrollX() > 0)) {
+                a.resetCardRow();
+                android.util.Log.i("ShieldHome", "back -> card0");
+                return;
+            }
+        }
+        focusHomeApp();
+    }
+
+    void focusHomeApp() {
+        if (a.homeGrid == null) return;
+        if (a.drawerOpen) a.setDrawer(false);
+        lastIdx[4] = 0;
+        for (int i = 0; i < a.homeGrid.getChildCount(); i++) {
+            View c = a.homeGrid.getChildAt(i);
+            if (c != null && c.isFocusable() && c.getVisibility() == View.VISIBLE) {
+                c.requestFocus();
+                android.util.Log.i("ShieldHome", "back -> " + name(c));
+                return;
+            }
+        }
     }
 
     List<View> secItems(int sec) {

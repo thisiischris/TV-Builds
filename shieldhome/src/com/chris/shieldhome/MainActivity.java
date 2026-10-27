@@ -110,25 +110,7 @@ public class MainActivity extends Activity {
         if (focus!=null && focus.dispatch(e)) return true;
         return super.dispatchKeyEvent(e);
     }
-    @Override public void onBackPressed(){ back(); }
-    void back(){
-        if (focus!=null && focus.closeOverlay()) return;
-        View f=getCurrentFocus();
-        if (f!=null && cardRow!=null && f.getParent()==cardRow){
-            int i=cardRow.indexOfChild(f);
-            if (i>0 || (cardScroll!=null && cardScroll.getScrollX()>0)){ resetCardRow(); android.util.Log.i("ShieldHome","back -> card0"); return; }
-        }
-        focusHomeApp();
-    }
-    void focusHomeApp(){
-        if (homeGrid==null) return;
-        if (drawerOpen) setDrawer(false);
-        if (focus!=null) focus.lastIdx[4]=0;
-        for (int i=0;i<homeGrid.getChildCount();i++){
-            View c=homeGrid.getChildAt(i);
-            if (c!=null && c.isFocusable() && c.getVisibility()==View.VISIBLE){ c.requestFocus(); android.util.Log.i("ShieldHome","back -> "+name(c)); return; }
-        }
-    }
+    @Override public void onBackPressed(){ focus.back(); }
     @Override public boolean onKeyDown(int k, KeyEvent e){ if (focus.keyDown(k,e)) return true; return super.onKeyDown(k,e); }
     @Override public boolean onKeyLongPress(int k, KeyEvent e){ if (focus.keyLong(k,e)) return true; return super.onKeyLongPress(k,e); }
     @Override public boolean onKeyUp(int k, KeyEvent e){ if (focus.keyUp(k,e)) return true; return super.onKeyUp(k,e); }
