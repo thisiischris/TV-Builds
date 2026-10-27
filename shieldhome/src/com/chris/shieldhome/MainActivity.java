@@ -191,7 +191,7 @@ public class MainActivity extends Activity {
     int pillTextW(PillView v, String s){
         boolean cta=v==heroBtn; Paint pt=new Paint(); pt.setTextSize(p(cta?14:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         float extra=cta?p(39):p(24);
-        if (cta && "Play Now".equals(s)) extra += (-pt.getFontMetrics().ascent)*0.78f + p(10);
+        if (cta && ("Play Now".equals(s) || "More Info".equals(s))) extra += (-pt.getFontMetrics().ascent)*0.78f + p(10);
         return Math.max(p(cta?34:28), Math.round(pt.measureText(s)+extra));
     }
     void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(34); v.setLayoutParams(lp); } v.invalidate(); }
@@ -382,19 +382,8 @@ public class MainActivity extends Activity {
                 for (int i=0;i<8;i++){ double a=Math.toRadians(i*45); float s=sr+p(1.5f), e=sr+p(3.3f); c.drawLine(gx+(float)Math.cos(a)*s, cy+(float)Math.sin(a)*s, gx+(float)Math.cos(a)*e, cy+(float)Math.sin(a)*e, pt); }
                 if (dimFill>0.01f){ c.save(); c.clipRect(gx+sr-2*sr*dimFill, cy-sr-1, gx+sr+1, cy+sr+1); pt.setStyle(Paint.Style.FILL); c.drawCircle(gx, cy, sr-p(0.3f), pt); pt.setStyle(Paint.Style.STROKE); c.restore(); } }
             else if (icon==6){
-                float mx=w/2f, hw=p(3.1f), top=cy-p(5.6f), bot=cy+p(2.4f), midY=(top+bot)/2;
-                Path mic=new Path(); mic.addRoundRect(new RectF(mx-hw, top, mx+hw, bot), hw, hw, Path.Direction.CW);
-                c.save(); c.clipPath(mic); pt.setStyle(Paint.Style.FILL);
-                pt.setColor(0xFF4285F4); c.drawRect(mx-hw, top, mx, midY, pt);
-                pt.setColor(0xFFEA4335); c.drawRect(mx, top, mx+hw, midY, pt);
-                pt.setColor(0xFFFBBC05); c.drawRect(mx-hw, midY, mx, bot, pt);
-                pt.setColor(0xFF34A853); c.drawRect(mx, midY, mx+hw, bot, pt);
-                c.restore();
-                pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(p(1.1f)); pt.setColor(fg); pt.setStrokeCap(Paint.Cap.ROUND);
-                c.drawLine(mx, bot, mx, cy+p(5.6f), pt);
-                c.drawLine(mx-p(3.8f), cy+p(5.6f), mx+p(3.8f), cy+p(5.6f), pt);
-                c.drawArc(mx-p(5), cy-p(1.2f), mx+p(5), cy+p(5.6f), 12, 156, false, pt);
-            }
+                if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
+                int ax=(int)(w/2f-p(7.5f)); asst.setBounds(ax, (int)(cy-p(7.5f)), ax+p(15), (int)(cy+p(7.5f))); asst.draw(c); }
             else if (icon==7){
                 float kx=w/2f, l=kx-p(8), rr=kx+p(8), t=cy-p(5.2f), b=cy+p(5.2f);
                 pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(p(1.1f)); pt.setStrokeJoin(Paint.Join.ROUND);
@@ -409,11 +398,22 @@ public class MainActivity extends Activity {
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(this==heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
-            if (this==heroBtn && "Play Now".equals(label)){
+            if (this==heroBtn && ("Play Now".equals(label) || "More Info".equals(label))){
                 float tw=pt.measureText(label), cap=-fm.ascent, th=cap, twt=cap*0.78f, gap=p(10), x0=(w-twt-gap-tw)/2;
-                pt.setPathEffect(new CornerPathEffect(Math.max(1, cap*0.12f)));
-                Path tr=new Path(); tr.moveTo(x0, cy-th/2); tr.lineTo(x0+twt, cy); tr.lineTo(x0, cy+th/2); tr.close();
-                c.drawPath(tr, pt); pt.setPathEffect(null);
+                if ("Play Now".equals(label)){
+                    pt.setPathEffect(new CornerPathEffect(Math.max(1, cap*0.12f)));
+                    Path tr=new Path(); tr.moveTo(x0, cy-th/2); tr.lineTo(x0+twt, cy); tr.lineTo(x0, cy+th/2); tr.close();
+                    c.drawPath(tr, pt); pt.setPathEffect(null);
+                } else {
+                    float icx=x0+twt/2;
+                    pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(Math.max(1, th*0.12f));
+                    c.drawCircle(icx, cy, th/2, pt);
+                    pt.setStyle(Paint.Style.FILL); pt.setTextAlign(Paint.Align.CENTER);
+                    pt.setTextSize(th*0.72f);
+                    Paint.FontMetrics ifm=pt.getFontMetrics();
+                    c.drawText("i", icx, cy-(ifm.ascent+ifm.descent)/2, pt);
+                    pt.setTextSize(p(14));
+                }
                 pt.setTextAlign(Paint.Align.LEFT);
                 c.drawText(label, x0+twt+gap, cy-(fm.ascent+fm.descent)/2, pt);
                 return;
@@ -445,6 +445,7 @@ public class MainActivity extends Activity {
             TextView t=text(s,12,Color.rgb(232,232,240),"sans-serif");
             t.setFocusable(true); t.setClickable(true); t.setGravity(Gravity.CENTER);
             t.setPadding(0,0,0,0); t.setSingleLine(true);
+            t.setDefaultFocusHighlightEnabled(false);
             return t;
         }
         void tabFocus(int t, boolean f){
@@ -490,9 +491,8 @@ public class MainActivity extends Activity {
         }
         @Override protected void dispatchDraw(Canvas c){
             float w=getWidth(), hh=getHeight(), rr=hh/2;
-            boolean fo=play.isFocused()||live.isFocused();
             Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-            pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
+            pt.setColor(Color.argb(140,60,58,75));
             c.drawRoundRect(0,0,w,hh,rr,rr,pt);
             pt.setStyle(Paint.Style.FILL);
             if (hw>0){
