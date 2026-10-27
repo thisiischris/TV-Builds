@@ -263,12 +263,12 @@ public class MainActivity extends Activity {
                 c.drawCircle(cx-p(1),cy-p(1),p(4.2f),pt); c.drawLine(cx+p(2),cy+p(2),cx+p(5),cy+p(5),pt);
                 if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
                 int ax=(int)(cx+p(8)); asst.setBounds(ax, (int)(cy-p(7.5f)), ax+p(15), (int)(cy+p(7.5f))); asst.draw(c); }
-            else if (icon==5){ float gx=w/2f, r=p(4.0f);
+            else if (icon==5){ float gx=w/2f, sr=p(4.0f);
                 pt.setStrokeWidth(p(1.5f));
-                c.drawCircle(gx, cy, r, pt);
+                c.drawCircle(gx, cy, sr, pt);
                 pt.setStrokeWidth(p(1.3f));
-                for (int i=0;i<8;i++){ double a=Math.toRadians(i*45); float s=r+p(1.5f), e=r+p(3.3f); c.drawLine(gx+(float)Math.cos(a)*s, cy+(float)Math.sin(a)*s, gx+(float)Math.cos(a)*e, cy+(float)Math.sin(a)*e, pt); }
-                if (dimFill>0.01f){ c.save(); c.clipRect(gx+r-2*r*dimFill, cy-r-1, gx+r+1, cy+r+1); pt.setStyle(Paint.Style.FILL); c.drawCircle(gx, cy, r-p(0.3f), pt); pt.setStyle(Paint.Style.STROKE); c.restore(); } }
+                for (int i=0;i<8;i++){ double a=Math.toRadians(i*45); float s=sr+p(1.5f), e=sr+p(3.3f); c.drawLine(gx+(float)Math.cos(a)*s, cy+(float)Math.sin(a)*s, gx+(float)Math.cos(a)*e, cy+(float)Math.sin(a)*e, pt); }
+                if (dimFill>0.01f){ c.save(); c.clipRect(gx+sr-2*sr*dimFill, cy-sr-1, gx+sr+1, cy+sr+1); pt.setStyle(Paint.Style.FILL); c.drawCircle(gx, cy, sr-p(0.3f), pt); pt.setStyle(Paint.Style.STROKE); c.restore(); } }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(this==heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
@@ -1462,7 +1462,7 @@ public class MainActivity extends Activity {
                 float w=getWidth(), hh=getHeight(), rr=w/2f, t=dimPct()/90f;
                 Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
                 pt.setColor(Color.argb(50,255,255,255)); c.drawRoundRect(0,0,w,hh,rr,rr,pt);
-                float th=Math.max(rr*2, hh*t); pt.setColor(Color.WHITE); c.drawRoundRect(0,hh-th,w,hh,rr,rr,pt);
+                if (t>0){ float th=Math.max(rr*2, hh*t); pt.setColor(Color.WHITE); c.drawRoundRect(0,hh-th,w,hh,rr,rr,pt); }
             }
         };
         LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(p(10), p(120)); tp.topMargin=p(8); p.addView(dimSlideTrack, tp);
