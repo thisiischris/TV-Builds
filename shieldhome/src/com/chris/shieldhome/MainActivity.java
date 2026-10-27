@@ -172,11 +172,11 @@ public class MainActivity extends Activity {
         // Hero: NVIDIA-style featured art, upper-right, fade into bg
         FrameLayout hero = new FrameLayout(this); hero.setClipChildren(false);
         FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
-        ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.FIT_XY);
-        heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.FIT_XY); heroArt2.setAlpha(0f);
+        ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        hero.addView(artHost, lp(p(702), p(360), Gravity.TOP|Gravity.END, 0,0,0,0));
+        hero.addView(artHost, lp(-1, p(360), Gravity.TOP|Gravity.END, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroArt = art;
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
@@ -191,7 +191,6 @@ public class MainActivity extends Activity {
         heroLabel.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroLabel.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
         heroLabel.setVisibility(View.GONE);
         heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(1f);
-        for (TextView tv: new TextView[]{heroLabel, heroTitle, heroSub}) tv.setShadowLayer(p(6), 0, p(2), Color.argb(180,0,0,0));
         meta.addView(heroBadge, new LinearLayout.LayoutParams(p(80), p(22)));
         LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-2,-2); ml.topMargin=p(6); meta.addView(heroLabel, ml);
         LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
@@ -203,17 +202,16 @@ public class MainActivity extends Activity {
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
         hero.addView(heroBtn, lp(p(138), p(41), Gravity.TOP|Gravity.START, p(35), p(253), 0, 0));
-        art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ Bitmap src=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,w,h); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
+        art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)->{
             heroTitle.setTextColor(f?Color.WHITE:Color.rgb(220,220,230));
-            heroTitle.setShadowLayer(f?p(10):p(6), 0, p(2), Color.argb(f?210:180,0,0,0));
             showHeroAction(f);
         });
         root.addView(hero, 0, lp(-1, p(360), Gravity.TOP, 0,0,0,0));
 
         tabBar = new SegBar(); tabPlay=tabBar.play; tabLive=tabBar.live;
-        place(tabBar, 35, 308, -2, 38);
+        place(tabBar, 35, 308, -2, 34);
 
         // Cards row: 5-tile viewport; clip off so scale+glow can draw; 6th hidden by alpha
         cardWrap = new FrameLayout(this);
@@ -304,9 +302,9 @@ public class MainActivity extends Activity {
         SegBar(){
             super(MainActivity.this);
             setOrientation(HORIZONTAL); setGravity(Gravity.CENTER_VERTICAL);
-            setPadding(p(3),p(3),p(3),p(3)); setWillNotDraw(false); setClipToPadding(false);
+            setPadding(0,0,0,0); setWillNotDraw(false); setClipChildren(false); setClipToPadding(false);
             play=mk("Play Next"); live=mk("Live TV");
-            int sw=Math.max(Math.round(play.getPaint().measureText("Play Next")), Math.round(live.getPaint().measureText("Live TV")))+p(44);
+            int sw=Math.max(Math.round(play.getPaint().measureText("Play Next")), Math.round(live.getPaint().measureText("Live TV")))+p(40);
             play.setLayoutParams(new LinearLayout.LayoutParams(sw,-1));
             live.setLayoutParams(new LinearLayout.LayoutParams(sw,-1));
             addView(play); addView(live);
@@ -318,18 +316,28 @@ public class MainActivity extends Activity {
             play.setNextFocusUpId(View.NO_ID); live.setNextFocusUpId(View.NO_ID);
         }
         TextView mk(String s){
-            TextView t=text(s,15,Color.rgb(232,232,240),"sans-serif");
+            TextView t=text(s,13.5f,Color.rgb(232,232,240),"sans-serif");
             t.setFocusable(true); t.setClickable(true); t.setGravity(Gravity.CENTER);
             t.setPadding(0,0,0,0); t.setSingleLine(true);
             return t;
         }
         void pick(int t){
-            if (t!=tab){ tab=t; refreshCards(); resetCardRow(); }
+            boolean ch=t!=tab;
+            if (ch){ tab=t; refreshCards(); resetCardRow(); }
             slide(hw>0); color();
+            if (ch && hw>0) pop();
         }
         void color(){
             int d=Color.rgb(22,22,30), l=Color.rgb(232,232,240);
             play.setTextColor(tab==0?d:l); live.setTextColor(tab==1?d:l);
+        }
+        void pop(){
+            TextView s=(tab==0 && play.getVisibility()==VISIBLE)?play:live, o=s==play?live:play;
+            android.view.animation.Interpolator ease=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
+            o.animate().cancel(); o.setScaleX(1f); o.setScaleY(1f); o.setElevation(0);
+            s.animate().cancel(); s.setScaleX(1f); s.setScaleY(1f); s.setElevation(p(3));
+            s.animate().scaleX(1.04f).scaleY(1.04f).setDuration(130).setInterpolator(ease)
+                .withEndAction(()->s.animate().scaleX(1f).scaleY(1f).setDuration(120).setInterpolator(ease).start()).start();
         }
         void showPlay(boolean on){ play.setVisibility(on?VISIBLE:GONE); play.setFocusable(on); requestLayout(); }
         void slide(boolean anim){
@@ -339,8 +347,8 @@ public class MainActivity extends Activity {
             if (!anim){ hx=nx; hw=nw; invalidate(); return; }
             if (ha!=null) ha.cancel();
             float x0=hx, w0=hw;
-            ha=android.animation.ValueAnimator.ofFloat(0,1); ha.setDuration(220);
-            ha.setInterpolator(new android.view.animation.PathInterpolator(0.42f,0,0.58f,1));
+            ha=android.animation.ValueAnimator.ofFloat(0,1); ha.setDuration(250);
+            ha.setInterpolator(new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f));
             ha.addUpdateListener(a->{ float u=(Float)a.getAnimatedValue(); hx=x0+(nx-x0)*u; hw=w0+(nw-w0)*u; invalidate(); });
             ha.start();
         }
@@ -355,13 +363,10 @@ public class MainActivity extends Activity {
             Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
             pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
             c.drawRoundRect(0,0,w,hh,rr,rr,pt);
-            pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255));
-            c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,rr,rr,pt);
             pt.setStyle(Paint.Style.FILL);
             if (hw>0){
-                float pad=p(3), h=hh-pad*2;
                 pt.setColor(Color.rgb(229,227,228));
-                c.drawRoundRect(hx, pad, hx+hw, pad+h, h/2f, h/2f, pt);
+                c.drawRoundRect(hx, 0, hx+hw, hh, rr, rr, pt);
             }
             super.dispatchDraw(c);
         }
@@ -1067,7 +1072,7 @@ public class MainActivity extends Activity {
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
         bindHeroAction(o);
         final String uri = (String)o[3];
-        final int tw=p(702), th=p(360), g=++heroLoadGen;
+        final int tw=p(1024), th=p(360), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
             Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
@@ -1078,7 +1083,7 @@ public class MainActivity extends Activity {
         android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
         final ImageView in = heroFront ? heroArt2 : heroArt, out = heroFront ? heroArt : heroArt2;
         if (bm != null){
-            in.setScaleType(ImageView.ScaleType.FIT_XY);
+            in.setScaleType(ImageView.ScaleType.CENTER_CROP);
             in.setImageBitmap(bm); in.setScaleX(1f); in.setScaleY(1f); in.setAlpha(0f); in.bringToFront();
             in.animate().alpha(1f).setDuration(1600).setInterpolator(ease).start();
             out.animate().alpha(0f).setDuration(1600).setInterpolator(ease).start();
