@@ -155,8 +155,7 @@ public class MainActivity extends Activity {
         PillView search = searchV = new PillView(this, "Search", 3, false);
         search.setOnClickListener(v->openAssistant()); place(search, 71, 17, 104, 28);
         qsPanel = new LinearLayout(this); qsPanel.setClipChildren(false); qsPanel.setVisibility(View.GONE);
-        qsDim = new PillView(this, "", 4, false); qsDim.setOnClickListener(v->cycleDim());
-        qsDim.setOnLongClickListener(v->{ openDimSlide(); return true; });
+        qsDim = new PillView(this, "", 4, false); qsDim.setOnClickListener(v->openDimSlide());
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
         place(qsPanel, 73, 17, 290, 28); qsLabels();
 
@@ -256,7 +255,7 @@ public class MainActivity extends Activity {
             int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
             pt.setColor(fg); pt.setStrokeWidth(p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
             float cx = icon==3 ? p(19) : p(icon==2?18:28) - (icon==2?p(4):0), cy = hh/2;
-            if (icon==0){ c.drawCircle(cx,cy,p(6.5f),pt); Path tr=new Path(); tr.moveTo(cx-p(2),cy-p(3.2f)); tr.lineTo(cx+p(3.3f),cy); tr.lineTo(cx-p(2),cy+p(3.2f)); tr.close(); c.drawPath(tr,pt); }
+            if (icon==0){ pt.setStyle(Paint.Style.FILL); pt.setPathEffect(new CornerPathEffect(p(1.1f))); Path tr=new Path(); tr.moveTo(cx-p(3.7f),cy-p(5.8f)); tr.lineTo(cx+p(5.5f),cy); tr.lineTo(cx-p(3.7f),cy+p(5.8f)); tr.close(); c.drawPath(tr,pt); pt.setPathEffect(null); }
             else if (icon==1){ pt.setStyle(Paint.Style.FILL); c.drawCircle(cx,cy,p(1.6f),pt); pt.setStyle(Paint.Style.STROKE);
                 for (float rr: new float[]{4.5f,7.5f}){ RectF o=new RectF(cx-p(rr),cy-p(rr),cx+p(rr),cy+p(rr)); c.drawArc(o,-40,80,false,pt); c.drawArc(o,140,80,false,pt);} }
             else if (icon==3){ // magnifier + mic
@@ -807,14 +806,14 @@ public class MainActivity extends Activity {
             if (ok){
                 if (e.getAction()==KeyEvent.ACTION_UP){ dimSlideIgnore=false; return true; }
                 if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
-                if (dimSlideIgnore) return true;
-                dimSlideKeep(); return true;
+                if (dimSlideIgnore && e.getRepeatCount()>0) return true;
+                closeMenu(false); return true;
             }
             if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
             if (k==KeyEvent.KEYCODE_BACK){ setDimPct(dimSlideWas); closeMenu(false); return true; }
             if (k==KeyEvent.KEYCODE_DPAD_UP){ dimSlideBy(1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ if (dimPct()<=0) dimSlideKeep(); else dimSlideBy(-1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT){ dimSlideKeep(); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ if (dimPct()<=0) closeMenu(false); else dimSlideBy(-1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT){ closeMenu(false); return true; }
             return true;
         }
         if (k==KeyEvent.KEYCODE_BACK){ if (e.getAction()==KeyEvent.ACTION_DOWN) closeMenu(); return true; }
@@ -1433,18 +1432,9 @@ public class MainActivity extends Activity {
     }
 
     PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false, dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim, dimSlideTrack; TextView dimSlideLab;
-    static final int[] DIMS = {0,25,50,70,90};
     float dimFill; int dimSlideWas; android.animation.ValueAnimator dimFillAnim;
-    int dimIdx(){ return Math.max(0, Math.min(DIMS.length-1, prefs().getInt("dim", 0))); }
-    int dimPct(){ int v=prefs().contains("dim_pct")?prefs().getInt("dim_pct",0):DIMS[dimIdx()]; return Math.max(0, Math.min(90, v)); }
+    int dimPct(){ return Math.max(0, Math.min(90, prefs().getInt("dim_pct",0))); }
     void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); qsLabels(); }
-    int[] dimPresets(){
-        int c=prefs().getInt("dim_custom",-1); java.util.ArrayList<Integer> l=new java.util.ArrayList<>();
-        for (int d: DIMS) l.add(d);
-        if (c>=0 && c<=90){ boolean hit=false; for (int d: DIMS) if (d==c) hit=true; if (!hit){ l.add(c); java.util.Collections.sort(l); } }
-        int[] a=new int[l.size()]; for (int i=0;i<l.size();i++) a[i]=l.get(i); return a;
-    }
-    void cycleDim(){ int[] ps=dimPresets(); int cur=dimPct(), n=ps[0]; for (int i=0;i<ps.length;i++) if (ps[i]==cur){ n=ps[(i+1)%ps.length]; break; } setDimPct(n); }
     void qsLabels(){ int d=dimPct(); if (qsDim==null) return; qsDim.label="Dim: "+(d==0?"Off":d+"%"); qsDim.setOn(d>0); qsDim.invalidate(); }
     void syncDimFill(boolean anim){
         float to=dimPct()/100f;
@@ -1455,28 +1445,31 @@ public class MainActivity extends Activity {
         dimFillAnim.start();
     }
     void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); if (dimSlideLab!=null) dimSlideLab.setText(dimPct()+"%"); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); }
-    void dimSlideKeep(){ prefs().edit().putInt("dim_custom", dimPct()).apply(); closeMenu(false); }
     void openDimSlide(){
         if (appMenu!=null || qsDim==null) return;
         if (focus!=null) focus.remember();
         dimSlide=true; dimSlideIgnore=true; dimSlideWas=dimPct();
         LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.VERTICAL); p.setGravity(Gravity.CENTER_HORIZONTAL);
-        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,28,28,32)); bg.setCornerRadius(p(14)); bg.setStroke(Math.max(1,p(1)), Color.argb(51,255,255,255));
-        p.setBackground(bg); p.setPadding(p(10),p(12),p(10),p(12)); p.setElevation(p(18)); p.setTranslationZ(p(80));
+        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(150,120,118,140)); bg.setStroke(1, Color.argb(40,255,255,255));
+        p.setBackground(bg); p.setPadding(p(10),p(12),p(10),p(12)); p.setElevation(p(4)); p.setTranslationZ(p(80));
         dimSlideLab=text(dimPct()+"%", 12, Color.WHITE, "sans-serif-medium"); dimSlideLab.setGravity(Gravity.CENTER);
         p.addView(dimSlideLab, new LinearLayout.LayoutParams(-2,-2));
         dimSlideTrack=new View(this){
             @Override protected void onDraw(Canvas c){
                 float w=getWidth(), hh=getHeight(), rr=w/2f, t=dimPct()/90f;
                 Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-                pt.setColor(Color.argb(50,255,255,255)); c.drawRoundRect(0,0,w,hh,rr,rr,pt);
-                if (t>0){ float th=Math.max(rr*2, hh*t); pt.setColor(Color.WHITE); c.drawRoundRect(0,hh-th,w,hh,rr,rr,pt); }
+                Path cap=new Path(); cap.addRoundRect(0,0,w,hh,rr,rr,Path.Direction.CW);
+                c.save(); c.clipPath(cap);
+                pt.setColor(Color.argb(50,255,255,255)); c.drawPaint(pt);
+                if (t>0){ float th=Math.max(hh*t, rr*2); pt.setColor(Color.WHITE); c.drawRoundRect(0,hh-th,w,hh,rr,rr,pt); }
+                c.restore();
             }
         };
-        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(p(10), p(120)); tp.topMargin=p(8); p.addView(dimSlideTrack, tp);
+        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(p(6), p(120)); tp.topMargin=p(8); p.addView(dimSlideTrack, tp);
         p.setFocusable(true); p.setClickable(true);
         p.measure(0,0);
         int mw=p.getMeasuredWidth(), mh=p.getMeasuredHeight();
+        bg.setCornerRadius(mh/2f);
         int[] loc=new int[2]; qsDim.getLocationInWindow(loc);
         int sw=root.getWidth()>0?root.getWidth():p(1024), sh=root.getHeight()>0?root.getHeight():p(576);
         int x=loc[0]+qsDim.getWidth()+p(10), y=loc[1];
