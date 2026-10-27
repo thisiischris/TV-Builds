@@ -175,7 +175,7 @@ public class MainActivity extends Activity {
         heroTitle = text("Your Library", 23, Color.rgb(220,220,230), "sans-serif-medium");
         heroTitle.setSingleLine(false); heroTitle.setMaxLines(2); heroTitle.setEllipsize(android.text.TextUtils.TruncateAt.END); heroTitle.setHorizontallyScrolling(false);
         heroTitle.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroTitle.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
-        heroSub = text("Movies and shows from your Plex Media Server", 13, Color.rgb(190,188,205), "sans-serif");
+        heroSub = text("Movies and shows from your Plex Media Server", 14, Color.rgb(190,188,205), "sans-serif");
         heroSub.setLineSpacing(p(3),1f); heroSub.setSingleLine(false); heroSub.setMaxLines(3); heroSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         heroSub.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroSub.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
         heroLabel.setSingleLine(false); heroLabel.setMaxLines(2); heroLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -193,7 +193,7 @@ public class MainActivity extends Activity {
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(250), 0, 0));
+        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(253), 0, 0));
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ Bitmap src=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,w,h); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)->{
@@ -803,11 +803,18 @@ public class MainActivity extends Activity {
     boolean menuKey(KeyEvent e){
         int k=e.getKeyCode();
         if (dimSlide){
+            boolean ok=k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_NUMPAD_ENTER;
+            if (ok){
+                if (e.getAction()==KeyEvent.ACTION_UP){ dimSlideIgnore=false; return true; }
+                if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
+                if (dimSlideIgnore) return true;
+                dimSlideKeep(); return true;
+            }
             if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
             if (k==KeyEvent.KEYCODE_BACK){ setDimPct(dimSlideWas); closeMenu(false); return true; }
             if (k==KeyEvent.KEYCODE_DPAD_UP){ dimSlideBy(1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ dimSlideBy(-1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_NUMPAD_ENTER){ prefs().edit().putInt("dim_custom", dimPct()).apply(); closeMenu(false); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ if (dimPct()<=0) dimSlideKeep(); else dimSlideBy(-1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT){ dimSlideKeep(); return true; }
             return true;
         }
         if (k==KeyEvent.KEYCODE_BACK){ if (e.getAction()==KeyEvent.ACTION_DOWN) closeMenu(); return true; }
@@ -856,7 +863,7 @@ public class MainActivity extends Activity {
         if (appMenu==null) return;
         boolean slide=dimSlide;
         if (slide && back) setDimPct(dimSlideWas);
-        dimSlide=false; dimSlideLab=null; dimSlideTrack=null;
+        dimSlide=false; dimSlideIgnore=false; dimSlideLab=null; dimSlideTrack=null;
         lockBehind(false);
         menuOwner=null;
         final View m=appMenu; appMenu=null;
@@ -901,7 +908,7 @@ public class MainActivity extends Activity {
     ImageView heroArt, heroBadge; TextView heroTitle, heroSub; LinearLayout heroMeta; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
     void fitHeroMeta(){
         if (heroTitle==null) return;
-        ts(heroTitle, 23); ts(heroSub, 13);
+        ts(heroTitle, 23); ts(heroSub, 14);
         if (heroTitle.getPaint().measureText(heroTitle.getText().toString())>p(360)) ts(heroTitle, 17);
     }
     void bindHeroCopy(Object[] o){
@@ -1425,7 +1432,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false, dimSlide=false; View heroG, heroFocus, inAppDim, dimSlideTrack; TextView dimSlideLab;
+    PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false, dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim, dimSlideTrack; TextView dimSlideLab;
     static final int[] DIMS = {0,25,50,70,90};
     float dimFill; int dimSlideWas; android.animation.ValueAnimator dimFillAnim;
     int dimIdx(){ return Math.max(0, Math.min(DIMS.length-1, prefs().getInt("dim", 0))); }
@@ -1448,10 +1455,11 @@ public class MainActivity extends Activity {
         dimFillAnim.start();
     }
     void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); if (dimSlideLab!=null) dimSlideLab.setText(dimPct()+"%"); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); }
+    void dimSlideKeep(){ prefs().edit().putInt("dim_custom", dimPct()).apply(); closeMenu(false); }
     void openDimSlide(){
         if (appMenu!=null || qsDim==null) return;
         if (focus!=null) focus.remember();
-        dimSlide=true; dimSlideWas=dimPct();
+        dimSlide=true; dimSlideIgnore=true; dimSlideWas=dimPct();
         LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.VERTICAL); p.setGravity(Gravity.CENTER_HORIZONTAL);
         GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,28,28,32)); bg.setCornerRadius(p(14)); bg.setStroke(Math.max(1,p(1)), Color.argb(51,255,255,255));
         p.setBackground(bg); p.setPadding(p(10),p(12),p(10),p(12)); p.setElevation(p(18)); p.setTranslationZ(p(80));
