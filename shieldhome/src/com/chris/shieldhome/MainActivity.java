@@ -87,8 +87,9 @@ public class MainActivity extends Activity {
     String name(View v){ return focus!=null?focus.name(v):"?"; }
     @Override protected void onNewIntent(Intent i){ super.onNewIntent(i); focus.restoreNow(); }
     boolean editLp=false;
-    @Override public void onWindowFocusChanged(boolean has){ super.onWindowFocusChanged(has); if (!has && dimSlide) closeMenu(false); }
+    @Override public void onWindowFocusChanged(boolean has){ super.onWindowFocusChanged(has); if (!has && dimSlide) closeDimSlide(); }
     @Override public boolean dispatchKeyEvent(KeyEvent e){
+        if (dimSlide) return dimSlideKey(e);
         if (appMenu!=null) return menuKey(e);
         // v17: in edit mode a long-press on a home row tile does nothing (no drag, no click on release)
         if (editMode && dragIdx<0 && homeGrid!=null && (e.getKeyCode()==KeyEvent.KEYCODE_DPAD_CENTER||e.getKeyCode()==KeyEvent.KEYCODE_ENTER||e.getKeyCode()==KeyEvent.KEYCODE_NUMPAD_ENTER)){
@@ -156,7 +157,9 @@ public class MainActivity extends Activity {
         PillView search = searchV = new PillView(this, "Search", 3, false);
         search.setOnClickListener(v->openAssistant()); place(search, 71, 17, 104, 28);
         qsPanel = new LinearLayout(this); qsPanel.setClipChildren(false); qsPanel.setVisibility(View.GONE);
-        qsDim = new PillView(this, "", 4, false); qsDim.setOnClickListener(v->openDimSlide());
+        qsDim = new PillView(this, "", 4, false); qsDim.setId(View.generateViewId());
+        qsDim.setOnClickListener(v->openDimSlide());
+        qsDim.setOnFocusChangeListener((v,f)->{ if (!f && dimSlide) closeDimSlide(); });
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
         place(qsPanel, 73, 17, 290, 28); qsLabels();
 
@@ -254,6 +257,14 @@ public class MainActivity extends Activity {
             if (icon==5 && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
             if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
             int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
+            if (this==qsDim && w>p(112)){
+                float pad=p(12), th=p(6), tw=w-pad*2, ty=(hh-th)/2, rr=th/2, t=Math.max(0, Math.min(1, dimFill/0.9f));
+                pt.setStyle(Paint.Style.FILL);
+                pt.setColor(Color.argb(50, Color.red(fg), Color.green(fg), Color.blue(fg)));
+                c.drawRoundRect(pad, ty, pad+tw, ty+th, rr, rr, pt);
+                if (t>0){ pt.setColor(fg); c.drawRoundRect(pad, ty, pad+Math.max(t*tw, th), ty+th, rr, rr, pt); }
+                return;
+            }
             pt.setColor(fg); pt.setStrokeWidth(p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
             float cx = icon==3 ? p(19) : p(icon==2?18:28) - (icon==2?p(4):0), cy = hh/2;
             if (icon==0){ pt.setStyle(Paint.Style.FILL); pt.setPathEffect(new CornerPathEffect(p(1.1f))); Path tr=new Path(); tr.moveTo(cx-p(3.7f),cy-p(5.8f)); tr.lineTo(cx+p(5.5f),cy); tr.lineTo(cx-p(3.7f),cy+p(5.8f)); tr.close(); c.drawPath(tr,pt); pt.setPathEffect(null); }
@@ -800,23 +811,24 @@ public class MainActivity extends Activity {
         final View f0=first;
         h.post(()->{ if (appMenu!=null && f0!=null) f0.requestFocus(); });
     }
+    boolean dimSlideKey(KeyEvent e){
+        int k=e.getKeyCode();
+        boolean ok=k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_NUMPAD_ENTER;
+        if (ok){
+            if (e.getAction()==KeyEvent.ACTION_UP){ dimSlideIgnore=false; return true; }
+            if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
+            if (dimSlideIgnore && e.getRepeatCount()>0) return true;
+            closeDimSlide(); return true;
+        }
+        if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
+        if (k==KeyEvent.KEYCODE_BACK){ closeDimSlide(); return true; }
+        if (k==KeyEvent.KEYCODE_DPAD_LEFT){ dimSlideBy(-1); return true; }
+        if (k==KeyEvent.KEYCODE_DPAD_RIGHT){ dimSlideBy(1); return true; }
+        if (k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN){ closeDimSlide(); return dispatchKeyEvent(e); }
+        return true;
+    }
     boolean menuKey(KeyEvent e){
         int k=e.getKeyCode();
-        if (dimSlide){
-            boolean ok=k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_NUMPAD_ENTER;
-            if (ok){
-                if (e.getAction()==KeyEvent.ACTION_UP){ dimSlideIgnore=false; return true; }
-                if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
-                if (dimSlideIgnore && e.getRepeatCount()>0) return true;
-                closeMenu(false); return true;
-            }
-            if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
-            if (k==KeyEvent.KEYCODE_BACK){ closeMenu(false); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_LEFT){ dimSlideBy(-1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_RIGHT){ dimSlideBy(1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN){ closeMenu(false); return dispatchKeyEvent(e); }
-            return true;
-        }
         if (k==KeyEvent.KEYCODE_BACK){ if (e.getAction()==KeyEvent.ACTION_DOWN) closeMenu(); return true; }
         if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT) return true;
         if (k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN){
@@ -860,15 +872,14 @@ public class MainActivity extends Activity {
     }
     void closeMenu(){ closeMenu(true); }
     void closeMenu(boolean back){
+        if (dimSlide) closeDimSlide();
         if (appMenu==null) return;
-        boolean slide=dimSlide;
-        dimSlide=false; dimSlideIgnore=false; dimSlideLab=null; dimSlideTrack=null;
         lockBehind(false);
         menuOwner=null;
         final View m=appMenu; appMenu=null;
         m.animate().cancel();
         m.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(140).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{ if (m.getParent()!=null) root.removeView(m); }).start();
-        if ((back || slide) && focus!=null) focus.restore();
+        if (back && focus!=null) focus.restore();
     }
     void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
     Bitmap vigMask; final Map<String,Bitmap> heroMasked=new HashMap<>();
@@ -1431,63 +1442,58 @@ public class MainActivity extends Activity {
         }
     }
 
-    PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false, dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim, dimSlideTrack; TextView dimSlideLab;
-    float dimFill; android.animation.ValueAnimator dimFillAnim;
+    PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false, dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim;
+    float dimFill; android.animation.ValueAnimator dimFillAnim, dimWAnim;
     int dimPct(){ return Math.max(0, Math.min(90, prefs().getInt("dim_pct",0))); }
     void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); qsLabels(); }
     void qsLabels(){ int d=dimPct(); if (qsDim==null) return; qsDim.label="Dim: "+(d==0?"Off":d+"%"); qsDim.setOn(d>0); qsDim.invalidate(); }
     void syncDimFill(boolean anim){
         float to=dimPct()/100f;
-        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); return; }
+        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); if (qsDim!=null) qsDim.invalidate(); return; }
         if (dimFillAnim!=null) dimFillAnim.cancel();
         dimFillAnim=android.animation.ValueAnimator.ofFloat(dimFill, to); dimFillAnim.setDuration(200);
-        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); });
+        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); if (qsDim!=null) qsDim.invalidate(); });
         dimFillAnim.start();
     }
-    void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); if (dimSlideLab!=null) dimSlideLab.setText(dimPct()+"%"); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); }
+    void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); }
+    void animDimW(int to){
+        if (qsDim==null) return;
+        ViewGroup.LayoutParams lp=qsDim.getLayoutParams();
+        if (dimWAnim!=null) dimWAnim.cancel();
+        dimWAnim=android.animation.ValueAnimator.ofInt(lp.width, to);
+        dimWAnim.setDuration(200);
+        dimWAnim.setInterpolator(new android.view.animation.DecelerateInterpolator());
+        dimWAnim.addUpdateListener(a->{ lp.width=(Integer)a.getAnimatedValue(); qsDim.setLayoutParams(lp); });
+        dimWAnim.start();
+    }
+    void hideSearch(boolean hide){
+        if (searchV==null) return;
+        android.view.animation.Interpolator ease=new android.view.animation.DecelerateInterpolator();
+        if (hide){
+            searchV.setFocusable(false);
+            searchV.animate().alpha(0f).setDuration(200).setInterpolator(ease).withEndAction(()->{ if (dimSlide||qsOpen) searchV.setVisibility(View.INVISIBLE); }).start();
+        } else if (!qsOpen){
+            searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen);
+            searchV.animate().alpha(1f).setDuration(200).setInterpolator(ease).start();
+        }
+    }
     void openDimSlide(){
-        if (appMenu!=null || qsDim==null) return;
-        if (focus!=null) focus.remember();
+        if (dimSlide || qsDim==null) return;
         dimSlide=true; dimSlideIgnore=true;
-        LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.HORIZONTAL); p.setGravity(Gravity.CENTER_VERTICAL);
-        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(240,18,18,22)); bg.setStroke(1, Color.argb(40,255,255,255));
-        p.setBackground(bg); p.setPadding(p(10),p(12),p(10),p(12)); p.setElevation(p(4)); p.setTranslationZ(p(80));
-        dimSlideLab=text("90%", 12, Color.WHITE, "sans-serif-medium"); dimSlideLab.setGravity(Gravity.CENTER);
-        dimSlideLab.setSingleLine(true); dimSlideLab.setMaxLines(1);
-        int lw=Math.round(dimSlideLab.getPaint().measureText("90%"));
-        p.addView(dimSlideLab, new LinearLayout.LayoutParams(lw,-2));
-        dimSlideLab.setText(dimPct()+"%");
-        dimSlideTrack=new View(this){
-            @Override protected void onDraw(Canvas c){
-                float w=getWidth(), hh=getHeight(), rr=hh/2f, t=Math.max(0, Math.min(1, dimFill/0.9f));
-                Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-                pt.setColor(Color.argb(50,255,255,255)); c.drawRoundRect(0,0,w,hh,rr,rr,pt);
-                if (t>0){ float fw=Math.max(t*w, hh); pt.setColor(Color.WHITE); c.drawRoundRect(0,0,fw,hh,rr,rr,pt); }
-            }
-        };
-        dimSlideTrack.setWillNotDraw(false);
-        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(p(120), p(6)); tp.leftMargin=p(8); p.addView(dimSlideTrack, tp);
-        p.setId(View.generateViewId());
-        p.setNextFocusLeftId(p.getId()); p.setNextFocusRightId(p.getId());
-        p.setNextFocusUpId(p.getId()); p.setNextFocusDownId(p.getId());
-        p.setFocusable(true); p.setClickable(true);
-        p.setOnFocusChangeListener((v,f)->{ if (!f && dimSlide) closeMenu(false); });
-        p.measure(0,0);
-        int mw=p.getMeasuredWidth(), mh=p.getMeasuredHeight();
-        bg.setCornerRadius(mh/2f);
-        int[] loc=new int[2]; qsDim.getLocationInWindow(loc);
-        int sw=root.getWidth()>0?root.getWidth():p(1024), sh=root.getHeight()>0?root.getHeight():p(576);
-        int x=loc[0]+qsDim.getWidth()+p(10), y=loc[1];
-        if (x+mw>sw-p(8)) x=loc[0]-mw-p(10);
-        if (x<p(8)) x=p(8);
-        if (y+mh>sh-p(8)) y=sh-mh-p(8);
-        if (y<p(8)) y=p(8);
-        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(mw, mh); lp.leftMargin=x; lp.topMargin=y;
-        p.setPivotX(0); p.setPivotY(0); p.setAlpha(0f); p.setScaleX(0.3f); p.setScaleY(0.3f);
-        appMenu=p; root.addView(p, lp); p.requestFocus(); lockBehind(true);
-        p.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        qsDim.setNextFocusLeftId(qsDim.getId()); qsDim.setNextFocusRightId(qsDim.getId());
+        hideSearch(true);
+        animDimW(p(200));
+        qsDim.requestFocus();
+    }
+    void closeDimSlide(){
+        if (!dimSlide) return;
+        dimSlide=false; dimSlideIgnore=false;
+        qsDim.setNextFocusLeftId(View.NO_ID); qsDim.setNextFocusRightId(View.NO_ID);
+        animDimW(p(104));
+        hideSearch(false);
     }
     void toggleQs(){
+        if (dimSlide) closeDimSlide();
         qsOpen=!qsOpen; gear.setOn(qsOpen);
         android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.2f,0f,0f,1f);
         gear.animate().alpha(qsOpen?0.75f:1f).setDuration(160).setInterpolator(ease).start();

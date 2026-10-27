@@ -122,6 +122,7 @@ class FocusController {
     /** Overlays close themselves. Returns true if consumed (not the home short/long path). */
     boolean closeOverlay() {
         if (a.appMenu != null) { a.closeMenu(); return true; }
+        if (a.dimSlide) { a.closeDimSlide(); return true; }
         if (a.editMode || a.dragIdx >= 0) { a.exitEdit(); return true; }
         if (a.drawerOpen) { a.setDrawer(false); a.focusHomeApp(); return true; }
         if (a.qsOpen) { a.toggleQs(); return true; }
