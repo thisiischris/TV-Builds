@@ -106,7 +106,7 @@ class TvData {
     }
 
     static final String YT = "com.google.android.youtube.tv";
-    static final int MAX_ITEMS = 12, YT_RESUME_MAX = 1;
+    static final int MAX_ITEMS = 20, YT_RESUME_MAX = 1;
     static final float FINISHED_FRAC = 0.9f;
     static final int WN_CONTINUE = 0, WN_NEXT = 1; // TvContract watch_next_type; NEW=2 / WATCHLIST=3 are recs, not Play Next
 
