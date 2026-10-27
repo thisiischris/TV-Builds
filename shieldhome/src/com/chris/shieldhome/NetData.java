@@ -7,7 +7,7 @@ import java.util.*;
 class NetData {
     final MainActivity a;
     final Map<String, String> httpCache = new java.util.concurrent.ConcurrentHashMap<>();
-    static final String[][] WEB_APPS = {{"Netflix","com.netflix.ninja"},{"Hulu","com.hulu.livingroomplus"},{"Disney+","com.disney.disneyplus"},{"Prime Video","com.amazon.amazonvideo.livingroom"},{"Amazon","com.amazon.amazonvideo.livingroom"},{"HBO Max","com.wbd.stream"},{"Max","com.wbd.stream"},{"Crunchyroll","com.crunchyroll.crunchyroid"},{"STARZ","com.bydeluxe.d3.android.program.starz"},{"Starz","com.bydeluxe.d3.android.program.starz"},{"Paramount+","com.cbs.ott"},{"Peacock","com.peacocktv.peacockandroid"},{"Apple TV+","com.apple.atve.androidtv.appletv"},{"YouTube","com.google.android.youtube.tv"}};
+    static final String[][] WEB_APPS = {{"Netflix","com.netflix.ninja"},{"Hulu","com.hulu.livingroomplus"},{"Disney+","com.disney.disneyplus"},{"Prime Video","com.amazon.amazonvideo.livingroom"},{"Amazon","com.amazon.amazonvideo.livingroom"},{"HBO Max","com.wbd.stream"},{"Max","com.wbd.stream"},{"Crunchyroll","com.crunchyroll.crunchyroid"},{"STARZ","com.bydeluxe.d3.android.program.starz"},{"Starz","com.bydeluxe.d3.android.program.starz"},{"Paramount+","com.cbs.ott"},{"Peacock","com.peacocktv.peacockandroid"},{"Apple TV+","com.apple.atve.androidtv.appletv"}};
 
     NetData(MainActivity a) { this.a = a; }
 

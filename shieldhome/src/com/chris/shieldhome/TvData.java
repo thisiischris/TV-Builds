@@ -101,22 +101,23 @@ class TvData {
                     out.add(new Object[]{row[0], row[1], row[2], row[3], row[4], "FEATURED", row.length > 5 ? row[5] : 0L});
                 }
         android.util.Log.i("ShieldHome", "hero items=" + out.size() + " apps=" + by.keySet());
+        for (Object[] o : out) android.util.Log.i("ShieldHome", "hero item src=preview pkg=" + o[0] + " title=" + o[1] + " target=" + uriOf(o[4]));
         return out;
     }
 
     static final String YT = "com.google.android.youtube.tv";
-    static final int MAX_ITEMS = 12, YT_RESUME_MAX = 1;
+    static final int MAX_ITEMS = 20;
     static final float FINISHED_FRAC = 0.9f;
-    static final int WN_CONTINUE = 0;
+    static final int WN_CONTINUE = 0, WN_NEXT = 1, WN_NEW = 2; // TvContract watch_next_type
 
-    /** Play Next: resume points (≤1 YouTube, nothing ≥90% watched), then round-robin PreviewPrograms recs from most-used apps. */
+    /** Play Next (video apps, ≤MAX_ITEMS), each group by engagement: other apps' resume/NEXT rows, then YouTube NEW, then YouTube resume. No recs. */
     List<Object[]> collectWatchNext() {
         List<Object[]> rows = new ArrayList<>();
         try (Cursor c = a.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, null, null, null, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC")) {
             int idx = 0;
             while (c != null && c.moveToNext()) {
                 String pkg = s(c, "package_name");
-                if (pkg == null || newsRow(c, pkg) || !a.installed(pkg)) continue;
+                if (pkg == null || !VIDEO_APPS.contains(pkg) || newsRow(c, pkg) || !a.installed(pkg)) continue;
                 Object[] o = prog(c, true);
                 if (o == null || o[0] == null || o[2] == null) continue;
                 rows.add(new Object[]{o, l(c, "last_engagement_time_utc_millis"), l(c, "last_playback_position_millis"), l(c, "duration_millis"), (int) l(c, "watch_next_type"), clean(s(c, "title")), idx++, uriOf(o[3])});
@@ -138,69 +139,44 @@ class TvData {
         }
         List<Object[]> pick = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        Map<String, Integer> resumeBy = new LinkedHashMap<>();
-        int ytN = 0, dropDone = 0, dropZero = 0;
+        List<Object[]> other = new ArrayList<>(), ytNew = new ArrayList<>(), ytResume = new ArrayList<>();
+        Map<String, Integer> ytTypes = new TreeMap<>();
+        int dropDone = 0, dropZero = 0, dropType = 0;
         for (Object[] r : rows) {
-            if (pick.size() >= MAX_ITEMS) break;
+            if (YT.equals(((Object[]) r[0])[0])) ytTypes.merge("t" + r[4], 1, Integer::sum);
             Object[] o = (Object[]) r[0];
             String pkg = (String) o[0];
             long pos = (Long) r[2], dur = (Long) r[3];
             int type = (Integer) r[4];
             // Nearly finished: hidden; a show's next episode is its own NEXT-type row and shows instead.
             if (finished(pos, dur)) { dropDone++; continue; }
+            boolean ytNewRow = type == WN_NEW && YT.equals(pkg);
+            if (type != WN_CONTINUE && type != WN_NEXT && !ytNewRow) { dropType++; continue; }
             if (type == WN_CONTINUE && pos <= 0) { dropZero++; continue; }
-            boolean yt = YT.equals(pkg);
-            if (yt && (pos <= 0 || ytN >= YT_RESUME_MAX)) continue;
             if (!fresh(pkg, (String) r[5], (String) r[7], feat, seen)) continue;
-            if (yt) ytN++;
-            pick.add(o);
-            resumeBy.merge(pkg, 1, Integer::sum);
+            (ytNewRow ? ytNew : YT.equals(pkg) ? ytResume : other).add(o);
         }
-        int resumeN = pick.size();
-        Map<String, Integer> recBy = previewRecs(pick, feat, seen);
-        android.util.Log.i("ShieldHome", "playnext resume=" + resumeN + " " + resumeBy + " recs=" + (pick.size() - resumeN) + " " + recBy + " wnRows=" + rows.size() + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero);
+        int[] shown = new int[3]; List<List<Object[]>> groups = Arrays.asList(other, ytNew, ytResume);
+        for (int g = 0; g < groups.size(); g++) {
+            List<Object[]> l = groups.get(g);
+            shown[g] = Math.min(l.size(), MAX_ITEMS - pick.size());
+            pick.addAll(l.subList(0, shown[g]));
+        }
+        android.util.Log.i("ShieldHome", "playnext other=" + shown[0] + "/" + other.size() + " ytNew=" + shown[1] + "/" + ytNew.size() + " ytResume=" + shown[2] + "/" + ytResume.size() + " wnRows=" + rows.size() + " ytTypes=" + ytTypes + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType);
+        return mixOrder(pick, a.wnPickCache);
+    }
+    /** Random order, but keeps the previous order when the same items (by intent) are picked again, so tiles don't jump on reloads. */
+    static List<Object[]> mixOrder(List<Object[]> pick, List<Object[]> prev) {
+        Map<String, Integer> at = new HashMap<>();
+        if (prev != null) for (Object[] o : prev) at.put(uriOf(o[3]), at.size());
+        boolean same = prev != null && prev.size() == pick.size() && at.size() == pick.size();
+        for (Object[] o : pick) same &= at.containsKey(uriOf(o[3]));
+        if (same) Collections.sort(pick, (x, y) -> at.get(uriOf(x[3])) - at.get(uriOf(y[3])));
+        else Collections.shuffle(pick);
+        android.util.Log.i("ShieldHome", "playnext order=" + (same ? "kept" : "shuffled"));
         return pick;
     }
-    /** Fills pick up to MAX_ITEMS with PreviewPrograms recs, one per app per round, apps by a.grid.use. Returns recs added per app. */
-    Map<String, Integer> previewRecs(List<Object[]> pick, Set<String> feat, Set<String> seen) {
-        Map<String, List<Object[]>> by = new HashMap<>();
-        Map<String, Integer> published = new TreeMap<>();
-        try (Cursor c = a.getContentResolver().query(TvContract.PreviewPrograms.CONTENT_URI, null, null, null, null)) {
-            while (c != null && c.moveToNext()) {
-                String pkg = s(c, "package_name");
-                if (pkg == null) continue;
-                published.merge(pkg, 1, Integer::sum);
-                if (pkg.equals(a.getPackageName()) || !a.installed(pkg) || newsRow(c, pkg)) continue;
-                Object[] o = prog(c, false);
-                if (o == null || o[2] == null) continue;
-                o = new Object[]{o[0], o[1], o[2], o[3], o[4], clean(s(c, "title"))};
-                List<Object[]> l = by.get(pkg);
-                if (l == null) by.put(pkg, l = new ArrayList<>());
-                l.add(o);
-            }
-        } catch (Exception e) { android.util.Log.w("ShieldHome", "recs " + e); }
-        android.util.Log.i("ShieldHome", "playnext previewPublishers=" + published);
-        List<String> apps = new ArrayList<>(by.keySet());
-        Collections.sort(apps, (x, y) -> Long.compare(a.grid.use(y), a.grid.use(x)));
-        Map<String, Integer> added = new LinkedHashMap<>();
-        int[] at = new int[apps.size()];
-        for (boolean more = true; more && pick.size() < MAX_ITEMS; ) {
-            more = false;
-            for (int i = 0; i < apps.size() && pick.size() < MAX_ITEMS; i++) {
-                List<Object[]> l = by.get(apps.get(i));
-                while (at[i] < l.size()) {
-                    Object[] o = l.get(at[i]++);
-                    if (!fresh((String) o[0], (String) o[5], uriOf(o[3]), feat, seen)) continue;
-                    pick.add(new Object[]{o[0], o[1], o[2], o[3], -1f});
-                    added.merge((String) o[0], 1, Integer::sum);
-                    break;
-                }
-                if (at[i] < l.size()) more = true;
-            }
-        }
-        return added;
-    }
-    /** True (and marks seen) when pkg|title and intent uri are not in the featured card or already picked. */
+    /** True (and marks seen) when pkg|title and intent uri are not in the featured card or already in Play Next. */
     static boolean fresh(String pkg, String title, String uri, Set<String> feat, Set<String> seen) {
         String pkTitle = title == null ? null : pkg + "|" + title;
         if (pkTitle != null && (feat.contains(pkTitle) || seen.contains(pkTitle))) return false;
