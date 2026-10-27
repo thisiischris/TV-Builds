@@ -220,7 +220,13 @@ public class MainActivity extends Activity {
         if (cta && ("Play Now".equals(s) || "More Info".equals(s))) extra += (-pt.getFontMetrics().ascent)*0.78f + p(10);
         return Math.max(p(cta?34:28), Math.round(pt.measureText(s)+extra));
     }
-    void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(34); v.setLayoutParams(lp); } v.invalidate(); if (v==heroBtn && heroDots!=null) heroDots.invalidate(); }
+    void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(34); v.setLayoutParams(lp); } v.invalidate(); if (v==heroBtn) placeDots(); }
+    void placeDots(){
+        if (heroBtn==null || heroDots==null) return;
+        int bw=heroBtn.getWidth(), dw=heroDots.getWidth();
+        if (bw<=0 || dw<=0) return;
+        heroDots.setTranslationX(heroBtn.getLeft()+(bw-dw)/2f);
+    }
 
     void place(View v, float x, float y, float w, float hh){ FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w<0?-2:p(w), hh<0?-2:p(hh)); lp.leftMargin=p(x); lp.topMargin=p(y); root.addView(v, lp); }
     TextView text(String s, float size, int color, String font){ TextView t=new TextView(this); t.setText(s); ts(t,size); t.setTextColor(color); t.setTypeface(Typeface.create(font, Typeface.NORMAL)); t.setIncludeFontPadding(false); return t; }
@@ -327,14 +333,12 @@ public class MainActivity extends Activity {
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
+        hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
         heroDots = new HeroDots();
-        LinearLayout ctaCol = new LinearLayout(this);
-        ctaCol.setOrientation(LinearLayout.VERTICAL); ctaCol.setGravity(Gravity.CENTER_HORIZONTAL);
-        ctaCol.setClipChildren(false); ctaCol.setClipToPadding(false);
-        ctaCol.addView(heroBtn, new LinearLayout.LayoutParams(p(138), p(34)));
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(-2, p(28)); dlp.topMargin=p(9);
-        ctaCol.addView(heroDots, dlp);
-        hero.addView(ctaCol, lp(-2, -2, Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
+        hero.addView(heroDots, lp(-2, p(28), Gravity.TOP|Gravity.START, 0, p(280), 0, 0));
+        View.OnLayoutChangeListener dotsLay=(v,a,b,c,d,e,f,g,h2)->placeDots();
+        heroBtn.addOnLayoutChangeListener(dotsLay);
+        heroDots.addOnLayoutChangeListener(dotsLay);
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
