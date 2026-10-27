@@ -379,7 +379,7 @@ public class MainActivity extends Activity {
         String label; int icon; boolean on; Drawable asst; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
         PillView(Context c, String l, int ic, boolean o){ super(c); label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
         void setOn(boolean o){ on=o; invalidate(); }
-        @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); setElevation(f?p(4):0); invalidate(); }
+        @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); setElevation(f?p(4):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
             float w=getWidth(), hh=getHeight(), r=this==heroBtn?p(14):hh/2;
             boolean lit = on || (icon==2 && isFocused());
@@ -1209,11 +1209,15 @@ public class MainActivity extends Activity {
     }
     void bindHeroAction(Object[] o){ setPill(heroBtn, heroPlayable(o)?"Play Now":"More Info"); }
     void showHeroAction(boolean on){
-        if (heroBtn==null) return;
-        heroBtn.animate().cancel();
+        if (heroBtn==null || on==heroCtaOn) return;
+        heroCtaOn=on;
         android.view.animation.Interpolator ease=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
-        if (on){ heroBtn.setFocusable(true); heroBtn.animate().alpha(1f).translationY(0).setDuration(160).setInterpolator(ease).start(); }
-        else heroBtn.animate().alpha(0f).translationY(p(8)).setDuration(120).setInterpolator(new android.view.animation.AccelerateInterpolator()).start();
+        heroBtn.animate().cancel();
+        boxLayer(heroBtn, true);
+        if (on) heroBtn.setFocusable(true);
+        heroBtn.animate().alpha(on?1f:0f).translationY(on?0:p(8)).scaleX(on?1.07f:1f).scaleY(on?1.07f:1f)
+            .setStartDelay(0).setDuration(on?160:120).setInterpolator(ease)
+            .withEndAction(()->boxLayer(heroBtn, false)).start();
         if (heroDots!=null){
             int n; synchronized(heroLock){ n=heroItems.size(); }
             heroDots.animate().cancel();
@@ -1712,7 +1716,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim; HeroDots heroDots;
+    PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false, heroCtaOn; View heroG, heroFocus, inAppDim; HeroDots heroDots;
     float dimFill; android.animation.ValueAnimator dimFillAnim;
     int dimPct(){ return Math.max(0, Math.min(90, prefs().getInt("dim_pct",0))); }
     void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); }
