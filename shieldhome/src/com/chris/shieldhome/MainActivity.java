@@ -21,7 +21,7 @@ public class MainActivity extends Activity {
     SegBar tabBar; TextView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255), BG = Color.rgb(8, 8, 16);
     static final int TILE_R = 11;
-    static final float APP_FOCUS=1.09f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f;
+    static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
 
@@ -129,15 +129,39 @@ public class MainActivity extends Activity {
         Intent[] tries = { new Intent(Intent.ACTION_ASSIST).setPackage("com.google.android.katniss"), new Intent(Intent.ACTION_ASSIST), new Intent("android.speech.action.VOICE_SEARCH_HANDS_FREE"), new Intent("android.search.action.GLOBAL_SEARCH").setPackage("com.google.android.katniss"), new Intent(Intent.ACTION_SEARCH_LONG_PRESS), new Intent(Intent.ACTION_WEB_SEARCH) };
         for (Intent i: tries){ try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Exception e) {} }
     }
+    void openTextSearch(){
+        Intent[] tries = { new Intent(Intent.ACTION_WEB_SEARCH).setPackage("com.google.android.katniss"), new Intent("android.search.action.GLOBAL_SEARCH").setPackage("com.google.android.katniss"), new Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.katniss"), new Intent(Intent.ACTION_WEB_SEARCH), new Intent("android.search.action.GLOBAL_SEARCH"), new Intent(Intent.ACTION_SEARCH) };
+        for (Intent i: tries){ try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Exception e) {} }
+    }
+    boolean searchOpen;
+    void expandSearch(){
+        if (searchOpen || dimSlide || searchSplit==null) return;
+        searchOpen=true;
+        searchV.setFocusable(false); searchV.setVisibility(View.INVISIBLE);
+        searchSplit.setVisibility(View.VISIBLE); searchSplit.setAlpha(1f);
+        speakV.setFocusable(true); typeV.setFocusable(true);
+        speakV.requestFocus();
+    }
+    void maybeCollapseSearch(){
+        if (!searchOpen || dimSlide) return;
+        if (speakV!=null && (speakV.isFocused()||typeV.isFocused())) return;
+        collapseSearch();
+    }
+    void collapseSearch(){
+        searchOpen=false;
+        if (searchSplit!=null) searchSplit.setVisibility(View.GONE);
+        if (speakV!=null){ speakV.setFocusable(false); typeV.setFocusable(false); }
+        if (!dimSlide && searchV!=null){ searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen); }
+    }
 
     void tick(){ setPill(timePill, new SimpleDateFormat("h:mm a", Locale.US).format(new Date())); h.postDelayed(this::tick, 15000); }
     int pillTextW(PillView v, String s){
         boolean cta=v==heroBtn; Paint pt=new Paint(); pt.setTextSize(p(cta?14:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         float extra=cta?p(39):p(24);
         if (cta && "Play Now".equals(s)) extra += (-pt.getFontMetrics().ascent)*0.78f + p(10);
-        return Math.max(p(cta?41:28), Math.round(pt.measureText(s)+extra));
+        return Math.max(p(cta?34:28), Math.round(pt.measureText(s)+extra));
     }
-    void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(41); v.setLayoutParams(lp); } v.invalidate(); }
+    void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(34); v.setLayoutParams(lp); } v.invalidate(); }
 
     void place(View v, float x, float y, float w, float hh){ FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w<0?-2:p(w), hh<0?-2:p(hh)); lp.leftMargin=p(x); lp.topMargin=p(y); root.addView(v, lp); }
     TextView text(String s, float size, int color, String font){ TextView t=new TextView(this); t.setText(s); ts(t,size); t.setTextColor(color); t.setTypeface(Typeface.create(font, Typeface.NORMAL)); t.setIncludeFontPadding(false); return t; }
@@ -163,7 +187,22 @@ public class MainActivity extends Activity {
         gear.setOnFocusChangeListener((v,f)->{ if (!f && dimSlide) closeDimSlide(); });
         place(gear, 35, 17, 28, 28);
         PillView search = searchV = new PillView(this, "Search", 3, false);
-        search.setOnClickListener(v->openAssistant()); place(search, 71, 17, 104, 28);
+        search.setOnFocusChangeListener((v,f)->{ if (f && !dimSlide) expandSearch(); });
+        place(search, 71, 17, 104, 28);
+        searchSplit = new LinearLayout(this); searchSplit.setOrientation(LinearLayout.HORIZONTAL); searchSplit.setGravity(Gravity.CENTER_VERTICAL);
+        searchSplit.setVisibility(View.GONE);
+        speakV = new PillView(this, "", 6, false); typeV = new PillView(this, "", 7, false);
+        speakV.setId(View.generateViewId()); typeV.setId(View.generateViewId());
+        speakV.setNextFocusRightId(typeV.getId()); typeV.setNextFocusLeftId(speakV.getId());
+        speakV.setNextFocusDownId(View.NO_ID); typeV.setNextFocusDownId(View.NO_ID);
+        speakV.setNextFocusUpId(View.NO_ID); typeV.setNextFocusUpId(View.NO_ID);
+        speakV.setOnClickListener(v->openAssistant()); typeV.setOnClickListener(v->openTextSearch());
+        speakV.setOnFocusChangeListener((v,f)->{ if (!f) h.post(this::maybeCollapseSearch); });
+        typeV.setOnFocusChangeListener((v,f)->{ if (!f) h.post(this::maybeCollapseSearch); });
+        searchSplit.addView(speakV, new LinearLayout.LayoutParams(p(49), p(28)));
+        searchSplit.addView(new View(this), new LinearLayout.LayoutParams(p(6), p(28)));
+        searchSplit.addView(typeV, new LinearLayout.LayoutParams(p(49), p(28)));
+        place(searchSplit, 71, 17, -2, 28);
         dimBar = new PillView(this, "", 5, false);
         dimBar.setFocusable(false); dimBar.setClickable(false); dimBar.setVisibility(View.GONE);
         dimBar.setPivotX(p(100)); dimBar.setPivotY(p(14));
@@ -201,7 +240,7 @@ public class MainActivity extends Activity {
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(138), p(41), Gravity.TOP|Gravity.START, p(35), p(253), 0, 0));
+        hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(253), 0, 0));
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
@@ -242,17 +281,20 @@ public class MainActivity extends Activity {
         void setOn(boolean o){ on=o; invalidate(); }
         @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); setElevation(f?p(4):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
-            float w=getWidth(), hh=getHeight(), r=this==heroBtn?p(8):hh/2;
+            float w=getWidth(), hh=getHeight(), r=this==heroBtn?p(14):hh/2;
             boolean lit = on || (icon==2 && isFocused());
             pt.setStyle(Paint.Style.FILL);
             boolean fo = isFocused();
-            if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
-            else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
-            else if (icon==5) pt.setColor(fo?Color.argb(155,170,170,191):Color.argb(95,162,162,183));
-            else pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
-            c.drawRoundRect(0,0,w,hh,r,r,pt);
-            if (icon==5 && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
-            if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
+            boolean bare = this==gear && !fo;
+            if (!bare){
+                if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
+                else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
+                else if (icon==5) pt.setColor(fo?Color.argb(155,170,170,191):Color.argb(95,162,162,183));
+                else pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
+                c.drawRoundRect(0,0,w,hh,r,r,pt);
+                if (icon==5 && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
+                if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
+            }
             int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
             if (this==dimBar){
                 pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
@@ -277,6 +319,8 @@ public class MainActivity extends Activity {
                 pt.setStrokeWidth(p(1.3f));
                 for (int i=0;i<8;i++){ double a=Math.toRadians(i*45); float s=sr+p(1.5f), e=sr+p(3.3f); c.drawLine(gx+(float)Math.cos(a)*s, cy+(float)Math.sin(a)*s, gx+(float)Math.cos(a)*e, cy+(float)Math.sin(a)*e, pt); }
                 if (dimFill>0.01f){ c.save(); c.clipRect(gx+sr-2*sr*dimFill, cy-sr-1, gx+sr+1, cy+sr+1); pt.setStyle(Paint.Style.FILL); c.drawCircle(gx, cy, sr-p(0.3f), pt); pt.setStyle(Paint.Style.STROKE); c.restore(); } }
+            else if (icon==6){ float mx=w/2f; c.drawRoundRect(mx-p(3), cy-p(5.5f), mx+p(3), cy+p(2.5f), p(3), p(3), pt); c.drawLine(mx, cy+p(2.5f), mx, cy+p(6), pt); c.drawLine(mx-p(4), cy+p(6), mx+p(4), cy+p(6), pt); c.drawArc(mx-p(5), cy-p(1), mx+p(5), cy+p(6), 10, 160, false, pt); }
+            else if (icon==7){ pt.setStyle(Paint.Style.STROKE); c.drawRoundRect(w/2f-p(8), cy-p(5), w/2f+p(8), cy+p(5), p(2), p(2), pt); pt.setStyle(Paint.Style.FILL); for (int i=0;i<6;i++){ float kx=w/2f-p(6)+(i%3)*p(4.2f), ky=cy-p(2)+(i/3)*p(4); c.drawRoundRect(kx, ky, kx+p(3), ky+p(2.4f), p(.6f), p(.6f), pt); } }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(this==heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
@@ -369,7 +413,7 @@ public class MainActivity extends Activity {
             if (hw>0){
                 float cx=hx+hw/2, cy=hh/2, sw=hw*hs, sh=hh*hs, sr=sh/2;
                 Bitmap sb=shadowBmp(Math.max(1,(int)sw), Math.max(1,(int)sh), sr);
-                if (sb!=null){ Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG); sp.setAlpha(Math.min(130,(int)(130*(hs-1f)/0.04f))); int pad=p(36); c.drawBitmap(sb, cx-sw/2-pad, cy-sh/2-pad+p(12), sp); }
+                if (sb!=null){ Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG); sp.setAlpha(Math.min(130,(int)(130*(hs-1f)/0.04f))); int pad=p(48); c.drawBitmap(sb, cx-sw/2-pad, cy-sh/2-pad+p(19), sp); }
                 pt.setColor(Color.rgb(229,227,228));
                 c.drawRoundRect(cx-sw/2, cy-sh/2, cx+sw/2, cy+sh/2, sr, sr, pt);
             }
@@ -381,7 +425,7 @@ public class MainActivity extends Activity {
     class GlowFrame extends FrameLayout {
         FrameLayout inner; View badgeV; float radius; Paint sp = new Paint(Paint.ANTI_ALIAS_FLAG); float glow=0, fade=1; Bitmap shBm; int shPad;
         GlowFrame(Context c, FrameLayout in, float r){ super(c); inner=in; radius=r; setClipChildren(false); setClipToPadding(false); setClipToOutline(false); setWillNotDraw(false); setLayerType(View.LAYER_TYPE_NONE, null); forceHasOverlappingRendering(false);
-            shPad=p(36);
+            shPad=p(48);
             addView(in, new FrameLayout.LayoutParams(-1,-1));
             in.setLayerType(View.LAYER_TYPE_HARDWARE, null); }
         void warm(int w, int h){ if (w<=0||h<=0) return; shBm=shadowBmp(w,h,radius); }
@@ -389,12 +433,12 @@ public class MainActivity extends Activity {
         @Override protected void onSizeChanged(int w, int h, int ow, int oh){ super.onSizeChanged(w,h,ow,oh); shBm=null; if (w>0&&h>0) warm(w,h); }
         @Override public void draw(Canvas c){
             float g=glow*fade;
-            if (g>0.02f){ if (shBm==null) shBm=shadowBmp(getWidth(),getHeight(),radius); if (shBm!=null){ sp.setAlpha((int)(130*g)); c.drawBitmap(shBm,-shPad,-shPad+p(12),sp); } }
+            if (g>0.02f){ if (shBm==null) shBm=shadowBmp(getWidth(),getHeight(),radius); if (shBm!=null){ sp.setAlpha((int)(160*g)); c.drawBitmap(shBm,-shPad,-shPad+p(19),sp); } }
             super.draw(c);
             if (badgeV!=null && badgeV.getAlpha()>0.01f){ c.saveLayerAlpha(badgeV.getLeft(), badgeV.getTop(), badgeV.getRight(), badgeV.getBottom(), Math.round(255*badgeV.getAlpha())); c.translate(badgeV.getLeft(), badgeV.getTop()); badgeV.draw(c); c.restore(); }
         }
     }
-    View focusable(final FrameLayout v, final GradientDrawable base, float radius, final Runnable click){ return focusable(v, base, radius, 1.09f, click); }
+    View focusable(final FrameLayout v, final GradientDrawable base, float radius, final Runnable click){ return focusable(v, base, radius, 1.13f, click); }
     View focusable(final FrameLayout v, final GradientDrawable base, float radius, final float sc, final Runnable click){
         final GlowFrame g = new GlowFrame(this, v, p(radius));
         g.setFocusable(true); g.setClickable(true);
@@ -403,7 +447,7 @@ public class MainActivity extends Activity {
             if (editMode){ if (x==dragV) x.setTranslationZ(p(18)); return; }
             if (x==menuOwner && !f) return;
             x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
-            x.setTranslationZ(f?p(8):0);
+            x.setTranslationZ(f?p(12):0);
             android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(220);
             va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.syncHalo(); }); va.start();
         });
@@ -414,11 +458,11 @@ public class MainActivity extends Activity {
     Bitmap shadowBmp(int w, int h, float r){
         String k="sh:"+w+"x"+h+":"+(int)r;
         Bitmap hit=glowBmps.get(k); if (hit!=null && !hit.isRecycled()) return hit;
-        int pad=p(36);
+        int pad=p(48);
         Bitmap bm=Bitmap.createBitmap(Math.max(1,w+pad*2), Math.max(1,h+pad*2), Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(bm);
         Paint bl=new Paint(Paint.ANTI_ALIAS_FLAG);
-        bl.setColor(Color.BLACK); bl.setMaskFilter(new BlurMaskFilter(p(22), BlurMaskFilter.Blur.NORMAL));
+        bl.setColor(Color.BLACK); bl.setMaskFilter(new BlurMaskFilter(p(32), BlurMaskFilter.Blur.NORMAL));
         c.drawRoundRect(pad, pad, pad+w, pad+h, r, r, bl);
         glowBmps.put(k, bm); return bm;
     }
@@ -515,18 +559,20 @@ public class MainActivity extends Activity {
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).commit(); }
     GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(APP_W); gl.height=p(APP_H); gl.rightMargin = (i%6==5)?0:p(APP_HG); gl.bottomMargin = p(APP_VG); return gl; }
     int rowH(){ return p(APP_H+APP_VG); }
-    View[] slideViews(){ return new View[]{clk, gear, searchV, dimBar, heroG, tabBar, cardWrap, homeGrid}; }
+    View[] slideViews(){ return new View[]{clk, gear, searchV, searchSplit, dimBar, heroG, tabBar, cardWrap, homeGrid}; }
     void setDrawer(boolean on){ boolean edge=drawerOpen!=on; drawerOpen=on; slideHome(edge); }
     void fadeChrome(boolean hide){
         float a=hide?0f:1f;
-        for (View v: new View[]{clk, gear, searchV, dimBar}){
+        for (View v: new View[]{clk, gear, searchV, searchSplit, dimBar}){
             if (v==null) continue;
             if (v==dimBar && !dimSlide) continue;
+            if (v==searchSplit && !searchOpen) continue;
             v.setVisibility(View.VISIBLE);
             v.animate().alpha(a).setDuration(600).setInterpolator(drawerIp).withEndAction(()->{ if (drawerOpen) v.setVisibility(View.INVISIBLE); }).start();
         }
         if (gear!=null) gear.setFocusable(!hide);
-        if (searchV!=null) searchV.setFocusable(!hide && !dimSlide);
+        if (searchV!=null) searchV.setFocusable(!hide && !dimSlide && !searchOpen);
+        if (speakV!=null){ speakV.setFocusable(!hide && searchOpen && !dimSlide); typeV.setFocusable(!hide && searchOpen && !dimSlide); }
     }
     void boxLayer(View v, boolean on){ if (v!=null) v.setLayerType(on?View.LAYER_TYPE_HARDWARE:View.LAYER_TYPE_NONE, null); }
     void staggerDrawer(boolean open){
@@ -556,6 +602,7 @@ public class MainActivity extends Activity {
             if (clk!=null) clk.bringToFront();
             if (gear!=null) gear.bringToFront();
             if (searchV!=null) searchV.bringToFront();
+            if (searchSplit!=null && searchOpen) searchSplit.bringToFront();
             if (dimBar!=null && dimSlide) dimBar.bringToFront();
         }
         if (editMode) stackEditDim();
@@ -709,7 +756,7 @@ public class MainActivity extends Activity {
         View keep=tiles!=null && i>=0 && i<tiles.length? tiles[i] : (homeGrid!=null && i>=0 && i<homeGrid.getChildCount()? homeGrid.getChildAt(i):null);
         dragV=null; dragIdx=-1; editMode=false; saveHome(fullOrder); markHomeSig();
         commitTiles(); setEditDim(false);
-        if (drawerOpen){ if (gear!=null) gear.setFocusable(false); if (searchV!=null) searchV.setFocusable(false); }
+        if (drawerOpen){ if (gear!=null) gear.setFocusable(false); if (searchV!=null) searchV.setFocusable(false); if (speakV!=null){ speakV.setFocusable(false); typeV.setFocusable(false); } }
         resetAllLifts(true, keep);
         if (keep!=null){
             if (focus!=null){ focus.savedSec=4+i/6; focus.savedIdx=i%6; }
@@ -875,7 +922,8 @@ public class MainActivity extends Activity {
             else if (c instanceof PillView){
                 if (on) c.setFocusable(false);
                 else if (c==gear) c.setFocusable(!drawerOpen);
-                else if (c==searchV) c.setFocusable(!drawerOpen && !dimSlide);
+                else if (c==searchV) c.setFocusable(!drawerOpen && !dimSlide && !searchOpen);
+                else if (c==speakV||c==typeV) c.setFocusable(!drawerOpen && searchOpen && !dimSlide);
                 else if (c==dimBar) c.setFocusable(false);
                 else c.setFocusable(true);
             }
@@ -1415,7 +1463,7 @@ public class MainActivity extends Activity {
     void launchPkg(String pkg){ Intent i = pm.getLeanbackLaunchIntentForPackage(pkg); if (i==null) i = pm.getLaunchIntentForPackage(pkg); if (i!=null) startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
 
     // ---------- v6: quick settings, featured toggle, dimmer, weather ----------
-    PillView searchV; TextView heroLabel;
+    PillView searchV, speakV, typeV; LinearLayout searchSplit; TextView heroLabel;
     void useWhatsNew(String js){
         List<Object[]> nl = new ArrayList<>();
         try { org.json.JSONArray a = new org.json.JSONArray(js==null?"[]":js);
@@ -1458,6 +1506,8 @@ public class MainActivity extends Activity {
         if (searchV==null) return;
         android.view.animation.Interpolator ease=new android.view.animation.DecelerateInterpolator();
         if (hide){
+            searchOpen=false;
+            if (searchSplit!=null){ searchSplit.setVisibility(View.GONE); if (speakV!=null){ speakV.setFocusable(false); typeV.setFocusable(false); } }
             searchV.setFocusable(false);
             searchV.animate().alpha(0f).setDuration(180).setInterpolator(ease).withEndAction(()->{ if (dimSlide) searchV.setVisibility(View.INVISIBLE); }).start();
         } else {

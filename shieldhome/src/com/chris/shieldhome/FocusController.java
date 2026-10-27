@@ -154,7 +154,8 @@ class FocusController {
         List<View> o = new ArrayList<>();
         if (sec == 0) {
             if (a.gear != null) o.add(a.gear);
-            if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
+            if (a.searchOpen){ if (a.speakV!=null) o.add(a.speakV); if (a.typeV!=null) o.add(a.typeV); }
+            else if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
         } else if (sec == 1) { if (a.heroShown() && a.heroBtn != null) o.add(a.heroBtn); }
         else if (sec == 2) { if (a.tabPlay.getVisibility()==View.VISIBLE) o.add(a.tabPlay); o.add(a.tabLive); }
         else if (sec == 3) {
@@ -187,7 +188,7 @@ class FocusController {
     int secOf(View f) {
         if (a.homeGrid == null || a.cardRow == null) return -1;
         for (View x = f; x != null; x = x.getParent() instanceof View ? (View) x.getParent() : null) {
-            if (x == a.gear || x == a.searchV) return 0;
+            if (x == a.gear || x == a.searchV || x == a.speakV || x == a.typeV) return 0;
             if (x == a.heroG) return 1;
             if (x == a.tabPlay || x == a.tabLive) return 2;
             if (x.getParent() == a.cardRow) return 3;
@@ -198,7 +199,8 @@ class FocusController {
 
     int topIdx(View v) {
         if (v == a.gear) return 0;
-        if (v == a.searchV) return 1;
+        if (v == a.searchV || v == a.speakV) return 1;
+        if (v == a.typeV) return 2;
         return -1;
     }
     View savedView() {
@@ -213,7 +215,7 @@ class FocusController {
         return it.get(Math.min(savedIdx, it.size() - 1));
     }
     View tabV() { return a.tab == 0 && a.tabPlay.getVisibility()==View.VISIBLE ? a.tabPlay : a.tabLive; }
-    View topTarget() { return a.searchV.getVisibility() == View.VISIBLE ? a.searchV : a.gear; }
+    View topTarget() { return a.searchOpen && a.speakV!=null ? a.speakV : (a.searchV!=null && a.searchV.getVisibility()==View.VISIBLE ? a.searchV : a.gear); }
 
     View navTarget(View f, int sec, boolean up) {
         View fr = secRoot(f, sec);
@@ -239,6 +241,8 @@ class FocusController {
     String name(View v) {
         if (v == a.gear) return "gear";
         if (v == a.searchV) return "search";
+        if (v == a.speakV) return "speak";
+        if (v == a.typeV) return "type";
         if (v == a.heroG || v == a.heroBtn) return "hero";
         if (v == a.tabPlay) return "tabPlay";
         if (v == a.tabLive) return "tabLive";
