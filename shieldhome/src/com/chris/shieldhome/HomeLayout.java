@@ -143,8 +143,8 @@ class HomeLayout {
 
         a.homeGrid = new GridLayout(a); a.homeGrid.setColumnCount(6); a.homeGrid.setClipChildren(false); a.homeGrid.setClipToPadding(false);
         place(a.homeGrid, 35, MainActivity.APP_GRID_Y, 954, MainActivity.APP_H+MainActivity.APP_VG);
-        a.ensureDim();
-        a.buildHomeGrid();
+        a.grid.ensureDim();
+        a.grid.buildHomeGrid();
 
         a.setContentView(a.root);
         a.h.post(()->{ if (a.tabPlay.getVisibility()==View.VISIBLE) a.tabPlay.requestFocus(); else a.tabLive.requestFocus(); });

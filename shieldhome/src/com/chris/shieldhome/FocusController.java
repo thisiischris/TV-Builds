@@ -118,10 +118,10 @@ class FocusController {
 
     /** Overlays close themselves. Returns true if consumed (not the home short/long path). */
     boolean closeOverlay() {
-        if (a.appMenu != null) { a.closeMenu(); return true; }
+        if (a.appMenu != null) { a.grid.closeMenu(); return true; }
         if (a.searchTyping) { a.closeSearchField(); if (a.searchV!=null) a.searchV.requestFocus(); return true; }
         if (a.dimSlide) { a.closeDimSlide(); return true; }
-        if (a.editMode || a.dragIdx >= 0) { a.exitEdit(); return true; }
+        if (a.editMode || a.dragIdx >= 0) { a.grid.exitEdit(); return true; }
         if (a.drawerOpen) { a.grid.setDrawer(false); focusHomeApp(); return true; }
         return false;
     }
