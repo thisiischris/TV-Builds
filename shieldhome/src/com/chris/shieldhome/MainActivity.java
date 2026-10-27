@@ -27,16 +27,15 @@ public class MainActivity extends Activity {
     final android.view.animation.DecelerateInterpolator focusInterpolator = new android.view.animation.DecelerateInterpolator();
     static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f, APP_GRID_Y=467.5f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
-    static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
 
     FrameLayout.LayoutParams lp(int w,int h,int g,int l,int t,int r,int b){ FrameLayout.LayoutParams x=new FrameLayout.LayoutParams(w,h,g); x.setMargins(l,t,r,b); return x; }
     java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
-    ImageLoader images; FocusController focus; TvData tv; NetData net;
+    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards; HeroController hero; SearchDimController searchDim;
     java.util.concurrent.Future<?> dataFut; int dataGen, heroLoadGen;
     List<String[]> appsCache, fullOrder=new ArrayList<>();
     List<Object[]> featuredCache, wnPickCache;
-    Map<String,Long> plutoIdsCache=new HashMap<>();
-    String homeBindSig="", cardsBindSig="", featuredBoundSig="";
+    
+    String homeBindSig="";
     final Object heroLock=new Object(); Object[] heroOnScreen;
     void loadInto(final ImageView iv, String uri0, final boolean fit){
         if (images==null||uri0==null) return;
@@ -52,6 +51,9 @@ public class MainActivity extends Activity {
         focus = new FocusController(this);
         tv = new TvData(this);
         net = new NetData(this);
+        cards = new CardsController(this);
+        hero = new HeroController(this);
+        searchDim = new SearchDimController(this);
         prefs().edit().remove("heromode").remove("featured").apply(); // v9: card mode removed
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         DisplayMetricsHolder();
@@ -85,7 +87,7 @@ public class MainActivity extends Activity {
         kickData(true);
         tick(); showWeather(); weatherTick(); applyDim();
     }
-    @Override protected void onPause(){ if (editMode) exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(heroRotate); h.removeCallbacks(wxRun); }
+    @Override protected void onPause(){ if (editMode) exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(hero.heroRotate); h.removeCallbacks(wxRun); }
     boolean heroShown(){ return heroG!=null && heroG.getVisibility()==View.VISIBLE; }
     View tabV(){ return focus!=null?focus.tabV():(tab==0?tabPlay:tabLive); }
     String name(View v){ return focus!=null?focus.name(v):"?"; }
@@ -129,93 +131,16 @@ public class MainActivity extends Activity {
     @Override public boolean onKeyDown(int k, KeyEvent e){ if (focus.keyDown(k,e)) return true; return super.onKeyDown(k,e); }
     @Override public boolean onKeyLongPress(int k, KeyEvent e){ if (focus.keyLong(k,e)) return true; return super.onKeyLongPress(k,e); }
     @Override public boolean onKeyUp(int k, KeyEvent e){ if (focus.keyUp(k,e)) return true; return super.onKeyUp(k,e); }
-    void openAssistant(){
-        Intent[] tries = {
-            new Intent(Intent.ACTION_ASSIST).setPackage("com.google.android.katniss"),
-            new Intent("android.speech.action.WEB_SEARCH").setPackage("com.google.android.katniss"),
-            new Intent(Intent.ACTION_SEARCH_LONG_PRESS).setPackage("com.google.android.katniss")
-        };
-        for (Intent i: tries){ try { if (i.resolveActivity(pm)!=null){ startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } } catch (Exception e) {} }
-    }
+    void openAssistant(){ searchDim.openAssistant(); }
     boolean searchOpen, searchTyping;
-    void expandSearch(){
-        if (searchOpen || dimSlide || searchTyping || searchSplit==null) return;
-        searchOpen=true;
-        searchV.animate().cancel();
-        searchV.setFocusable(false); searchV.setAlpha(1f); searchV.setVisibility(View.INVISIBLE);
-        searchSplit.setVisibility(View.VISIBLE); searchSplit.setAlpha(1f);
-        speakV.setFocusable(true); typeV.setFocusable(true);
-        float mid=p(28);
-        android.view.animation.Interpolator ip=new android.view.animation.OvershootInterpolator(1.2f);
-        for (PillView pv: new PillView[]{speakV,typeV}){ pv.animate().cancel(); pv.setScaleX(0.86f); pv.setScaleY(0.86f); pv.setAlpha(0.35f); }
-        speakV.setTranslationX(mid); typeV.setTranslationX(-mid);
-        speakV.animate().translationX(0).scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).setInterpolator(ip).start();
-        typeV.animate().translationX(0).scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).setInterpolator(ip).start();
-        speakV.requestFocus();
-    }
-    void maybeCollapseSearch(){
-        if (searchTyping || !searchOpen || dimSlide) return;
-        if (speakV!=null && (speakV.isFocused()||typeV.isFocused())) return;
-        collapseSearch();
-    }
-    void showKb(){
-        android.view.inputmethod.InputMethodManager imm=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
-        if (imm==null || searchField==null) return;
-        searchField.post(()->{
-            searchField.requestFocus();
-            if (!imm.showSoftInput(searchField, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT))
-                imm.showSoftInput(searchField, android.view.inputmethod.InputMethodManager.SHOW_FORCED);
-        });
-    }
-    void hideKb(){
-        android.view.inputmethod.InputMethodManager imm=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
-        if (imm==null || searchField==null) return;
-        imm.hideSoftInputFromWindow(searchField.getWindowToken(), 0);
-    }
-    void launchSearch(String q){
-        Intent[] tries = {
-            new Intent("android.search.action.GLOBAL_SEARCH").setPackage("com.google.android.katniss").putExtra(android.app.SearchManager.QUERY, q),
-            new Intent("android.speech.action.WEB_SEARCH").setPackage("com.google.android.katniss").putExtra(android.app.SearchManager.QUERY, q),
-            new Intent(Intent.ACTION_VIEW, Uri.parse("https://assistant.google.com/search?q="+Uri.encode(q))).setPackage("com.google.android.katniss")
-        };
-        for (Intent i: tries){ try { if (i.resolveActivity(pm)!=null){ startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); closeSearchField(); return; } } catch (Exception e) {} }
-    }
-    void openSearchField(){
-        if (searchTyping || dimSlide || searchField==null) return;
-        searchTyping=true; searchOpen=false;
-        if (speakV!=null){ speakV.animate().cancel(); typeV.animate().cancel(); speakV.setFocusable(false); typeV.setFocusable(false); }
-        if (searchSplit!=null) searchSplit.setVisibility(View.GONE);
-        if (searchV!=null){ searchV.setVisibility(View.INVISIBLE); searchV.setFocusable(false); }
-        searchField.setText(""); searchField.setVisibility(View.VISIBLE); searchField.bringToFront();
-        searchField.requestFocus(); showKb();
-    }
-    void closeSearchField(){
-        if (!searchTyping) return;
-        searchTyping=false; hideKb();
-        if (searchField!=null){ searchField.setVisibility(View.GONE); searchField.setText(""); }
-        if (!dimSlide && searchV!=null){ searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen); }
-    }
-    void collapseSearch(){
-        searchOpen=false;
-        if (speakV!=null){ speakV.setFocusable(false); typeV.setFocusable(false); }
-        if (searchSplit==null || searchSplit.getVisibility()!=View.VISIBLE){
-            if (!dimSlide && searchV!=null){ searchV.setVisibility(View.VISIBLE); searchV.setAlpha(1f); searchV.setFocusable(!drawerOpen); }
-            return;
-        }
-        float mid=p(28);
-        android.view.animation.Interpolator ip=new android.view.animation.DecelerateInterpolator();
-        speakV.animate().cancel(); typeV.animate().cancel();
-        speakV.animate().translationX(mid).scaleX(0.86f).scaleY(0.86f).alpha(0f).setDuration(280).setInterpolator(ip).start();
-        typeV.animate().translationX(-mid).scaleX(0.86f).scaleY(0.86f).alpha(0f).setDuration(280).setInterpolator(ip).withEndAction(()->{
-            if (searchOpen) return;
-            searchSplit.setVisibility(View.GONE);
-            if (!dimSlide && searchV!=null){
-                searchV.animate().cancel();
-                searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen);
-                searchV.setAlpha(0f); searchV.animate().alpha(1f).setDuration(160).start();
-            }
-        }).start();
-    }
+    void expandSearch(){ searchDim.expandSearch(); }
+    void maybeCollapseSearch(){ searchDim.maybeCollapseSearch(); }
+    void showKb(){ searchDim.showKb(); }
+    void hideKb(){ searchDim.hideKb(); }
+    void launchSearch(String q){ searchDim.launchSearch(q); }
+    void openSearchField(){ searchDim.openSearchField(); }
+    void closeSearchField(){ searchDim.closeSearchField(); }
+    void collapseSearch(){ searchDim.collapseSearch(); }
 
     void tick(){ setPill(timePill, new SimpleDateFormat("h:mm a", Locale.US).format(new Date())); h.postDelayed(this::tick, 15000); }
     int pillTextW(PillView v, String s){
@@ -1242,25 +1167,8 @@ public class MainActivity extends Activity {
         try { if (o[4] instanceof Intent) startActivity(((Intent)o[4]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); else launchPkg((String)o[0]); }
         catch(Exception e){ launchPkg((String)o[0]); }
     }
-    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, HERO_ROTATE_MS); return; } } showHero(); h.postDelayed(this, HERO_ROTATE_MS); } };
-    ImageView heroArt2; boolean heroFront=true;
-    void loadHero(){ applyFeaturedCache(); }
-    void applyFeaturedCache(){
-        List<Object[]> feat=featuredCache;
-        if (feat==null) return;
-        String fs=heroSig(feat);
-        if (fs.equals(featuredBoundSig)) return;
-        featuredBoundSig=fs;
-        synchronized(heroLock){ heroItems.clear(); heroItems.addAll(feat); heroIdx=0; }
-        h.removeCallbacks(heroRotate);
-        if (!heroItems.isEmpty()){ showHero(); h.postDelayed(heroRotate, HERO_ROTATE_MS); }
-        net.loadWhatsNew();
-    }
-    static String heroSig(List<Object[]> l){
-        StringBuilder b=new StringBuilder();
-        for (Object[] o: l) b.append(o[0]).append('|').append(o[1]).append('|').append(o[3]).append(',');
-        return b.toString();
-    }
+    ImageView heroArt2;
+    void applyFeaturedCache(){ hero.applyFeaturedCache(); }
     long heroGate;
     void heroStep(boolean next){
         if (android.os.SystemClock.uptimeMillis()<heroGate) return;
@@ -1269,47 +1177,11 @@ public class MainActivity extends Activity {
             if (n<=1) return;
             heroIdx = (heroIdx + (next?1:-1) + n) % n;
         }
-        h.removeCallbacks(heroRotate);
+        h.removeCallbacks(hero.heroRotate);
         showHero();
-        h.postDelayed(heroRotate, HERO_ROTATE_MS);
+        h.postDelayed(hero.heroRotate, HERO_ROTATE_MS);
     }
-    void showHero(){
-        final Object[] o;
-        synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
-        heroGate=android.os.SystemClock.uptimeMillis()+650;
-        if (heroBtn==null || !heroBtn.isFocused()) bindHeroAction(o);
-        final String uri = (String)o[3];
-        final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=heroG!=null&&heroG.getHeight()>0?heroG.getHeight():p(400), g=++heroLoadGen;
-        pool.execute(()->{
-            Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
-            Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
-            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, bm); });
-        });
-    }
-    void transitionHero(final Object[] o, Bitmap bm){
-        android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
-        final ImageView in = heroFront ? heroArt2 : heroArt, out = heroFront ? heroArt : heroArt2;
-        if (bm != null){
-            in.setScaleType(ImageView.ScaleType.FIT_XY);
-            in.setImageBitmap(bm); in.setScaleX(1f); in.setScaleY(1f); in.setAlpha(0f); in.bringToFront();
-            in.animate().alpha(1f).setDuration(1600).setInterpolator(ease).start();
-            out.animate().alpha(0f).setDuration(1600).setInterpolator(ease).start();
-            heroFront = !heroFront;
-        }
-        final View[] texts = {heroTitle, heroSub, heroBadge, heroFocus, heroLabel};
-        android.view.animation.Interpolator outIp=new android.view.animation.AccelerateInterpolator();
-        for (View t: texts) t.animate().alpha(0f).translationX(-p(10)).setDuration(450).setInterpolator(outIp).start();
-        final boolean ctaOn=heroBtn!=null && heroBtn.isFocused();
-        if (ctaOn){ heroBtn.animate().cancel(); heroBtn.animate().alpha(0f).setStartDelay(0).setDuration(450).setInterpolator(outIp).start(); }
-        h.postDelayed(()->{
-            bindHeroCopy(o);
-            try { Drawable bd = pm.getApplicationBanner((String)o[0]); if (bd==null) bd = pm.getApplicationIcon((String)o[0]); heroBadge.setImageBitmap(glyph((String)o[0], bd));} catch(Exception e){}
-            fitHeroMeta();
-            if (heroDots!=null && heroDots.getVisibility()==View.VISIBLE){ int n; synchronized(heroLock){ n=heroItems.size(); } heroDots.bind(n, heroIdx, true); }
-            int d=200; for (View t: texts){ t.setTranslationX(p(16)); t.animate().alpha(t==heroBadge?0.7f:1f).translationX(0).setStartDelay(d).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); d+=90; }
-            if (ctaOn && heroBtn!=null && heroBtn.isFocused()){ heroBtn.animate().cancel(); heroBtn.setAlpha(0f); heroBtn.animate().alpha(1f).setStartDelay(200).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); }
-        }, 480);
-    }
+    void showHero(){ hero.showHero(); }
 
     Map<String,Bitmap> glyphs=new HashMap<>();
     // v12: white monochrome mark extracted from the app banner (pixels that differ from the banner background become white, alpha by contrast), cropped, with a soft shadow
@@ -1341,7 +1213,7 @@ public class MainActivity extends Activity {
             usage=nextUse;
             featuredCache=tv.collectFeatured(tv.queryPreviewFeatured());
             wnPickCache=tv.collectWatchNext();
-            plutoIdsCache=tv.queryPlutoIds();
+            cards.plutoIdsCache=tv.queryPlutoIds();
             appsCache=apps;
             StringBuilder sb=new StringBuilder(); List<String> keys=new ArrayList<>(usage.keySet()); Collections.sort(keys,(a,b)->Long.compare(use(b),use(a)));
             for (int i=0;i<Math.min(15,keys.size());i++) sb.append(keys.get(i)).append('=').append(use(keys.get(i))/60000).append("m ");
@@ -1372,421 +1244,29 @@ public class MainActivity extends Activity {
         }
         if (tabBar!=null) tabBar.slide(false);
     }
-    String cardSig(){
-        StringBuilder b=new StringBuilder(tab==0?"P|":"L|");
-        if (tab==0){ if (wnPickCache!=null) for (Object[] o: wnPickCache) b.append(o[0]).append('|').append(o[1]).append('|').append(o[2]).append(','); }
-        else { if (plutoIdsCache!=null) b.append(plutoIdsCache); b.append('|').append(plutoSlug.size()); }
-        return b.toString();
-    }
+    void resetCardRow(){ cards.resetCardRow(); }
+    void updateCardAlphas(){ cards.updateCardAlphas(); }
+    void refreshCards(){ cards.refreshCards(); }
     List<String[]> apps(){ return appsCache!=null?appsCache:tv.queryApps(); }
 
-    // ---------- Cards ----------
-    void addCard(View v, int i){
-        int width=p(184.4f), height=p(112), bottom=p(8), left=i==0?0:p(8);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, height); lp.bottomMargin=bottom; lp.leftMargin=left;
-        if (v.getParent()==cardRow){ ViewGroup.LayoutParams old=v.getLayoutParams(); if (!(old instanceof LinearLayout.LayoutParams) || old.width!=width || old.height!=height || ((LinearLayout.LayoutParams)old).bottomMargin!=bottom || ((LinearLayout.LayoutParams)old).leftMargin!=left) v.setLayoutParams(lp); return; }
-        if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v);
-        if (!(v.getLayoutParams() instanceof LinearLayout.LayoutParams)){
-            final View.OnFocusChangeListener base = v.getOnFocusChangeListener();
-            v.setOnFocusChangeListener((x,f)->{ if (base!=null) base.onFocusChange(x,f); if (f) snapCardRow(x); });
-        }
-        cardRow.addView(v, lp);
-        if (v instanceof GlowFrame) ((GlowFrame)v).warm(p(184.4f), p(112));
-    }
-    void snapCardRow(View v){
-        if (cardScroll==null) return;
-        int idx=cardRow.indexOfChild(v); if (idx<0) return;
-        int x=snapX(cardScroll.getScrollX(), idx, p(184.4f), p(8), p(954), cardRow.getChildCount());
-        if (x!=cardScroll.getScrollX()) cardScroll.smoothScrollTo(x,0); else updateCardAlphas();
-    }
-    void resetCardRow(){
-        if (focus!=null){ focus.lastIdx[3]=0; focus.lastCardX=0; }
-        if (cardScroll!=null) cardScroll.scrollTo(0,0);
-        if (cardRow!=null && cardRow.getChildCount()>0 && cardRow.indexOfChild(getCurrentFocus())>=0) cardRow.getChildAt(0).requestFocus();
-        updateCardAlphas();
-    }
-    void updateCardAlphas(){
-        if (cardRow==null) return;
-        int sx=cardScroll==null?0:cardScroll.getScrollX(), stride=p(184.4f)+p(8);
-        for (int i=0;i<cardRow.getChildCount();i++){
-            View c=cardRow.getChildAt(i); float a=tileAlpha(i,sx,stride,5);
-            if (c instanceof GlowFrame){
-                GlowFrame g=(GlowFrame)c; g.fade=a; g.setAlpha(1f); g.inner.setAlpha(a); g.syncHalo(); g.invalidate();
-                if (a>0.01f){
-                    View iv=g.inner.getChildAt(0);
-                    if (iv instanceof ImageView){ Object tg=iv.getTag();
-                        if (tg instanceof String && (((String)tg).startsWith("pend:")||((String)tg).startsWith("pendf:"))){
-                            boolean fit=((String)tg).startsWith("pendf:");
-                            loadInto((ImageView)iv, ((String)tg).substring(fit?6:5), fit); } }
-                }
-            } else c.setAlpha(a);
-        }
-    }
-    static float tileAlpha(int i, int sx, int stride, int nFit){
-        if (stride<=0) return 1f;
-        int b=sx/stride; float t=(sx-b*(float)stride)/stride;
-        if (i<b) return 0f;
-        if (i==b) return 1f-t;
-        if (i<b+nFit) return 1f;
-        if (i==b+nFit) return t;
-        return 0f;
-    }
-    static int snapX(int sx, int idx, int cardW, int gap, int vis, int n){
-        int stride=cardW+gap;
-        if (stride<=0||n<=0) return 0;
-        int nFit=Math.max(1,(vis+gap)/stride);
-        int max=Math.max(0,n-nFit)*stride;
-        int left=idx*stride, right=left+cardW;
-        int target=sx;
-        if (left<sx) target=left;
-        else if (right>sx+vis) target=right-vis;
-        target=Math.round(target/(float)stride)*stride;
-        return Math.max(0, Math.min(target, max));
-    }
-
-    View card(Drawable art, String artUri, boolean fitArt, String badgePkg, String caption, float progress, final Runnable click){
-        FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
-        GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(Color.argb(96,190,185,220)); bg.setStroke(Math.max(1,p(.6f)), Color.argb(60,255,255,255)); f.setBackground(bg);
-        f.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
-        ImageView iv = new ImageView(this); iv.setScaleType(ImageView.ScaleType.CENTER_CROP); if (art!=null) iv.setImageDrawable(art); if (fitArt){ iv.setScaleType(ImageView.ScaleType.FIT_CENTER); iv.setPadding(p(30),p(18),p(30),p(30)); } loadInto(iv, artUri, fitArt);
-        f.addView(iv, new FrameLayout.LayoutParams(-1,-1));
-        View shade = new View(this); shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(70,0,0,0), Color.argb(160,0,0,0), Color.argb(204,0,0,0)}));
-        if (caption!=null || progress>=0) f.addView(shade, new FrameLayout.LayoutParams(-1, p(56), Gravity.BOTTOM));
-        if (badgePkg != null){
-            ImageView b = new ImageView(this); b.setScaleType(ImageView.ScaleType.CENTER_CROP); b.setClipToOutline(true);
-            GradientDrawable bb = new GradientDrawable(); bb.setCornerRadius(p(4)); bb.setColor(Color.BLACK); b.setBackground(bb);
-            try { Drawable d = pm.getApplicationBanner(badgePkg); if (d==null) d = pm.getApplicationIcon(badgePkg); b.setImageDrawable(d);} catch(Exception e){}
-            f.addView(b, lp(p(36), p(20), Gravity.END|Gravity.TOP, 0, p(7), p(7), 0));
-        }
-        if (caption != null){
-            TextView t = text(caption, 10.5f, Color.WHITE, "sans-serif-medium"); t.setSingleLine(); t.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            f.addView(t, lp(-1,-2,Gravity.BOTTOM, p(9), 0, p(9), p(progress>=0?14:9)));
-        }
-        if (progress >= 0){
-            FrameLayout bar = new FrameLayout(this); bar.setBackgroundColor(Color.argb(90,255,255,255));
-            View fill = new View(this); fill.setBackgroundColor(Color.rgb(229,9,20));
-            bar.addView(fill, new FrameLayout.LayoutParams(Math.round(p(166)*progress), -1));
-            f.addView(bar, lp(p(166), p(2.5f), Gravity.BOTTOM, p(9), 0, 0, p(8)));
-        }
-        return focusable(f, TILE_R, click);
-    }
-
-    void refreshCards(){
-        if (cardRow==null) return;
-        if (tab==0 && !playNextOn()) applyTabs();
-        if (tab==1 && liveCache!=null && !liveCache.isEmpty()){
-            showLiveCache(); cardsBindSig=cardSig(); h.post(this::updateCardAlphas); return;
-        }
-        String next=cardSig();
-        if (next.equals(cardsBindSig) && cardRow.getChildCount()>0) return;
-        cardsBindSig=next;
-        cardRow.removeAllViews();
-        if (cardScroll!=null) cardScroll.scrollTo(0,0);
-        int n = tab==0 ? loadWatchNext() : loadLive();
-        if (n>0){ h.post(this::updateCardAlphas); return; }
-        if (tab==0){ applyTabs(); if (tab==1){ loadLive(); h.post(this::updateCardAlphas); } return; }
-        int i=0;
-        for (final String pk : LIVE_PKGS){
-            if (!installed(pk)) continue;
-            Drawable art=null; try { art = pm.getApplicationBanner(pk); if (art==null){ Intent li=pm.getLeanbackLaunchIntentForPackage(pk); if(li!=null) art=pm.getActivityBanner(li);} if(art==null) art=pm.getApplicationIcon(pk);} catch(Exception e){}
-            String cap = tab==1 && pk.equals("com.google.android.tv") ? "Free channels" : null;
-            View v=card(art, null, false, null, cap, -1, ()->launchPkg(pk)); addCard(v, i++);
-        }
-        h.post(this::updateCardAlphas);
-    }
-
-    int loadWatchNext(){
-        List<Object[]> pick=wnPickCache;
-        if (pick==null||pick.isEmpty()) return 0;
-        int n=0;
-        for (Object[] o: pick){ final Intent fi=new Intent((Intent)o[3]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); final String pk2=(String)o[0]; boolean isNew=o.length>5;
-            View v = card(null,(String)o[2],false,pk2,(String)o[1], isNew?-1f:(Float)o[4], ()->{try{startActivity(fi);}catch(Exception e){ launchPkg(pk2);} });
-            addCard(v, n++); }
-        android.util.Log.i("ShieldHome","playnext shown="+n);
-        return n;
-    }
-    List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); Map<String,String> plutoArt = new HashMap<>(); Map<String,String> plutoLogo = new HashMap<>(); final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
-    List<View> liveCache; final Set<String> liveSlugs = new LinkedHashSet<>();
-    // Pluto doesn't publish programs to TvContract (0 readable rows), so read what's on now from Pluto's public guide.
-    void fillPlutoNow(final List<Object[]> caps){
-        if (System.currentTimeMillis()-plutoAt < 10*60000L && !plutoNow.isEmpty()){ applyLiveNow(); return; }
-        pool.execute(()->{ try {
-            SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US); f.setTimeZone(TimeZone.getTimeZone("UTC"));
-            long now = System.currentTimeMillis();
-            java.net.HttpURLConnection c=(java.net.HttpURLConnection)new java.net.URL("https://api.pluto.tv/v2/channels?start="+f.format(new Date(now))+"&stop="+f.format(new Date(now+60000))).openConnection();
-            c.setConnectTimeout(6000); c.setReadTimeout(20000);
-            java.io.InputStream in = c.getInputStream(); java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] buf=new byte[65536]; int r; while ((r=in.read(buf))>0) bo.write(buf,0,r); in.close();
-            org.json.JSONArray a = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>(), art = new HashMap<>(), logos = new HashMap<>();
-            Set<String> ban = new HashSet<>(); Map<String,Integer> shared = new HashMap<>();
-            for (int i=0;i<a.length();i++){ org.json.JSONObject ch=a.getJSONObject(i);
-                addBan(ban, ch.optJSONObject("featuredImage")); addBan(ban, ch.optJSONObject("logo")); addBan(ban, ch.optJSONObject("thumbnail")); addBan(ban, ch.optJSONObject("tile"));
-                String logo=jsonPath(ch.optJSONObject("colorLogoPNG")); if (logo==null) logo=jsonPath(ch.optJSONObject("logo"));
-                if (logo!=null) logos.put(ch.optString("name"), logo);
-                org.json.JSONArray tl=ch.optJSONArray("timelines");
-                if (tl!=null && tl.length()>0){ String first=plutoGuideArt(tl.getJSONObject(0), ban); if (first!=null){ String b=bareUrl(first); shared.put(b, (shared.containsKey(b)?shared.get(b):0)+1); } }
-            }
-            for (Map.Entry<String,Integer> e: shared.entrySet()) if (e.getValue()>=4) ban.add(e.getKey());
-            for (int i=0;i<a.length();i++){ org.json.JSONObject ch=a.getJSONObject(i); org.json.JSONArray tl=ch.optJSONArray("timelines");
-                if (tl!=null && tl.length()>0){ org.json.JSONObject t0=tl.getJSONObject(0); m.put(ch.optString("name"), t0.optString("title")); String img=plutoGuideArt(t0, ban); if (img!=null) art.put(ch.optString("name"), img); }
-                String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
-            android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels art="+art.size()+" logos="+logos.size());
-            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoLogo.clear(); plutoLogo.putAll(logos); plutoAt=System.currentTimeMillis(); applyLiveNow(); });
-        } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); } });
-    }
-    static String plutoGuideArt(org.json.JSONObject t0, Set<String> ban){
-        org.json.JSONObject ep=t0.optJSONObject("episode"); if (ep==null) return null;
-        org.json.JSONObject se=ep.optJSONObject("series");
-        String[] cand={ jsonPath(ep.optJSONObject("poster16_9")), jsonPath(ep.optJSONObject("thumbnail")),
-            se==null?null:jsonPath(se.optJSONObject("tile")), se==null?null:jsonPath(se.optJSONObject("featuredImage")),
-            jsonPath(ep.optJSONObject("featuredImage")) };
-        for (String u: cand) if (!genericArt(u, ban)) return u;
-        return null;
-    }
-    static void addBan(Set<String> ban, org.json.JSONObject o){ String u=jsonPath(o); if (u!=null){ ban.add(u); ban.add(bareUrl(u)); } }
-    static String bareUrl(String u){ if (u==null) return ""; int q=u.indexOf('?'); return q<0?u:u.substring(0,q); }
-    static boolean genericArt(String u, Set<String> ban){
-        if (u==null || u.isEmpty()) return true;
-        String s=u.toLowerCase(Locale.US), b=bareUrl(s);
-        if (s.contains("default") || s.contains("placeholder") || s.contains("pluto-default") || s.contains("/channels/")) return true;
-        return ban!=null && (ban.contains(u) || ban.contains(b) || ban.contains(bareUrl(u)));
-    }
-    static String jsonPath(org.json.JSONObject o){ if (o==null) return null; String p=o.optString("path",""); return p.isEmpty()?null:p; }
-    static final String[] LIVE_SLUGS = {"cnn-headlines","nbc-news-now","abc-news-live","cbs-news"};
-    String slugify(String n){ return n.toLowerCase(Locale.US).replace("+","").replaceAll("[^a-z0-9]+","-").replaceAll("(^-|-$)",""); }
-    Intent plutoIntent(String slug){ return new Intent(Intent.ACTION_VIEW, Uri.parse("https://pluto.tv/live-tv"+(slug==null?"":"/"+slug))).setPackage("tv.pluto.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); }
-    void startSafe(Intent in, String fallbackPkg){ try { if (in.resolveActivity(pm)!=null){ startActivity(in); return; } } catch (Exception e){} try { launchPkg(fallbackPkg); } catch (Exception e){} }
-    Long plutoId(Map<String,Long> ids, String nm, String slug){
-        Long id = ids.get(nm); if (id!=null) return id;
-        for (Map.Entry<String,Long> e: ids.entrySet()){ String k=slugify(e.getKey()); if (k.equals(slug)||k.equals(slugify(nm))) return e.getValue(); }
-        return null;
-    }
-    int loadLive(){
-        if (liveCache!=null && !liveCache.isEmpty()){ showLiveCache(); fillPlutoNow(plutoCaps); return liveCache.size(); }
-        liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
-        if (installed("com.google.android.tvlauncher")) putLive(freeplayLiveTile(), null);
-        if (installed("tv.pluto.android")){
-            LinkedHashMap<String,String> names=liveSlugNames();
-            for (String slug: LIVE_SLUGS){
-                if (liveCache.size()>=4) break;
-                String nm=names.get(slug); if (nm==null) continue;
-                putLive(plutoTile(slug, nm, true), slug);
-            }
-        }
-        putLive(plutoGuideTile(), "pluto-guide");
-        if (!plutoCaps.isEmpty()) fillPlutoNow(plutoCaps);
-        return liveCache.size();
-    }
-    View plutoGuideTile(){
-        Drawable ban=null, ic=null;
-        try { ban=pm.getApplicationBanner("tv.pluto.android"); ic=pm.getApplicationIcon("tv.pluto.android"); } catch (Exception e){}
-        return card(ban!=null?ban:ic, null, ban==null, null, "Pluto TV guide", -1, ()->startSafe(plutoIntent(null), "tv.pluto.android"));
-    }
-    LinkedHashMap<String,String> liveSlugNames(){
-        LinkedHashMap<String,String> slugName=new LinkedHashMap<>();
-        Map<String,Long> plutoIds=plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
-        for (String slug: LIVE_SLUGS){
-            String nm=null; for (Map.Entry<String,String> en: plutoSlug.entrySet()) if (slug.equals(en.getValue())) nm=en.getKey();
-            if (nm==null) nm=slug.equals("cnn-headlines")?"CNN Headlines":slug.equals("nbc-news-now")?"NBC News NOW":slug.equals("abc-news-live")?"ABC News Live":"CBS News 24/7";
-            slugName.put(slug, nm);
-        }
-        for (Map.Entry<String,Long> e: plutoIds.entrySet()){ String slug=slugify(e.getKey()); if (!slugName.containsKey(slug)) slugName.put(slug, e.getKey()); }
-        for (Map.Entry<String,String> e: plutoSlug.entrySet()) if (!slugName.containsKey(e.getValue())) slugName.put(e.getValue(), e.getKey());
-        return slugName;
-    }
-    void putLive(View v, String slug){ if (slug!=null) liveSlugs.add(slug); liveCache.add(v); addCard(v, liveCache.size()-1); }
-    void showLiveCache(){
-        if (cardRow.getChildCount()==liveCache.size() && cardRow.getChildCount()>0 && cardRow.getChildAt(0)==liveCache.get(0)){ applyLiveNow(); return; }
-        cardRow.removeAllViews();
-        int i=0; for (View v: liveCache){ if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v); addCard(v, i++); }
-        applyLiveNow();
-    }
-    View plutoTile(String slug, String nm, boolean loadArt){
-        Map<String,Long> plutoIds=plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
-        final Intent in=plutoIntent(slug); Long id=plutoId(plutoIds, nm, slug);
-        View v=card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android"));
-        ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0);
-        TextView ov=chName(nm);
-        ((GlowFrame)v).inner.addView(ov, lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0));
-        TextView cap=null;
-        for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView && cv!=ov) cap=(TextView)cv; }
-        String art=liveArt(nm, id), logo=plutoLogo.get(nm);
-        if (art!=null && loadArt) setLiveArt(big, art, true, false);
-        else if (logo!=null && loadArt) setLiveArt(big, logo, true, true);
-        else if (art!=null) big.setTag("pend:"+art);
-        else if (logo!=null) big.setTag("pendf:"+logo);
-        ov.setVisibility(art!=null||logo!=null?View.VISIBLE:View.GONE);
-        if (plutoNow.get(nm)!=null && cap!=null) cap.setText(plutoNow.get(nm));
-        plutoCaps.add(new Object[]{cap, nm, big, ov, id});
-        return v;
-    }
-    TextView chName(String nm){
-        TextView ov=text(nm, 7, Color.WHITE, "sans-serif-medium");
-        ov.setPadding(p(6),p(3),p(10),p(4));
-        ov.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.argb(160,0,0,0), Color.argb(70,0,0,0), Color.TRANSPARENT}));
-        return ov;
-    }
-    String liveArt(String nm, Long id){
-        String art=plutoArt.get(nm); if (!genericArt(art,null)) return art;
-        art=tifNowArt(id); return genericArt(art,null)?null:art;
-    }
-    void applyLiveNow(){
-        for (Object[] o: plutoCaps){
-            String nm=(String)o[1]; TextView cap=(TextView)o[0]; ImageView iv=o.length>2?(ImageView)o[2]:null; TextView ov=o.length>3?(TextView)o[3]:null;
-            Long id=o.length>4?(Long)o[4]:null;
-            String t=plutoNow.get(nm), art=liveArt(nm,id), logo=plutoLogo.get(nm);
-            if (art!=null && !art.isEmpty()){
-                if (ov!=null) ov.setVisibility(View.VISIBLE);
-                if (cap!=null) cap.setText(t!=null?t:nm);
-                setLiveArt(iv, art, false, false);
-            } else if (logo!=null){
-                if (ov!=null) ov.setVisibility(View.VISIBLE);
-                if (cap!=null) cap.setText(t!=null?t:nm);
-                setLiveArt(iv, logo, false, true);
-            } else {
-                if (ov!=null) ov.setVisibility(View.GONE);
-                if (cap!=null) cap.setText(t!=null?nm+" \u00B7 "+t:nm);
-            }
-        }
-        if (tab==1) updateCardAlphas();
-    }
-    void setLiveArt(ImageView iv, String uri, boolean now, boolean fit){
-        if (iv==null || uri==null) return;
-        Object old=iv.getTag(); if (uri.equals(old) || ("pend:"+uri).equals(old) || ("pendf:"+uri).equals(old)) return;
-        iv.setPadding(fit?p(22):0, fit?p(16):0, fit?p(22):0, fit?p(16):0);
-        iv.setScaleType(fit?ImageView.ScaleType.FIT_CENTER:ImageView.ScaleType.CENTER_CROP);
-        if (now || (tab==1 && iv.getAlpha()>0)) loadInto(iv, uri, fit); else iv.setTag((fit?"pendf:":"pend:")+uri);
-    }
-    String tifNowArt(Long id){
-        if (id==null) return null;
-        long now=System.currentTimeMillis();
-        try (Cursor c=getContentResolver().query(TvContract.buildProgramsUriForChannel(id, now, now+60000), null, null, null, null)){
-            if (c!=null && c.moveToFirst()){
-                int i=c.getColumnIndex("poster_art_uri"); String a=i>=0&&!c.isNull(i)?c.getString(i):null;
-                if (a==null){ i=c.getColumnIndex("thumbnail_uri"); a=i>=0&&!c.isNull(i)?c.getString(i):null; }
-                return a;
-            }
-        } catch (Exception e){}
-        return null;
-    }
-    String freeplayNowArt(){
-        try (Cursor c=getContentResolver().query(TvContract.Channels.CONTENT_URI, null, null, null, null)){
-            while (c!=null && c.moveToNext()){
-                int pi=c.getColumnIndex("package_name"); String pkg=pi>=0&&!c.isNull(pi)?c.getString(pi):null;
-                if (pkg==null || !(pkg.contains("tvlauncher")||pkg.equals("com.google.android.tv"))) continue;
-                int i=c.getColumnIndex("_id"); if (i<0) continue;
-                String art=tifNowArt(c.getLong(i)); if (art!=null) return art;
-            }
-        } catch (Exception e){}
-        return null;
-    }
-    void playFreeplay(){ try { Intent b=new Intent("com.google.android.tvlauncher.action.VIEW", Uri.parse("tv://freeplay")); b.setComponent(new android.content.ComponentName("com.google.android.tvlauncher","com.google.android.tvlauncher.TvContentIntentReceiver")); b.addFlags(Intent.FLAG_RECEIVER_FOREGROUND); sendBroadcast(b); android.util.Log.i("ShieldHome","freeplay broadcast sent"); } catch(Exception e){ android.util.Log.w("ShieldHome","freeplay "+e); } }
-    View freeplayLiveTile(){
-        String art=freeplayNowArt();
-        Drawable ic=null; if (art==null) try { android.content.res.Resources r=pm.getResourcesForApplication("com.google.android.tvlauncher"); int id=r.getIdentifier("freeplay_icon","drawable","com.google.android.tvlauncher"); if (id!=0) ic=r.getDrawable(id,null); } catch(Exception e){}
-        View v=card(ic, art, art==null, null, "Google TV Freeplay \u00B7 Live", -1, this::playFreeplay);
-        TextView tg=text("LIVE", 7, Color.WHITE, "sans-serif-medium"); tg.setLetterSpacing(.08f); tg.setPadding(p(5),p(2),p(5),p(2)); GradientDrawable gb=new GradientDrawable(); gb.setCornerRadius(p(3)); gb.setColor(Color.rgb(200,30,40)); tg.setBackground(gb);
-        ((GlowFrame)v).inner.addView(tg, lp(-2,-2,Gravity.TOP|Gravity.START,p(7),p(7),0,0));
-        if (art!=null){ TextView ov=chName("Freeplay"); ((GlowFrame)v).inner.addView(ov, lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0)); }
-        return v;
-    }
     boolean installed(String p){ try { pm.getApplicationInfo(p,0); return true; } catch(Exception e){ return false; } }
     void launchPkg(String pkg){ Intent i = pm.getLeanbackLaunchIntentForPackage(pkg); if (i==null) i = pm.getLaunchIntentForPackage(pkg); if (i!=null) startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
 
     // ---------- v6: quick settings, featured toggle, dimmer, weather ----------
     PillView searchV, speakV, typeV; LinearLayout searchSplit; EditText searchField; TextView heroLabel;
-    void useWhatsNew(String js){
-        List<Object[]> nl = new ArrayList<>();
-        try { org.json.JSONArray a = new org.json.JSONArray(js==null?"[]":js);
-            SimpleDateFormat whatsNewDateFormat=new SimpleDateFormat("yyyy-MM-dd",Locale.US);
-            SimpleDateFormat whatsNewDayFormat=new SimpleDateFormat("EEE",Locale.US);
-            SimpleDateFormat whatsNewWeekdayFormat=new SimpleDateFormat("EEEE",Locale.US);
-            Date whatsNewToday=whatsNewDateFormat.parse(whatsNewDateFormat.format(new Date()));
-            for (int i=0;i<a.length();i++){ org.json.JSONObject o=a.getJSONObject(i); String pkg=o.getString("pkg"); if (!installed(pkg) || o.optString("img").isEmpty()) continue;
-                int dd=o.optInt("dd"); String when; Date itemDate=null;
-                try { itemDate = whatsNewDateFormat.parse(o.getString("date")); long diff = Math.round((itemDate.getTime() - whatsNewToday.getTime())/86400000.0);
-                    when = diff==0?"New today":diff==1?"Coming tomorrow":diff==-1?"Added yesterday":diff<0?"Added "+whatsNewDayFormat.format(itemDate):"Coming "+whatsNewWeekdayFormat.format(itemDate); } catch (Exception e){ when="New"; }
-                String ep = o.optInt("season")>0 ? "  \u00B7  S"+o.optInt("season")+(o.optInt("num")>0?" E"+o.optInt("num"):"") : "";
-                String sum = firstSentence(o.optString("summary"));
-                Intent li = pm.getLeanbackLaunchIntentForPackage(pkg); if (li==null) li = pm.getLaunchIntentForPackage(pkg);
-                long avail=0; if (itemDate!=null && itemDate.getTime()>System.currentTimeMillis()) avail=itemDate.getTime();
-                nl.add(new Object[]{pkg, o.getString("show"), when+" on "+o.optString("net")+ep+"\n"+sum, o.getString("img"), li, "NEW", avail});
-            }
-        } catch (Exception e){ android.util.Log.w("ShieldHome","whatsnew parse "+e); }
-        // v9: one hero, Featured + What's New randomly mixed in the same rotation
-        List<Object[]> mix = new ArrayList<>(); for (Object[] o: heroItems) if (o.length>5 && "FEATURED".equals(o[5])) mix.add(o);
-        int nf = mix.size(); Collections.shuffle(nl); for (int i=0;i<Math.min(8,nl.size());i++) mix.add(nl.get(i));
-        android.util.Log.i("ShieldHome","hero mix featured="+nf+" new="+(mix.size()-nf));
-        if (mix.size()!=nf){
-            Collections.shuffle(mix);
-            synchronized(heroLock){ h.removeCallbacks(heroRotate); heroItems.clear(); heroItems.addAll(mix); heroIdx=0; }
-            showHero(); h.postDelayed(heroRotate, HERO_ROTATE_MS);
-        }
-    }
+    void useWhatsNew(String js){ hero.useWhatsNew(js); }
 
     PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false, heroCtaOn; View heroG, heroFocus, inAppDim; HeroDots heroDots;
     float dimFill; android.animation.ValueAnimator dimFillAnim;
-    int dimPct(){ return Math.max(0, Math.min(90, prefs().getInt("dim_pct",0))); }
-    void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); }
-    void syncDimFill(boolean anim){
-        float to=dimPct()/100f;
-        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); if (dimBar!=null) dimBar.invalidate(); return; }
-        if (dimFillAnim!=null) dimFillAnim.cancel();
-        dimFillAnim=android.animation.ValueAnimator.ofFloat(dimFill, to); dimFillAnim.setDuration(200);
-        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); if (dimBar!=null) dimBar.invalidate(); });
-        dimFillAnim.start();
-    }
-    void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); }
-    void hideSearch(boolean hide){
-        if (searchV==null) return;
-        android.view.animation.Interpolator ease=new android.view.animation.DecelerateInterpolator();
-        if (hide){
-            if (searchTyping){ searchTyping=false; hideKb(); if (searchField!=null){ searchField.setVisibility(View.GONE); searchField.setText(""); } }
-            searchOpen=false;
-            if (speakV!=null){ speakV.animate().cancel(); typeV.animate().cancel(); speakV.setFocusable(false); typeV.setFocusable(false); }
-            if (searchSplit!=null) searchSplit.setVisibility(View.GONE);
-            searchV.setFocusable(false);
-            searchV.animate().alpha(0f).setDuration(180).setInterpolator(ease).withEndAction(()->{ if (dimSlide) searchV.setVisibility(View.INVISIBLE); }).start();
-        } else {
-            searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen);
-            searchV.animate().alpha(1f).setDuration(180).setInterpolator(ease).start();
-        }
-    }
-    void popDimBar(boolean on){
-        if (dimBar==null) return;
-        android.view.animation.Interpolator ease=new android.view.animation.DecelerateInterpolator();
-        dimBar.animate().cancel();
-        if (on){
-            dimBar.setVisibility(View.VISIBLE);
-            dimBar.setAlpha(0f); dimBar.setScaleX(0.88f); dimBar.setScaleY(0.88f);
-            dimBar.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(180).setInterpolator(ease).start();
-        } else {
-            dimBar.animate().alpha(0f).scaleX(0.88f).scaleY(0.88f).setDuration(140).setInterpolator(ease).withEndAction(()->{ if (!dimSlide) dimBar.setVisibility(View.GONE); }).start();
-        }
-    }
-    void openDimSlide(){
-        if (dimSlide || gear==null) return;
-        dimSlide=true; dimSlideIgnore=true;
-        gear.setNextFocusLeftId(gear.getId()); gear.setNextFocusRightId(gear.getId());
-        hideSearch(true);
-        popDimBar(true);
-        gear.requestFocus();
-    }
-    void closeDimSlide(){
-        if (!dimSlide) return;
-        dimSlide=false; dimSlideIgnore=false;
-        gear.setNextFocusLeftId(View.NO_ID); gear.setNextFocusRightId(View.NO_ID);
-        popDimBar(false);
-        hideSearch(false);
-    }
-    void applyDim(){
-        int pct = dimPct(); syncDimFill(true);
-        boolean overlay = android.provider.Settings.canDrawOverlays(this);
-        Intent si = new Intent(this, DimService.class).putExtra("pct", pct);
-        try { if (overlay){ if (pct>0) startForegroundService(si); else stopService(si); } } catch (Exception e){ android.util.Log.w("ShieldHome","dimsvc "+e); overlay=false; }
-        if (inAppDim==null){ inAppDim = new View(this); inAppDim.setBackgroundColor(Color.BLACK); inAppDim.setClickable(false); inAppDim.setFocusable(false); root.addView(inAppDim, new FrameLayout.LayoutParams(-1,-1)); inAppDim.setTranslationZ(p(60)); }
-        inAppDim.setAlpha(overlay?0f:pct/100f); inAppDim.setVisibility(!overlay && pct>0 ? View.VISIBLE : View.GONE);
-        android.util.Log.i("ShieldHome","dim pct="+pct+" overlay="+overlay);
-    }
+    int dimPct(){ return searchDim.dimPct(); }
+    void setDimPct(int pct){ searchDim.setDimPct(pct); }
+    void syncDimFill(boolean anim){ searchDim.syncDimFill(anim); }
+    void dimSlideBy(int dir){ searchDim.dimSlideBy(dir); }
+    void hideSearch(boolean hide){ searchDim.hideSearch(hide); }
+    void popDimBar(boolean on){ searchDim.popDimBar(on); }
+    void openDimSlide(){ searchDim.openDimSlide(); }
+    void closeDimSlide(){ searchDim.closeDimSlide(); }
+    void applyDim(){ searchDim.applyDim(); }
     final Runnable wxRun = this::weatherTick;
     void weatherTick(){
         h.removeCallbacks(wxRun);
