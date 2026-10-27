@@ -163,6 +163,17 @@ class TvData {
             pick.addAll(l.subList(0, shown[g]));
         }
         android.util.Log.i("ShieldHome", "playnext other=" + shown[0] + "/" + other.size() + " ytNew=" + shown[1] + "/" + ytNew.size() + " ytResume=" + shown[2] + "/" + ytResume.size() + " wnRows=" + rows.size() + " ytTypes=" + ytTypes + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType);
+        return mixOrder(pick, a.wnPickCache);
+    }
+    /** Random order, but keeps the previous order when the same items (by intent) are picked again, so tiles don't jump on reloads. */
+    static List<Object[]> mixOrder(List<Object[]> pick, List<Object[]> prev) {
+        Map<String, Integer> at = new HashMap<>();
+        if (prev != null) for (Object[] o : prev) at.put(uriOf(o[3]), at.size());
+        boolean same = prev != null && prev.size() == pick.size() && at.size() == pick.size();
+        for (Object[] o : pick) same &= at.containsKey(uriOf(o[3]));
+        if (same) Collections.sort(pick, (x, y) -> at.get(uriOf(x[3])) - at.get(uriOf(y[3])));
+        else Collections.shuffle(pick);
+        android.util.Log.i("ShieldHome", "playnext order=" + (same ? "kept" : "shuffled"));
         return pick;
     }
     /** True (and marks seen) when pkg|title and intent uri are not in the featured card or already in Play Next. */
