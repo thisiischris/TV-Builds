@@ -204,10 +204,7 @@ public class MainActivity extends Activity {
         hero.addView(heroBtn, lp(p(138), p(41), Gravity.TOP|Gravity.START, p(35), p(253), 0, 0));
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
-        heroBtn.setOnFocusChangeListener((x,f)->{
-            heroTitle.setTextColor(f?Color.WHITE:Color.rgb(220,220,230));
-            showHeroAction(f);
-        });
+        heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
         root.addView(hero, 0, lp(-1, p(360), Gravity.TOP, 0,0,0,0));
 
         tabBar = new SegBar(); tabPlay=tabBar.play; tabLive=tabBar.live;
@@ -245,7 +242,7 @@ public class MainActivity extends Activity {
         void setOn(boolean o){ on=o; invalidate(); }
         @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); setElevation(f?p(4):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
-            float w=getWidth(), hh=getHeight(), r=hh/2;
+            float w=getWidth(), hh=getHeight(), r=this==heroBtn?p(8):hh/2;
             boolean lit = on || (icon==2 && isFocused());
             pt.setStyle(Paint.Style.FILL);
             boolean fo = isFocused();
@@ -298,7 +295,7 @@ public class MainActivity extends Activity {
     }
 
     class SegBar extends LinearLayout {
-        TextView play, live; float hx, hw, hs=1.04f; android.animation.ValueAnimator ha, pa;
+        TextView play, live; float hx, hw, hs=1f; android.animation.ValueAnimator ha, pa;
         SegBar(){
             super(MainActivity.this);
             setOrientation(HORIZONTAL); setGravity(Gravity.CENTER_VERTICAL);
@@ -308,8 +305,8 @@ public class MainActivity extends Activity {
             play.setLayoutParams(new LinearLayout.LayoutParams(sw,-1));
             live.setLayoutParams(new LinearLayout.LayoutParams(sw,-1));
             addView(play); addView(live);
-            play.setOnFocusChangeListener((v,f)->{ if(f) pick(0); });
-            live.setOnFocusChangeListener((v,f)->{ if(f) pick(1); });
+            play.setOnFocusChangeListener((v,f)-> tabFocus(0,f));
+            live.setOnFocusChangeListener((v,f)-> tabFocus(1,f));
             play.setId(View.generateViewId()); live.setId(View.generateViewId());
             play.setNextFocusRightId(live.getId()); live.setNextFocusLeftId(play.getId());
             play.setNextFocusDownId(View.NO_ID); live.setNextFocusDownId(View.NO_ID);
@@ -321,19 +318,25 @@ public class MainActivity extends Activity {
             t.setPadding(0,0,0,0); t.setSingleLine(true);
             return t;
         }
+        void tabFocus(int t, boolean f){
+            if (f){ pick(t); lift(true); }
+            else post(()->{ if (!play.isFocused() && !live.isFocused()) lift(false); });
+        }
         void pick(int t){
             boolean ch=t!=tab;
             if (ch){ tab=t; refreshCards(); resetCardRow(); }
             slide(hw>0); color();
-            if (ch && hw>0) pop();
         }
         void color(){
             int d=Color.rgb(22,22,30), l=Color.rgb(232,232,240);
             play.setTextColor(tab==0?d:l); live.setTextColor(tab==1?d:l);
         }
-        void pop(){
+        void lift(boolean on){
+            float to=on?1.06f:1f;
+            if (on && hs>1.02f) return;
+            if (Math.abs(hs-to)<0.005f) return;
             if (pa!=null) pa.cancel();
-            pa=android.animation.ValueAnimator.ofFloat(1f,1.08f,1.04f); pa.setDuration(220);
+            pa=android.animation.ValueAnimator.ofFloat(hs, to); pa.setDuration(220);
             pa.setInterpolator(new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f));
             pa.addUpdateListener(a->{ hs=(Float)a.getAnimatedValue(); invalidate(); });
             pa.start();
@@ -1282,6 +1285,7 @@ public class MainActivity extends Activity {
     int loadLive(){
         if (liveCache!=null && !liveCache.isEmpty()){ showLiveCache(); fillPlutoNow(plutoCaps); return liveCache.size(); }
         liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
+        if (installed("com.google.android.tvlauncher")) putLive(freeplayLiveTile(), null);
         if (installed("tv.pluto.android")){
             LinkedHashMap<String,String> names=liveSlugNames();
             for (String slug: LIVE_SLUGS){
@@ -1385,6 +1389,27 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e){}
         return null;
+    }
+    String freeplayNowArt(){
+        try (Cursor c=getContentResolver().query(TvContract.Channels.CONTENT_URI, null, null, null, null)){
+            while (c!=null && c.moveToNext()){
+                int pi=c.getColumnIndex("package_name"); String pkg=pi>=0&&!c.isNull(pi)?c.getString(pi):null;
+                if (pkg==null || !(pkg.contains("tvlauncher")||pkg.equals("com.google.android.tv"))) continue;
+                int i=c.getColumnIndex("_id"); if (i<0) continue;
+                String art=tifNowArt(c.getLong(i)); if (art!=null) return art;
+            }
+        } catch (Exception e){}
+        return null;
+    }
+    void playFreeplay(){ try { Intent b=new Intent("com.google.android.tvlauncher.action.VIEW", Uri.parse("tv://freeplay")); b.setComponent(new android.content.ComponentName("com.google.android.tvlauncher","com.google.android.tvlauncher.TvContentIntentReceiver")); b.addFlags(Intent.FLAG_RECEIVER_FOREGROUND); sendBroadcast(b); android.util.Log.i("ShieldHome","freeplay broadcast sent"); } catch(Exception e){ android.util.Log.w("ShieldHome","freeplay "+e); } }
+    View freeplayLiveTile(){
+        String art=freeplayNowArt();
+        Drawable ic=null; if (art==null) try { android.content.res.Resources r=pm.getResourcesForApplication("com.google.android.tvlauncher"); int id=r.getIdentifier("freeplay_icon","drawable","com.google.android.tvlauncher"); if (id!=0) ic=r.getDrawable(id,null); } catch(Exception e){}
+        View v=card(ic, art, art==null, null, "Google TV Freeplay \u00B7 Live", -1, this::playFreeplay);
+        TextView tg=text("LIVE", 7, Color.WHITE, "sans-serif-medium"); tg.setLetterSpacing(.08f); tg.setPadding(p(5),p(2),p(5),p(2)); GradientDrawable gb=new GradientDrawable(); gb.setCornerRadius(p(3)); gb.setColor(Color.rgb(200,30,40)); tg.setBackground(gb);
+        ((GlowFrame)v).inner.addView(tg, lp(-2,-2,Gravity.TOP|Gravity.START,p(7),p(7),0,0));
+        if (art!=null){ TextView ov=chName("Freeplay"); ((GlowFrame)v).inner.addView(ov, lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0)); }
+        return v;
     }
     boolean installed(String p){ try { pm.getApplicationInfo(p,0); return true; } catch(Exception e){ return false; } }
     void launchPkg(String pkg){ Intent i = pm.getLeanbackLaunchIntentForPackage(pkg); if (i==null) i = pm.getLaunchIntentForPackage(pkg); if (i!=null) startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
