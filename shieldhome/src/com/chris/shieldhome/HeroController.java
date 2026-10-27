@@ -14,7 +14,6 @@ class HeroController {
     boolean heroFront=true;
     HeroController(MainActivity a) { this.a=a; }
     final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(a.heroLock){ if (a.heroItems.size()>1) a.heroIdx=(a.heroIdx+1)%a.heroItems.size(); else { a.h.postDelayed(this, a.HERO_ROTATE_MS); return; } } showHero(); a.h.postDelayed(this, a.HERO_ROTATE_MS); } };
-    void loadHero(){ applyFeaturedCache(); }
     void applyFeaturedCache(){
         List<Object[]> feat=a.featuredCache;
         if (feat==null) return;
