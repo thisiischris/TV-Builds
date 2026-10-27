@@ -56,8 +56,7 @@ class TvData {
             while (c != null && c.moveToNext()) {
                 String pkg = s(c, "package_name");
                 if (pkg == null || !VIDEO_APPS.contains(pkg)) continue;
-                String art = s(c, "thumbnail_uri");
-                if (art == null) art = s(c, "poster_art_uri");
+                String art = landArt(s(c, "thumbnail_uri"), s(c, "poster_art_uri"));
                 if (art == null) continue;
                 Intent in;
                 try {
@@ -210,8 +209,7 @@ class TvData {
 
     Object[] prog(Cursor c, boolean watchNext) {
         String pkg = s(c, "package_name"), title = s(c, "title");
-        String thumb = s(c, "thumbnail_uri");
-        if (thumb == null) thumb = s(c, "poster_art_uri");
+        String thumb = landArt(s(c, "thumbnail_uri"), s(c, "poster_art_uri"));
         Intent in;
         try {
             in = Intent.parseUri(s(c, "intent_uri"), Intent.URI_INTENT_SCHEME);
@@ -241,6 +239,7 @@ class TvData {
         t = t.replaceAll("(?i)\\s*[\\-\u00B7:|]?\\s*continue watching\\s*[\\-\u00B7:|]?\\s*", " ").trim();
         return t.isEmpty() ? null : t;
     }
+    static String landArt(String thumb, String poster){ return thumb!=null?thumb:poster; }
     static String s(Cursor c, String col) { int i = c.getColumnIndex(col); return i < 0 || c.isNull(i) ? null : c.getString(i); }
     static long l(Cursor c, String col) { int i = c.getColumnIndex(col); return i < 0 || c.isNull(i) ? 0 : c.getLong(i); }
 }

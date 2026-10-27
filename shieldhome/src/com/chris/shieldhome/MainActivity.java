@@ -88,6 +88,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent i){ super.onNewIntent(i); focus.restoreNow(); }
     boolean editLp=false;
     @Override public boolean dispatchKeyEvent(KeyEvent e){
+        if (appMenu!=null) return menuKey(e);
         // v17: in edit mode a long-press on a home row tile does nothing (no drag, no click on release)
         if (editMode && dragIdx<0 && homeGrid!=null && (e.getKeyCode()==KeyEvent.KEYCODE_DPAD_CENTER||e.getKeyCode()==KeyEvent.KEYCODE_ENTER||e.getKeyCode()==KeyEvent.KEYCODE_NUMPAD_ENTER)){
             View f=getCurrentFocus();
@@ -167,45 +168,44 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
         place(qsPanel, 73, 17, 290, 28); qsLabels();
 
-        // Hero: full-bleed top half, under the top bar (inserted at index 0)
+        // Hero: full-screen backdrop under everything
         FrameLayout hero = new FrameLayout(this);
         FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
         ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        View botFade = new View(this);
-        botFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(140,8,8,16), Color.rgb(8,8,16)}));
-        artHost.addView(botFade, lp(-1, p(96), Gravity.BOTTOM, 0,0,0,0));
         hero.addView(artHost, new FrameLayout.LayoutParams(-1,-1));
+        View botFade = new View(this);
+        botFade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(204,8,8,16)}));
+        hero.addView(botFade, lp(-1, p(346), Gravity.BOTTOM, 0,0,0,0));
         View topScrim = new View(this);
-        topScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.argb(170,0,0,0), Color.argb(70,0,0,0), Color.TRANSPARENT}));
-        hero.addView(topScrim, lp(-1, p(80), Gravity.TOP, 0,0,0,0));
-        View textScrim = new View(this);
-        textScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.BL_TR, new int[]{Color.argb(200,0,0,0), Color.argb(90,0,0,0), Color.TRANSPARENT}));
-        hero.addView(textScrim, lp(p(640), p(190), Gravity.BOTTOM|Gravity.START, 0,0,0,0));
+        topScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.argb(140,0,0,0), Color.TRANSPARENT}));
+        hero.addView(topScrim, lp(-1, p(72), Gravity.TOP, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroLabel = text("FEATURED", 8, Color.rgb(190,188,205), "sans-serif-medium");
         heroArt = art;
-        heroTitle = text("Your Library", 31, Color.rgb(220,220,230), "sans-serif-medium"); heroTitle.setSingleLine(); heroTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        heroSub = text("Movies and shows from your\nPlex Media Server", 12, Color.rgb(190,188,205), "sans-serif"); heroSub.setLineSpacing(p(3),1f); heroSub.setMaxLines(2); heroSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        heroTitle = text("Your Library", 23, Color.rgb(220,220,230), "sans-serif-medium"); heroTitle.setSingleLine(); heroTitle.setEllipsize(null);
+        heroTitle.setAutoSizeTextTypeUniformWithConfiguration(p(16), p(23), 1, TypedValue.COMPLEX_UNIT_PX);
+        heroSub = text("Movies and shows from your\nPlex Media Server", 11, Color.rgb(190,188,205), "sans-serif"); heroSub.setLineSpacing(p(3),1f); heroSub.setMaxLines(2); heroSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
         heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(0f);
         for (TextView tv: new TextView[]{heroLabel, heroTitle, heroSub}) tv.setShadowLayer(p(6), 0, p(2), Color.argb(180,0,0,0));
         meta.addView(heroLabel, new LinearLayout.LayoutParams(-2,-2));
-        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(p(440),-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
+        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(p(500),-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
         LinearLayout.LayoutParams mf = new LinearLayout.LayoutParams(p(40), Math.max(2,p(1.4f))); mf.topMargin=p(6); meta.addView(heroFocus, mf);
-        LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(p(400),-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
-        LinearLayout.LayoutParams mb = new LinearLayout.LayoutParams(p(70),p(18)); mb.topMargin=p(10); meta.addView(heroBadge, mb);
-        hero.addView(meta, lp(p(500),-2,Gravity.BOTTOM|Gravity.START,p(35),0,0,p(18)));
+        LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(p(460),-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
+        LinearLayout.LayoutParams mb = new LinearLayout.LayoutParams(p(56),p(15)); mb.topMargin=p(10); meta.addView(heroBadge, mb);
+        hero.addView(meta, lp(p(520),-2,Gravity.TOP|Gravity.START,p(35),p(148),0,0));
         heroG = hero; hero.setFocusable(true); hero.setClickable(true);
         hero.setOnFocusChangeListener((x,f)->{
             heroTitle.setTextColor(f?Color.WHITE:Color.rgb(220,220,230));
             heroTitle.setShadowLayer(f?p(10):p(6), 0, p(2), Color.argb(f?210:180,0,0,0));
             heroFocus.animate().alpha(f?1f:0f).setDuration(180).start();
+            fadeHeroDots(f);
         });
         hero.setOnClickListener(x->{ Object[] o=heroOnScreen; if (o==null) synchronized(heroLock){ o=heroItems.isEmpty()?null:heroItems.get(heroIdx); } if (o==null) launchPkg(installed("com.plexapp.android")?"com.plexapp.android":PLAY_PKGS[0]); else { try { startActivity(((Intent)o[4]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch(Exception e){ launchPkg((String)o[0]); } } });
-        root.addView(hero, 0, lp(-1, p(288), Gravity.TOP, 0,0,0,0));
+        root.addView(hero, 0, new FrameLayout.LayoutParams(-1,-1));
 
         // Tabs
         tabPlay = new PillView(this, "Play Next", 0, true); tabLive = new PillView(this, "Live TV", 1, false);
@@ -475,7 +475,7 @@ public class MainActivity extends Activity {
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).commit(); }
     GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(147); gl.height=p(81); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
     int rowH(){ return p(93); }
-    View[] slideViews(){ return new View[]{clk, gear, searchV, qsPanel, heroG, tabPlay, tabLive, cardWrap, homeGrid}; }
+    View[] slideViews(){ return new View[]{clk, gear, searchV, qsPanel, tabPlay, tabLive, cardWrap, homeGrid}; }
     void setDrawer(boolean on){ drawerOpen=on; slideHome(); }
     void fadeChrome(boolean hide){
         float a=hide?0f:1f;
@@ -500,13 +500,14 @@ public class MainActivity extends Activity {
         android.view.animation.Interpolator ip=new android.view.animation.DecelerateInterpolator();
         fadeChrome(drawerOpen);
         if (drawerOpen){
-            for (View v: new View[]{heroG, tabPlay, tabLive, cardWrap, homeGrid}) if (v!=null) v.bringToFront();
+            for (View v: new View[]{tabPlay, tabLive, cardWrap, homeGrid}) if (v!=null) v.bringToFront();
         } else {
             if (clk!=null) clk.bringToFront();
             if (gear!=null) gear.bringToFront();
             if (searchV!=null) searchV.bringToFront();
             if (qsPanel!=null && qsOpen) qsPanel.bringToFront();
         }
+        if (editMode) stackEditDim();
         for (View v: slideViews()){
             if (v==null) continue;
             android.view.ViewPropertyAnimator an=v.animate().translationY(y).setDuration(250).setInterpolator(ip);
@@ -660,10 +661,14 @@ public class MainActivity extends Activity {
         int at=homeGrid==null?-1:root.indexOfChild(homeGrid);
         root.addView(dimV, at<0?0:at, new FrameLayout.LayoutParams(-1,-1));
     }
+    void stackEditDim(){
+        if (dimV!=null) dimV.bringToFront();
+        if (homeGrid!=null) homeGrid.bringToFront();
+    }
     void setEditDim(boolean on){
         ensureDim(); if (dimV==null) return;
         dimV.animate().cancel();
-        if (on){ dimV.setVisibility(View.VISIBLE); dimV.animate().alpha(1f).setDuration(160).setInterpolator(dragIp).start(); }
+        if (on){ stackEditDim(); dimV.setVisibility(View.VISIBLE); dimV.animate().alpha(1f).setDuration(160).setInterpolator(dragIp).start(); }
         else dimV.animate().alpha(0f).setDuration(140).setInterpolator(dragIp).withEndAction(()->dimV.setVisibility(View.INVISIBLE)).start();
     }
     void fadeRemove(final GridLayout g, final String pkg, final Runnable after){
@@ -696,6 +701,7 @@ public class MainActivity extends Activity {
         String[] labs={"Edit Home Screen","Force Stop","Uninstall","App Info"};
         boolean sys=systemApp(a[0]);
         View first=null;
+        java.util.ArrayList<View> rows=new java.util.ArrayList<>();
         for (int n=0;n<labs.length;n++){
             final int id=n;
             boolean off=id==2 && sys;
@@ -720,7 +726,13 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(p(200), p(36));
             if (n==0) rp.topMargin=p(4);
             p.addView(row, rp);
-            if (first==null && !off) first=row;
+            if (!off){ row.setId(View.generateViewId()); rows.add(row); if (first==null) first=row; }
+        }
+        for (int i=0;i<rows.size();i++){
+            View r=rows.get(i);
+            r.setNextFocusLeftId(r.getId()); r.setNextFocusRightId(r.getId());
+            r.setNextFocusUpId(i==0?r.getId():rows.get(i-1).getId());
+            r.setNextFocusDownId(i==rows.size()-1?r.getId():rows.get(i+1).getId());
         }
         p.measure(0,0);
         int mw=p.getMeasuredWidth(), mh=p.getMeasuredHeight();
@@ -735,9 +747,47 @@ public class MainActivity extends Activity {
         lp.leftMargin=x; lp.topMargin=y;
         p.setAlpha(0f); p.setScaleX(0.94f); p.setScaleY(0.94f);
         appMenu=p; root.addView(p, lp);
+        lockBehind(true);
         p.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(120).start();
         final View f0=first;
-        h.post(()->{ if (f0!=null) f0.requestFocus(); });
+        h.post(()->{ if (appMenu!=null && f0!=null) f0.requestFocus(); });
+    }
+    boolean menuKey(KeyEvent e){
+        int k=e.getKeyCode();
+        if (k==KeyEvent.KEYCODE_BACK){ if (e.getAction()==KeyEvent.ACTION_DOWN) closeMenu(); return true; }
+        if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT) return true;
+        if (k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN){
+            if (e.getAction()==KeyEvent.ACTION_DOWN) menuMove(k==KeyEvent.KEYCODE_DPAD_DOWN);
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
+    }
+    void menuMove(boolean down){
+        if (appMenu==null) return;
+        java.util.ArrayList<View> items=new java.util.ArrayList<>();
+        for (int i=0;i<appMenu.getChildCount();i++){ View c=appMenu.getChildAt(i); if (c.isFocusable()) items.add(c); }
+        if (items.isEmpty()) return;
+        View f=getCurrentFocus(); int ix=items.indexOf(f);
+        if (ix<0){ items.get(0).requestFocus(); return; }
+        int n=ix+(down?1:-1);
+        if (n>=0 && n<items.size()) items.get(n).requestFocus();
+    }
+    void lockBehind(boolean on){
+        if (root==null) return;
+        for (int i=0;i<root.getChildCount();i++){
+            View c=root.getChildAt(i);
+            if (c==appMenu) continue;
+            if (c instanceof ViewGroup){
+                ((ViewGroup)c).setDescendantFocusability(on?ViewGroup.FOCUS_BLOCK_DESCENDANTS:ViewGroup.FOCUS_AFTER_DESCENDANTS);
+                if (c==heroG) c.setFocusable(!on);
+            }
+            else if (c instanceof PillView){
+                if (on) c.setFocusable(false);
+                else if (c==gear) c.setFocusable(!drawerOpen);
+                else if (c==searchV) c.setFocusable(!drawerOpen && !qsOpen);
+                else c.setFocusable(true);
+            }
+        }
     }
     void menuAct(int id, String[] a, int idx){
         if (id==0){ enterEdit(idx); return; }
@@ -748,6 +798,7 @@ public class MainActivity extends Activity {
     void closeMenu(){ closeMenu(true); }
     void closeMenu(boolean back){
         if (appMenu==null) return;
+        lockBehind(false);
         root.removeView(appMenu); appMenu=null;
         if (back && focus!=null) focus.restore();
     }
@@ -755,7 +806,7 @@ public class MainActivity extends Activity {
     // ---------- Featured hero ----------
     ImageView heroArt, heroBadge; TextView heroTitle, heroSub; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0; LinearLayout heroDots;
     final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, 16000); return; } } showHero(); h.postDelayed(this, 16000); } };
-    ImageView heroArt2; boolean heroFront=true; android.animation.ObjectAnimator kb;
+    ImageView heroArt2; boolean heroFront=true;
     void loadHero(){ applyFeaturedCache(); }
     void applyFeaturedCache(){
         List<Object[]> feat=featuredCache;
@@ -773,28 +824,6 @@ public class MainActivity extends Activity {
         for (Object[] o: l) b.append(o[0]).append('|').append(o[1]).append('|').append(o[3]).append(',');
         return b.toString();
     }
-    // v14: focal point (fractions of the bitmap). Face detection on a downscaled copy, else top-weighted (x centre, y 30%).
-    float[] focal(Bitmap bm){
-        float[] f = {0.5f, 0.3f};
-        try { int w=320, hh=Math.max(2, Math.round(320f*bm.getHeight()/bm.getWidth())); if (hh%2==1) hh++;
-            Bitmap sm = Bitmap.createScaledBitmap(bm, w, hh, true).copy(Bitmap.Config.RGB_565, false);
-            android.media.FaceDetector.Face[] fs = new android.media.FaceDetector.Face[4];
-            int n = new android.media.FaceDetector(w, hh, 4).findFaces(sm, fs); float best=0; PointF pt=new PointF();
-            for (int i=0;i<n;i++){ if (fs[i]==null || fs[i].confidence()<0.4f) continue; float d=fs[i].eyesDistance(); if (d>best){ best=d; fs[i].getMidPoint(pt); f[0]=pt.x/w; f[1]=Math.min(1f,(pt.y+d*0.4f)/hh); } }
-            android.util.Log.i("ShieldHome","focal faces="+n+" f="+f[0]+","+f[1]);
-        } catch (Throwable t){ android.util.Log.w("ShieldHome","focal "+t); }
-        return f;
-    }
-    void focalCrop(ImageView iv, Bitmap bm, float[] f){
-        int vw = iv.getWidth()>0?iv.getWidth():p(1024), vh = iv.getHeight()>0?iv.getHeight():p(288); float bw=bm.getWidth(), bh=bm.getHeight();
-        float sc = Math.max(vw/bw, vh/bh); float sw=bw*sc, sh=bh*sc;
-        boolean face = !(f[0]==0.5f && f[1]==0.3f);
-        float tx = face ? vw*0.6f - f[0]*sw : (vw-sw)/2f; tx = Math.max(vw-sw, Math.min(0, tx));
-        float ty = face ? vh*0.42f - f[1]*sh : -(sh-vh)*f[1]; ty = Math.max(vh-sh, Math.min(0, ty));
-        Matrix m = new Matrix(); m.setScale(sc, sc); m.postTranslate(tx, ty);
-        iv.setScaleType(ImageView.ScaleType.MATRIX); iv.setImageMatrix(m);
-        iv.setPivotX(Math.max(0, Math.min(vw, f[0]*sw+tx))); iv.setPivotY(Math.max(0, Math.min(vh, f[1]*sh+ty)));
-    }
     void heroStep(boolean next){
         synchronized(heroLock){
             int n=heroItems.size();
@@ -810,12 +839,13 @@ public class MainActivity extends Activity {
         int n, ix;
         synchronized(heroLock){ n=heroItems.size(); ix=heroIdx; }
         if (heroDots==null){
-            heroDots=new LinearLayout(this); heroDots.setGravity(Gravity.CENTER);
-            ((ViewGroup)heroG).addView(heroDots, lp(-2,-2,Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0,0,p(12)));
+            heroDots=new LinearLayout(this); heroDots.setGravity(Gravity.CENTER); heroDots.setAlpha(0f);
+            ((ViewGroup)heroG).addView(heroDots, lp(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL,0,p(268),0,0));
         }
         heroDots.removeAllViews();
         if (n<=1){ heroDots.setVisibility(View.GONE); return; }
-        heroDots.setVisibility(View.VISIBLE);
+        heroDots.setVisibility(heroG!=null && heroG.hasFocus()?View.VISIBLE:View.INVISIBLE);
+        if (heroG==null || !heroG.hasFocus()) heroDots.setAlpha(0f);
         for (int i=0;i<n;i++){
             View d=new View(this);
             GradientDrawable g=new GradientDrawable(); g.setShape(GradientDrawable.OVAL);
@@ -825,33 +855,34 @@ public class MainActivity extends Activity {
             dp.leftMargin=dp.rightMargin=p(3);
             heroDots.addView(d, dp);
         }
+        fadeHeroDots(heroG!=null && heroG.hasFocus());
+    }
+    void fadeHeroDots(boolean on){
+        if (heroDots==null) return;
+        boolean show=on && heroDots.getChildCount()>0;
+        if (show) heroDots.setVisibility(View.VISIBLE);
+        heroDots.animate().alpha(show?1f:0f).setDuration(180).withEndAction(()->{ if (!show && heroDots!=null) heroDots.setVisibility(View.INVISIBLE); }).start();
     }
     void showHero(){
         final Object[] o;
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
         bindHeroDots();
         final String uri = (String)o[3];
-        final int tw=p(1024), th=p(288), g=++heroLoadGen;
+        final int tw=root.getWidth()>0?root.getWidth():p(1024), th=root.getHeight()>0?root.getHeight():p(576), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap bm = uri==null||images==null?null:images.decode(uri, tw, th);
-            final float[] ff = bm==null? null : focal(bm);
-            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; heroFocal=ff; transitionHero(o, bm); });
+            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, bm); });
         });
     }
-    float[] heroFocal;
     void transitionHero(final Object[] o, Bitmap bm){
         if (heroLabel!=null) heroLabel.setText(o.length>5 && "NEW".equals(o[5]) ? "NEW" : "FEATURED");
         android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
         final ImageView in = heroFront ? heroArt2 : heroArt, out = heroFront ? heroArt : heroArt2;
         if (bm != null){
-            in.setImageBitmap(bm); focalCrop(in, bm, heroFocal==null?new float[]{0.5f,0.3f}:heroFocal); in.setScaleX(1f); in.setScaleY(1f); in.setAlpha(0f); in.bringToFront();
-            ViewGroup hp=(ViewGroup)in.getParent();
-            for (int i=0;i<hp.getChildCount();i++){ View ch=hp.getChildAt(i); if (!(ch instanceof ImageView)) ch.bringToFront(); }
+            in.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            in.setImageBitmap(bm); in.setScaleX(1f); in.setScaleY(1f); in.setAlpha(0f); in.bringToFront();
             in.animate().alpha(1f).setDuration(1600).setInterpolator(ease).start();
             out.animate().alpha(0f).setDuration(1600).setInterpolator(ease).start();
-            if (kb!=null) kb.cancel();
-            kb = android.animation.ObjectAnimator.ofPropertyValuesHolder(in, android.animation.PropertyValuesHolder.ofFloat("scaleX",1f,1.07f), android.animation.PropertyValuesHolder.ofFloat("scaleY",1f,1.07f));
-            kb.setDuration(17600); kb.setInterpolator(new android.view.animation.LinearInterpolator()); kb.start();
             heroFront = !heroFront;
         }
         final View[] texts = {heroTitle, heroSub, heroBadge};
