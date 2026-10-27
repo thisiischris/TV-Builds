@@ -126,8 +126,12 @@ public class MainActivity extends Activity {
     @Override public boolean onKeyLongPress(int k, KeyEvent e){ if (focus.keyLong(k,e)) return true; return super.onKeyLongPress(k,e); }
     @Override public boolean onKeyUp(int k, KeyEvent e){ if (focus.keyUp(k,e)) return true; return super.onKeyUp(k,e); }
     void openAssistant(){
-        Intent[] tries = { new Intent(Intent.ACTION_ASSIST).setPackage("com.google.android.katniss"), new Intent(Intent.ACTION_ASSIST), new Intent("android.speech.action.VOICE_SEARCH_HANDS_FREE"), new Intent("android.search.action.GLOBAL_SEARCH").setPackage("com.google.android.katniss"), new Intent(Intent.ACTION_SEARCH_LONG_PRESS), new Intent(Intent.ACTION_WEB_SEARCH) };
-        for (Intent i: tries){ try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Exception e) {} }
+        Intent[] tries = {
+            new Intent(Intent.ACTION_ASSIST).setPackage("com.google.android.katniss"),
+            new Intent("android.speech.action.WEB_SEARCH").setPackage("com.google.android.katniss"),
+            new Intent(Intent.ACTION_SEARCH_LONG_PRESS).setPackage("com.google.android.katniss")
+        };
+        for (Intent i: tries){ try { if (i.resolveActivity(pm)!=null){ startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } } catch (Exception e) {} }
     }
     boolean searchOpen, searchTyping;
     void expandSearch(){
@@ -159,11 +163,11 @@ public class MainActivity extends Activity {
     }
     void launchSearch(String q){
         Intent[] tries = {
-            new Intent(Intent.ACTION_WEB_SEARCH).setPackage("com.google.android.katniss").putExtra(android.app.SearchManager.QUERY, q),
-            new Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.katniss").putExtra(android.app.SearchManager.QUERY, q),
-            new Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, q)
+            new Intent("android.search.action.GLOBAL_SEARCH").setPackage("com.google.android.katniss").putExtra(android.app.SearchManager.QUERY, q),
+            new Intent("android.speech.action.WEB_SEARCH").setPackage("com.google.android.katniss").putExtra(android.app.SearchManager.QUERY, q),
+            new Intent(Intent.ACTION_VIEW, Uri.parse("https://assistant.google.com/search?q="+Uri.encode(q))).setPackage("com.google.android.katniss")
         };
-        for (Intent i: tries){ try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); closeSearchField(); return; } catch (Exception e) {} }
+        for (Intent i: tries){ try { if (i.resolveActivity(pm)!=null){ startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); closeSearchField(); return; } } catch (Exception e) {} }
     }
     void openSearchField(){
         if (searchTyping || dimSlide || searchField==null) return;
@@ -462,7 +466,7 @@ public class MainActivity extends Activity {
             play.setTextColor(tab==0?d:l); live.setTextColor(tab==1?d:l);
         }
         void lift(boolean on){
-            float to=on?1.06f:1f;
+            float to=on?1.12f:1f;
             if (on && hs>1.02f) return;
             if (Math.abs(hs-to)<0.005f) return;
             if (pa!=null) pa.cancel();
