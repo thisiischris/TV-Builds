@@ -43,7 +43,7 @@ class CardsController {
             v.setOnFocusChangeListener((x,f)->{ if (base!=null) base.onFocusChange(x,f); if (f) snapCardRow(x); });
         }
         a.cardRow.addView(v, lp);
-        if (v instanceof MainActivity.GlowFrame) ((MainActivity.GlowFrame)v).warm(a.p(184.4f), a.p(112));
+        if (v instanceof GlowFrame) ((GlowFrame)v).warm(a.p(184.4f), a.p(112));
     }
     void snapCardRow(View v){
         if (a.cardScroll==null) return;
@@ -62,8 +62,8 @@ class CardsController {
         int sx=a.cardScroll==null?0:a.cardScroll.getScrollX(), stride=a.p(184.4f)+a.p(8);
         for (int i=0;i<a.cardRow.getChildCount();i++){
             View c=a.cardRow.getChildAt(i); float a=tileAlpha(i,sx,stride,5);
-            if (c instanceof MainActivity.GlowFrame){
-                MainActivity.GlowFrame g=(MainActivity.GlowFrame)c; g.fade=a; g.setAlpha(1f); g.inner.setAlpha(a); g.syncHalo(); g.invalidate();
+            if (c instanceof GlowFrame){
+                GlowFrame g=(GlowFrame)c; g.fade=a; g.setAlpha(1f); g.inner.setAlpha(a); g.syncHalo(); g.invalidate();
                 if (a>0.01f){
                     View iv=g.inner.getChildAt(0);
                     if (iv instanceof ImageView){ Object tg=iv.getTag();
@@ -256,11 +256,11 @@ class CardsController {
         Map<String,Long> plutoIds=plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
         final Intent in=plutoIntent(slug); Long id=plutoId(plutoIds, nm, slug);
         View v=card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android"));
-        ImageView big=(ImageView)((MainActivity.GlowFrame)v).inner.getChildAt(0);
+        ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0);
         TextView ov=chName(nm);
-        ((MainActivity.GlowFrame)v).inner.addView(ov, a.lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0));
+        ((GlowFrame)v).inner.addView(ov, a.lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0));
         TextView cap=null;
-        for (int ci=0; ci<((MainActivity.GlowFrame)v).inner.getChildCount(); ci++){ View cv=((MainActivity.GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView && cv!=ov) cap=(TextView)cv; }
+        for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView && cv!=ov) cap=(TextView)cv; }
         String art=liveArt(nm, id), logo=plutoLogo.get(nm);
         if (art!=null && loadArt) setLiveArt(big, art, true, false);
         else if (logo!=null && loadArt) setLiveArt(big, logo, true, true);
@@ -337,8 +337,8 @@ class CardsController {
         Drawable ic=null; if (art==null) try { android.content.res.Resources r=a.pm.getResourcesForApplication("com.google.android.tvlauncher"); int id=r.getIdentifier("freeplay_icon","drawable","com.google.android.tvlauncher"); if (id!=0) ic=r.getDrawable(id,null); } catch(Exception e){}
         View v=card(ic, art, art==null, null, "Google TV Freeplay \u00B7 Live", -1, this::playFreeplay);
         TextView tg=a.text("LIVE", 7, Color.WHITE, "sans-serif-medium"); tg.setLetterSpacing(.08f); tg.setPadding(a.p(5),a.p(2),a.p(5),a.p(2)); GradientDrawable gb=new GradientDrawable(); gb.setCornerRadius(a.p(3)); gb.setColor(Color.rgb(200,30,40)); tg.setBackground(gb);
-        ((MainActivity.GlowFrame)v).inner.addView(tg, a.lp(-2,-2,Gravity.TOP|Gravity.START,a.p(7),a.p(7),0,0));
-        if (art!=null){ TextView ov=chName("Freeplay"); ((MainActivity.GlowFrame)v).inner.addView(ov, a.lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0)); }
+        ((GlowFrame)v).inner.addView(tg, a.lp(-2,-2,Gravity.TOP|Gravity.START,a.p(7),a.p(7),0,0));
+        if (art!=null){ TextView ov=chName("Freeplay"); ((GlowFrame)v).inner.addView(ov, a.lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0)); }
         return v;
     }
 }

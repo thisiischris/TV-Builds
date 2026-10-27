@@ -86,7 +86,7 @@ class TvData {
             if ("com.google.android.youtube.tv".equals(pkg)) continue; // YT recs live in Play Next only
             all.add(row);
         }
-        Collections.sort(all, (x, y) -> Long.compare(a.use((String) y[0]), a.use((String) x[0])));
+        Collections.sort(all, (x, y) -> Long.compare(a.grid.use((String) y[0]), a.grid.use((String) x[0])));
         Map<String, List<Object[]>> by = new LinkedHashMap<>();
         for (Object[] o : all) {
             String k = (String) o[0];

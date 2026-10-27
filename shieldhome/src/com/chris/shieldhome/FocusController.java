@@ -76,7 +76,7 @@ class FocusController {
     void restoreNow() {
         if (savedSec < 0) return;
         if (a.appMenu != null || a.editMode) return;
-        if (savedSec >= 5) a.setDrawer(true);
+        if (savedSec >= 5) a.grid.setDrawer(true);
         restore();
     }
 
@@ -91,7 +91,7 @@ class FocusController {
         int sec = f == null ? -1 : secOf(f);
         if (sec < 0) return false;
         if (e.getAction() != KeyEvent.ACTION_DOWN) return false; // ponytail: let ACTION_UP through
-        if (sec == 1 && hz) { a.heroStep(k == KeyEvent.KEYCODE_DPAD_RIGHT); return true; }
+        if (sec == 1 && hz) { a.hero.heroStep(k == KeyEvent.KEYCODE_DPAD_RIGHT); return true; }
         if (k == KeyEvent.KEYCODE_DPAD_DOWN && sec >= 4 && sec == nSecs() - 1)
             return true;
         View t;
@@ -108,8 +108,8 @@ class FocusController {
             t.requestFocus();
             if (t.getParent() == a.homeGrid){
                 int i = a.homeGrid.indexOfChild(t);
-                if (a.drawerOpen && i < 6) a.setDrawer(false);
-                else a.slideHome();
+                if (a.drawerOpen && i < 6) a.grid.setDrawer(false);
+                else a.grid.slideHome();
             }
             android.util.Log.i("ShieldHome", "nav " + name(f) + " -> " + name(t));
         }
@@ -118,11 +118,11 @@ class FocusController {
 
     /** Overlays close themselves. Returns true if consumed (not the home short/long path). */
     boolean closeOverlay() {
-        if (a.appMenu != null) { a.closeMenu(); return true; }
+        if (a.appMenu != null) { a.grid.closeMenu(); return true; }
         if (a.searchTyping) { a.closeSearchField(); if (a.searchV!=null) a.searchV.requestFocus(); return true; }
         if (a.dimSlide) { a.closeDimSlide(); return true; }
-        if (a.editMode || a.dragIdx >= 0) { a.exitEdit(); return true; }
-        if (a.drawerOpen) { a.setDrawer(false); a.focusHomeApp(); return true; }
+        if (a.editMode || a.dragIdx >= 0) { a.grid.exitEdit(); return true; }
+        if (a.drawerOpen) { a.grid.setDrawer(false); focusHomeApp(); return true; }
         return false;
     }
 
@@ -144,12 +144,40 @@ class FocusController {
     boolean keyUp(int k, KeyEvent e) {
         if (k != KeyEvent.KEYCODE_BACK) return false;
         if (e.isTracking()) {
-            if (!backLong && !e.isCanceled() && !closeOverlay()) a.back();
+            if (!backLong && !e.isCanceled() && !closeOverlay()) back();
             backLong = false;
             return true;
         }
         if (backLong) { backLong = false; return true; }
         return false;
+    }
+
+    void back() {
+        if (closeOverlay()) return;
+        View f = a.getCurrentFocus();
+        if (f != null && a.cardRow != null && f.getParent() == a.cardRow) {
+            int i = a.cardRow.indexOfChild(f);
+            if (i > 0 || (a.cardScroll != null && a.cardScroll.getScrollX() > 0)) {
+                a.resetCardRow();
+                android.util.Log.i("ShieldHome", "back -> card0");
+                return;
+            }
+        }
+        focusHomeApp();
+    }
+
+    void focusHomeApp() {
+        if (a.homeGrid == null) return;
+        if (a.drawerOpen) a.grid.setDrawer(false);
+        lastIdx[4] = 0;
+        for (int i = 0; i < a.homeGrid.getChildCount(); i++) {
+            View c = a.homeGrid.getChildAt(i);
+            if (c != null && c.isFocusable() && c.getVisibility() == View.VISIBLE) {
+                c.requestFocus();
+                android.util.Log.i("ShieldHome", "back -> " + name(c));
+                return;
+            }
+        }
     }
 
     List<View> secItems(int sec) {
@@ -239,7 +267,7 @@ class FocusController {
             int ti = s2 == 3 ? lastIdx[3] : (s2 == 4 && sec == 3) ? 0 : (multi ? ix : (s2 < lastIdx.length ? lastIdx[s2] : 0));
             View dest = it.get(Math.max(0, Math.min(ti, it.size() - 1)));
             if (s2 == 3 && a.cardScroll != null) a.cardScroll.scrollTo(lastCardX, 0);
-            if (s2 >= 5) a.setDrawer(true);
+            if (s2 >= 5) a.grid.setDrawer(true);
             return dest;
         }
         return f;
