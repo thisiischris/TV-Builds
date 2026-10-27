@@ -179,7 +179,7 @@ public class MainActivity extends Activity {
         heroLabel.setSingleLine(false); heroLabel.setMaxLines(2); heroLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
         heroLabel.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroLabel.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
-        heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(0f);
+        heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(1f);
         for (TextView tv: new TextView[]{heroLabel, heroTitle, heroSub}) tv.setShadowLayer(p(6), 0, p(2), Color.argb(180,0,0,0));
         meta.addView(heroLabel, new LinearLayout.LayoutParams(-2,-2));
         LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
@@ -191,12 +191,11 @@ public class MainActivity extends Activity {
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(220), 0, 0));
+        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(272), 0, 0));
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)->{
             heroTitle.setTextColor(f?Color.WHITE:Color.rgb(220,220,230));
             heroTitle.setShadowLayer(f?p(10):p(6), 0, p(2), Color.argb(f?210:180,0,0,0));
-            heroFocus.animate().alpha(f?1f:0f).setDuration(180).start();
             showHeroAction(f);
         });
         root.addView(hero, 0, lp(-1, p(328), Gravity.TOP, 0,0,0,0));
@@ -262,12 +261,11 @@ public class MainActivity extends Activity {
                 if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
                 int ax=(int)(cx+p(8)); asst.setBounds(ax, (int)(cy-p(7.5f)), ax+p(15), (int)(cy+p(7.5f))); asst.draw(c); }
             else if (icon==5){ float gx=w/2f;
-                Path a=new Path(); a.addCircle(gx-p(0.4f),cy,p(6.2f),Path.Direction.CW);
-                Path b=new Path(); b.addCircle(gx+p(2.6f),cy-p(1.8f),p(5.5f),Path.Direction.CW);
-                Path cres=new Path();
-                if (!cres.op(a,b,Path.Op.DIFFERENCE)){ cres.addPath(a); cres.addPath(b); cres.setFillType(Path.FillType.EVEN_ODD); pt.setStyle(Paint.Style.FILL); }
-                else { pt.setStyle(Paint.Style.STROKE); pt.setStrokeJoin(Paint.Join.ROUND); }
-                c.drawPath(cres,pt); }
+                c.drawCircle(gx, cy-p(1.6f), p(4.5f), pt);
+                c.drawLine(gx-p(1.8f), cy+p(3.2f), gx-p(1.5f), cy+p(4.8f), pt);
+                c.drawLine(gx+p(1.8f), cy+p(3.2f), gx+p(1.5f), cy+p(4.8f), pt);
+                c.drawLine(gx-p(2.0f), cy+p(5.0f), gx+p(2.0f), cy+p(5.0f), pt);
+                c.drawLine(gx-p(1.5f), cy+p(6.4f), gx+p(1.5f), cy+p(6.4f), pt); }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(this==heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
@@ -864,13 +862,13 @@ public class MainActivity extends Activity {
         p.setShader(new RadialGradient(w*0.62f, h*0.36f, Math.max(w,h)*1.015f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
-        p.setShader(new LinearGradient(0,0,w*0.30f,0, Color.argb(220,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,0,w*0.32f,0, Color.argb(248,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,h,0,h*0.73f, Color.argb(220,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,h,0,h*0.62f, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,0,0,h*0.16f, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,0,0,h*0.08f, Color.argb(26,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(w,0,w*0.86f,0, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(w,0,w*0.94f,0, Color.argb(26,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         vigMask=bm; return bm;
     }
@@ -891,15 +889,9 @@ public class MainActivity extends Activity {
     // ---------- Featured hero ----------
     ImageView heroArt, heroBadge; TextView heroTitle, heroSub; LinearLayout heroMeta; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
     void fitHeroMeta(){
-        if (heroMeta==null || heroTitle==null || heroSub==null) return;
+        if (heroTitle==null) return;
         ts(heroTitle, 23); ts(heroSub, 11);
-        int w=p(360), top=p(72);
-        if (heroTitle.getPaint().measureText(heroTitle.getText().toString())>w) ts(heroTitle, 17);
-        heroMeta.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        if (heroBtn!=null){
-            FrameLayout.LayoutParams bp=(FrameLayout.LayoutParams)heroBtn.getLayoutParams();
-            if (bp!=null){ bp.topMargin=top+heroMeta.getMeasuredHeight()+p(26); bp.height=p(33); heroBtn.setLayoutParams(bp); }
-        }
+        if (heroTitle.getPaint().measureText(heroTitle.getText().toString())>p(360)) ts(heroTitle, 17);
     }
     void bindHeroCopy(Object[] o){
         String raw=o[2]==null?"":(String)o[2];
