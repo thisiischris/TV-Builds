@@ -415,9 +415,8 @@ public class MainActivity extends Activity {
     Map<String,Long> usage = new HashMap<>();
     long use(String p){ Long v = p==null?null:usage.get(p); long base = v==null?0:v; if ("com.google.android.youtube.tv".equals(p)) base = base*3+1; return base; }
 
-    GridLayout homeGrid; boolean drawerOpen, editMode; int dragIdx=-1; View dragV; View[] tiles; android.animation.ObjectAnimator wig;
+    GridLayout homeGrid; boolean drawerOpen, editMode; int dragIdx=-1; View dragV; View[] tiles;
     final android.view.animation.Interpolator dragIp=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
-    final android.view.animation.Interpolator linIp=new android.view.animation.LinearInterpolator();
     float[] tgtX, tgtY; boolean glideOn; int slotW, slotH, liftY;
     final android.view.Choreographer.FrameCallback glideCb=new android.view.Choreographer.FrameCallback(){
         public void doFrame(long t){
@@ -565,30 +564,18 @@ public class MainActivity extends Activity {
     void kickGlide(){
         if (!glideOn){ glideOn=true; android.view.Choreographer.getInstance().postFrameCallback(glideCb); }
     }
-    void startWiggle(View v){
-        if (wig!=null){ wig.cancel(); wig=null; }
-        if (v==null) return;
-        wig=android.animation.ObjectAnimator.ofFloat(v, View.ROTATION, -1.5f, 1.5f);
-        wig.setDuration(72); wig.setRepeatCount(android.animation.ValueAnimator.INFINITE);
-        wig.setRepeatMode(android.animation.ValueAnimator.REVERSE);
-        wig.setInterpolator(linIp);
-        wig.start();
-    }
-    void stopWiggle(){ if (wig!=null){ wig.cancel(); wig=null; } }
     void clearLift(View v, boolean settle){
         if (v==null) return;
-        if (wig!=null && wig.getTarget()==v) stopWiggle();
         v.animate().cancel();
         boolean foc=v.isFocused() && !editMode;
         float sc=foc?1.07f:1f;
         v.setRotation(0);
         if (settle) v.animate().scaleX(sc).scaleY(sc).translationX(0).translationY(0).rotation(0).setDuration(180).setInterpolator(dragIp).start();
-        else { v.setScaleX(sc); v.setScaleY(sc); v.setTranslationX(0); v.setTranslationY(0); }
+        else { v.setScaleX(sc); v.setScaleY(sc); v.setTranslationX(0); v.setTranslationY(0); v.setRotation(0); }
         v.setTranslationZ(foc?p(6):0);
         if (v instanceof GlowFrame){ GlowFrame g=(GlowFrame)v; if (!foc){ g.glow=0; g.invalidate(); } }
     }
     void resetAllLifts(boolean settle, View keep){
-        stopWiggle();
         if (homeGrid==null) return;
         for (int j=0;j<homeGrid.getChildCount();j++){
             View c=homeGrid.getChildAt(j);
@@ -601,7 +588,7 @@ public class MainActivity extends Activity {
         if (tiles==null || homeGrid==null) return;
         for (int i=0;i<tiles.length;i++){
             View v=tiles[i]; v.animate().cancel();
-            v.setTranslationX(0); v.setTranslationY(0); layer(v, false);
+            v.setTranslationX(0); v.setTranslationY(0); v.setRotation(0); layer(v, false);
         }
         homeGrid.removeAllViews();
         for (int i=0;i<tiles.length;i++) homeGrid.addView(tiles[i], gridLp(i));
@@ -623,10 +610,9 @@ public class MainActivity extends Activity {
                 if (c instanceof GlowFrame){ GlowFrame g=(GlowFrame)c; g.glow=1f; g.setTranslationZ(p(18)); }
                 c.animate().cancel();
                 float from=c.getScaleX();
-                c.setTranslationY(-liftY); tgtY[j]=-liftY;
+                c.setRotation(0); c.setTranslationY(-liftY); tgtY[j]=-liftY;
                 c.setScaleX(from); c.setScaleY(from);
                 c.animate().scaleX(1.16f).scaleY(1.16f).setDuration(160).setInterpolator(dragIp).start();
-                startWiggle(c);
             } else c.setAlpha(0.5f);
         }
         if (!dragV.isFocused()) dragV.requestFocus();
@@ -642,7 +628,7 @@ public class MainActivity extends Activity {
     }
     void drop(int i){
         View keep=tiles!=null && i>=0 && i<tiles.length? tiles[i] : (homeGrid!=null && i>=0 && i<homeGrid.getChildCount()? homeGrid.getChildAt(i):null);
-        stopWiggle(); dragV=null; dragIdx=-1; editMode=false; saveHome(fullOrder); markHomeSig();
+        dragV=null; dragIdx=-1; editMode=false; saveHome(fullOrder); markHomeSig();
         commitTiles(); setEditDim(false);
         if (drawerOpen){ if (gear!=null) gear.setFocusable(false); if (searchV!=null) searchV.setFocusable(false); }
         resetAllLifts(true, keep);
