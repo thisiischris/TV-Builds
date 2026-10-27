@@ -83,7 +83,7 @@ class TvData {
         for (Object[] row : previewRows) {
             String pkg = (String) row[0];
             if (pkg == null || !VIDEO_APPS.contains(pkg)) continue;
-            if (YT.equals(pkg)) continue; // YT recs live in Play Next only
+            if (opensYouTube(pkg, (Intent) row[4])) continue; // YT recs live in Play Next only
             all.add(row);
         }
         Collections.sort(all, (x, y) -> Long.compare(a.grid.use((String) y[0]), a.grid.use((String) x[0])));
@@ -207,6 +207,14 @@ class TvData {
     }
     static String uriOf(Object intent) {
         try { return ((Intent) intent).toUri(Intent.URI_INTENT_SCHEME); } catch (Exception e) { return ""; }
+    }
+    /** YouTube content, whether published by YouTube itself or by another app (e.g. Google TV) whose intent opens YouTube. */
+    static boolean opensYouTube(String pkg, Intent in) {
+        if (YT.equals(pkg)) return true;
+        if (in == null) return false;
+        if (YT.equals(in.getPackage()) || (in.getComponent() != null && YT.equals(in.getComponent().getPackageName()))) return true;
+        String host = in.getData() == null ? null : in.getData().getHost();
+        return host != null && (host.endsWith("youtube.com") || host.equals("youtu.be"));
     }
     static boolean finished(long pos, long dur) { return dur > 0 && pos >= dur * FINISHED_FRAC; }
 
