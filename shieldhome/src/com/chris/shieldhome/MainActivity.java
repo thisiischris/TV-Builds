@@ -298,20 +298,11 @@ public class MainActivity extends Activity {
 
         FrameLayout hero = new FrameLayout(this); hero.setClipChildren(false);
         FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
-        ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
+        ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.FIT_XY);
+        heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.FIT_XY); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
         hero.addView(artHost, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
-        heroWash = new View(this){
-            @Override protected void onSizeChanged(int w,int h,int ow,int oh){
-                if (heroWashBm!=null && !heroWashBm.isRecycled()) heroWashBm.recycle();
-                heroWashBm=null;
-            }
-            @Override protected void onDraw(Canvas c){ Bitmap b=heroWashBmp(); if (b!=null) c.drawBitmap(b,0,0,null); }
-        };
-        heroWash.setWillNotDraw(false); heroWash.setFocusable(false); heroWash.setClickable(false);
-        hero.addView(heroWash, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroArt = art;
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
@@ -338,7 +329,8 @@ public class MainActivity extends Activity {
         heroBtn.setOnClickListener(v->heroAction());
         hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
         heroDots = new HeroDots();
-        hero.addView(heroDots, lp(-1, p(10), Gravity.TOP, 0, p(280), 0, 0));
+        hero.addView(heroDots, lp(-1, p(28), Gravity.TOP, 0, p(280), 0, 0));
+        art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
         root.addView(hero, 0, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
@@ -542,24 +534,35 @@ public class MainActivity extends Activity {
     }
 
     class HeroDots extends View {
-        int n, cur; float[] al; android.animation.ValueAnimator an;
+        int n, cur; float ax; android.animation.ValueAnimator an;
         HeroDots(){ super(MainActivity.this); setAlpha(0f); setVisibility(GONE); setFocusable(false); }
-        void snap(int i){ if (al==null||al.length!=n) al=new float[Math.max(1,n)]; for (int k=0;k<n;k++) al[k]=k==i?1f:0.35f; cur=i; invalidate(); }
+        float slot(int i){ return i*(p(5)+p(7)); }
+        void snap(int i){ cur=i; ax=slot(i); invalidate(); }
         void bind(int nn, int i, boolean anim){
             n=Math.max(0,nn); i=n==0?0:Math.max(0, Math.min(i,n-1));
-            if (!anim || getAlpha()<0.05f || n<=1 || al==null || al.length!=n){ snap(i); return; }
+            if (!anim || getAlpha()<0.05f || n<=1){ snap(i); return; }
             if (an!=null) an.cancel();
-            final float[] from=al.clone(); cur=i;
-            an=android.animation.ValueAnimator.ofFloat(0,1); an.setDuration(200);
-            an.setInterpolator(new android.view.animation.DecelerateInterpolator());
-            an.addUpdateListener(a->{ float u=(Float)a.getAnimatedValue(); for (int k=0;k<n;k++) al[k]=from[k]+((k==cur?1f:0.35f)-from[k])*u; invalidate(); });
+            float to=slot(i), x0=ax; cur=i;
+            an=android.animation.ValueAnimator.ofFloat(0,1); an.setDuration(250);
+            an.setInterpolator(new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f));
+            an.addUpdateListener(a->{ float u=(Float)a.getAnimatedValue(); ax=x0+(to-x0)*u; invalidate(); });
             an.start();
         }
         @Override protected void onDraw(Canvas c){
-            if (n<=1 || al==null) return;
-            float d=p(5), g=p(7), row=(n-1)*(d+g)+d, x0=(getWidth()-row)/2f, cy=getHeight()/2f;
+            if (n<=1) return;
+            float d=p(5), g=p(7), row=(n-1)*(d+g)+d, padX=p(12), hh=getHeight(), rr=hh/2;
+            float bx=heroBtn!=null&&heroBtn.getWidth()>0?heroBtn.getLeft()+heroBtn.getWidth()/2f:p(104);
+            float x0=bx-row/2f, pl=bx-(row+padX*2)/2f, pr=pl+row+padX*2, cy=hh/2f;
             Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-            for (int i=0;i<n;i++){ pt.setColor(Color.argb(Math.round(255*al[i]),255,255,255)); c.drawCircle(x0+i*(d+g)+d/2, cy, d/2, pt); }
+            pt.setColor(Color.argb(140,60,58,75));
+            c.drawRoundRect(pl,0,pr,hh,rr,rr,pt);
+            pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255));
+            c.drawRoundRect(pl+.5f,.5f,pr-.5f,hh-.5f,rr,rr,pt);
+            pt.setStyle(Paint.Style.FILL);
+            pt.setColor(Color.argb(89,255,255,255));
+            for (int i=0;i<n;i++) c.drawCircle(x0+slot(i)+d/2, cy, d/2, pt);
+            pt.setColor(Color.WHITE);
+            c.drawCircle(x0+ax+d/2, cy, d/2, pt);
         }
     }
 
@@ -1109,21 +1112,40 @@ public class MainActivity extends Activity {
         if (back && focus!=null) focus.restore();
     }
     void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
-    View heroWash; Bitmap heroWashBm;
-    Bitmap heroWashBmp(){
-        int w=heroWash==null?0:heroWash.getWidth(), h=heroWash==null?0:heroWash.getHeight();
-        if (w<=0||h<=0) return null;
-        if (heroWashBm!=null && !heroWashBm.isRecycled() && heroWashBm.getWidth()==w && heroWashBm.getHeight()==h) return heroWashBm;
+    Bitmap vigMask; final Map<String,Bitmap> heroMasked=new HashMap<>();
+    Bitmap alphaMask(int w, int h){
+        if (vigMask!=null && vigMask.getWidth()==w && vigMask.getHeight()==h) return vigMask;
         Bitmap bm=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(bm);
-        Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); pt.setDither(true);
-        pt.setShader(new LinearGradient(0,0,w*0.60f,0, new int[]{0xD9050507,0x99050507,0x33050507,0x00050507}, new float[]{0,0.20f,0.50f,1}, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,w,h,pt);
-        pt.setShader(new LinearGradient(0,h,0,h*0.60f, new int[]{0xFF080810,0xB3080810,0x00080810}, new float[]{0,0.38f,1}, Shader.TileMode.CLAMP));
-        c.drawRect(0,h*0.60f,w,h,pt);
-        pt.setShader(new LinearGradient(0,0,0,h*0.10f, 0x28000000, 0x00000000, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,w,h*0.10f,pt);
-        heroWashBm=bm; return bm;
+        c.drawColor(Color.WHITE);
+        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
+        p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*0.24f, botEnd=artB-artH*0.40f, botRange=h-botEnd;
+        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
+        c.drawRect(0,0,w,h,p);
+        p.setShader(new LinearGradient(0,h,0,botEnd, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, botRange<=0?0:(h-artB)/botRange, 1}, Shader.TileMode.CLAMP));
+        c.drawRect(0,0,w,h,p);
+        p.setShader(new LinearGradient(0,0,0,h*0.064f, Color.argb(240,255,255,255), Color.WHITE, Shader.TileMode.CLAMP));
+        c.drawRect(0,0,w,h,p);
+        float rad=artH*0.37f;
+        p.setShader(new RadialGradient(artL, artB, rad, new int[]{Color.TRANSPARENT, Color.argb(50,255,255,255), Color.WHITE}, new float[]{0, 0.5f, 1}, Shader.TileMode.CLAMP));
+        c.drawRect(artL, artB-rad, Math.min(w, artL+rad), artB, p);
+        vigMask=bm; return bm;
+    }
+    Bitmap maskHero(String key, Bitmap src, int tw, int th){
+        if (tw<=0||th<=0||src==null) return src;
+        Bitmap hit=heroMasked.get(key);
+        if (hit!=null && !hit.isRecycled() && hit.getWidth()==tw && hit.getHeight()==th) return hit;
+        Bitmap out=Bitmap.createBitmap(tw,th,Bitmap.Config.ARGB_8888);
+        Canvas c=new Canvas(out);
+        float artW=Math.min(tw,p(758)), artH=Math.min(th,p(360)), artL=tw-artW;
+        float s=Math.max(artW/src.getWidth(), artH/src.getHeight());
+        float dw=src.getWidth()*s, dh=src.getHeight()*s, cx=artL+artW/2f, cy=artH/2f;
+        c.drawBitmap(src, null, new RectF(cx-dw/2,cy-dh/2,cx+dw/2,cy+dh/2), null);
+        Paint xp=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); xp.setDither(true);
+        xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+        c.drawBitmap(alphaMask(tw,th),0,0,xp);
+        heroMasked.put(key, out); return out;
     }
     // ---------- Featured hero ----------
     ImageView heroArt, heroBadge; TextView heroTitle, heroSub; LinearLayout heroMeta; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
@@ -1215,14 +1237,15 @@ public class MainActivity extends Activity {
         final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=heroG!=null&&heroG.getHeight()>0?heroG.getHeight():p(400), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
-            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, raw); });
+            Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
+            h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, bm); });
         });
     }
     void transitionHero(final Object[] o, Bitmap bm){
         android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
         final ImageView in = heroFront ? heroArt2 : heroArt, out = heroFront ? heroArt : heroArt2;
         if (bm != null){
-            in.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            in.setScaleType(ImageView.ScaleType.FIT_XY);
             in.setImageBitmap(bm); in.setScaleX(1f); in.setScaleY(1f); in.setAlpha(0f); in.bringToFront();
             in.animate().alpha(1f).setDuration(1600).setInterpolator(ease).start();
             out.animate().alpha(0f).setDuration(1600).setInterpolator(ease).start();
