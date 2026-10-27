@@ -556,7 +556,8 @@ public class MainActivity extends Activity {
             int nn2=Math.max(0,nn); i=nn2==0?0:Math.max(0, Math.min(i,nn2-1));
             if (nn2!=n) requestLayout();
             n=nn2;
-            if (!anim || getAlpha()<0.05f || n<=1){ snap(i); return; }
+            boolean wrap=n>2 && ((cur==n-1 && i==0) || (cur==0 && i==n-1));
+            if (!anim || getAlpha()<0.05f || n<=1 || wrap){ snap(i); return; }
             if (an!=null) an.cancel();
             float to=slot(i), x0=ax; cur=i;
             an=android.animation.ValueAnimator.ofFloat(0,1); an.setDuration(250);
@@ -1134,8 +1135,8 @@ public class MainActivity extends Activity {
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*0.24f, botEnd=artB-artH*0.40f, botRange=h-botEnd;
-        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
+        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*0.38f, botEnd=artB-artH*0.40f, botRange=h-botEnd;
+        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:Math.min(1,(artL+artW*0.10f)/leftEnd), 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,h,0,botEnd, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, botRange<=0?0:(h-artB)/botRange, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
