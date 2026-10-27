@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
 
     FrameLayout.LayoutParams lp(int w,int h,int g,int l,int t,int r,int b){ FrameLayout.LayoutParams x=new FrameLayout.LayoutParams(w,h,g); x.setMargins(l,t,r,b); return x; }
     java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
-    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards; HeroController hero; SearchDimController searchDim;
+    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards; HeroController hero; SearchDimController searchDim; HomeLayout layout;
     java.util.concurrent.Future<?> dataFut; int dataGen, heroLoadGen;
     List<String[]> appsCache, fullOrder=new ArrayList<>();
     List<Object[]> featuredCache, wnPickCache;
@@ -54,11 +54,12 @@ public class MainActivity extends Activity {
         cards = new CardsController(this);
         hero = new HeroController(this);
         searchDim = new SearchDimController(this);
+        layout = new HomeLayout(this);
         prefs().edit().remove("heromode").remove("featured").apply(); // v9: card mode removed
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         DisplayMetricsHolder();
         kickData(false);
-        build();
+        layout.build();
         IntentFilter pf = new IntentFilter(); pf.addAction(Intent.ACTION_PACKAGE_REMOVED); pf.addAction(Intent.ACTION_PACKAGE_ADDED); pf.addAction(Intent.ACTION_PACKAGE_CHANGED); pf.addDataScheme("package");
         registerReceiver(pkgRx, pf);
     }
@@ -157,149 +158,8 @@ public class MainActivity extends Activity {
         heroDots.setTranslationX((sw-dw)/2f);
     }
 
-    void place(View v, float x, float y, float w, float hh){ FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w<0?-2:p(w), hh<0?-2:p(hh)); lp.leftMargin=p(x); lp.topMargin=p(y); root.addView(v, lp); }
     TextView text(String s, float size, int color, String font){ TextView t=new TextView(this); t.setText(s); ts(t,size); t.setTextColor(color); t.setTypeface(Typeface.create(font, Typeface.NORMAL)); t.setIncludeFontPadding(false); return t; }
 
-    void build(){
-        root = new FrameLayout(this);
-        root.setBackgroundResource(R.drawable.bg);
-        root.setClipChildren(false);
-
-        wxPill = new PillView(this, "", 4, false); wxPill.setFocusable(false); wxPill.setClickable(false);
-        timePill = new PillView(this, "", 4, false); timePill.setFocusable(false); timePill.setClickable(false);
-        LinearLayout tr = new LinearLayout(this); tr.setGravity(Gravity.CENTER_VERTICAL);
-        tr.addView(wxPill, new LinearLayout.LayoutParams(p(28), p(28)));
-        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(p(8), p(28));
-        tr.addView(new View(this), gap);
-        tr.addView(timePill, new LinearLayout.LayoutParams(p(88), p(28)));
-        clk = tr;
-        root.addView(clk, lp(-2,-2,Gravity.TOP|Gravity.END,0,p(17),p(46),0));
-
-        // Quick settings gear + inline options
-        gear = new PillView(this, "", 5, false); gear.setId(View.generateViewId());
-        gear.setOnClickListener(v->openDimSlide());
-        gear.setOnFocusChangeListener((v,f)->{ if (!f && dimSlide) closeDimSlide(); });
-        place(gear, 35, 17, 28, 28);
-        PillView search = searchV = new PillView(this, "Search", 3, false);
-        search.setOnFocusChangeListener((v,f)->{ if (f && !dimSlide) expandSearch(); });
-        place(search, 71, 17, 104, 28);
-        searchSplit = new LinearLayout(this); searchSplit.setOrientation(LinearLayout.HORIZONTAL); searchSplit.setGravity(Gravity.CENTER_VERTICAL);
-        searchSplit.setVisibility(View.GONE);
-        speakV = new PillView(this, "", 6, false); typeV = new PillView(this, "", 7, false);
-        speakV.setId(View.generateViewId()); typeV.setId(View.generateViewId());
-        speakV.setNextFocusRightId(typeV.getId()); typeV.setNextFocusLeftId(speakV.getId());
-        speakV.setNextFocusDownId(View.NO_ID); typeV.setNextFocusDownId(View.NO_ID);
-        speakV.setNextFocusUpId(View.NO_ID); typeV.setNextFocusUpId(View.NO_ID);
-        speakV.setOnClickListener(v->openAssistant()); typeV.setOnClickListener(v->openSearchField());
-        speakV.setOnFocusChangeListener((v,f)->{ if (!f) h.post(this::maybeCollapseSearch); });
-        typeV.setOnFocusChangeListener((v,f)->{ if (!f) h.post(this::maybeCollapseSearch); });
-        searchSplit.addView(speakV, new LinearLayout.LayoutParams(p(49), p(28)));
-        searchSplit.addView(new View(this), new LinearLayout.LayoutParams(p(6), p(28)));
-        searchSplit.addView(typeV, new LinearLayout.LayoutParams(p(49), p(28)));
-        place(searchSplit, 71, 17, -2, 28);
-        searchField = new EditText(this);
-        searchField.setSingleLine(true);
-        searchField.setHint("Search");
-        searchField.setTextColor(Color.rgb(232,232,240));
-        searchField.setHintTextColor(Color.argb(140,232,232,240));
-        searchField.setHighlightColor(Color.argb(80,64,156,255));
-        ts(searchField, 12);
-        searchField.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        searchField.setIncludeFontPadding(false);
-        searchField.setGravity(Gravity.CENTER_VERTICAL);
-        searchField.setPadding(p(14), 0, p(14), 0);
-        searchField.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-        searchField.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
-        searchField.setMinHeight(0); searchField.setMinimumHeight(0);
-        searchField.setFocusableInTouchMode(true);
-        GradientDrawable fieldBg=new GradientDrawable();
-        fieldBg.setCornerRadius(p(14));
-        fieldBg.setColor(Color.argb(185,102,100,119));
-        fieldBg.setStroke(1, Color.argb(40,255,255,255));
-        searchField.setBackground(fieldBg);
-        searchField.setVisibility(View.GONE);
-        searchField.setOnEditorActionListener((v,id,ev)->{
-            if (id!=android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH && id!=android.view.inputmethod.EditorInfo.IME_ACTION_DONE) return false;
-            String q=v.getText().toString().trim();
-            if (!q.isEmpty()) launchSearch(q);
-            return true;
-        });
-        searchField.setOnFocusChangeListener((v,f)->{ if (!f) closeSearchField(); });
-        place(searchField, 71, 17, 200, 28);
-        dimBar = new PillView(this, "", 5, false);
-        dimBar.setFocusable(false); dimBar.setClickable(false); dimBar.setVisibility(View.GONE);
-        dimBar.setPivotX(p(100)); dimBar.setPivotY(p(14));
-        place(dimBar, 71, 17, 200, 28);
-
-        FrameLayout hero = new FrameLayout(this); hero.setClipChildren(false);
-        FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
-        ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.FIT_XY);
-        heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.FIT_XY); heroArt2.setAlpha(0f);
-        artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
-        artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        hero.addView(artHost, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
-        LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
-        heroArt = art;
-        heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
-        heroLabel = text("", 11, Color.rgb(190,188,205), "sans-serif-medium");
-        heroTitle = text("Your Library", 23, Color.rgb(220,220,230), "sans-serif-medium");
-        heroTitle.setSingleLine(false); heroTitle.setMaxLines(2); heroTitle.setEllipsize(android.text.TextUtils.TruncateAt.END); heroTitle.setHorizontallyScrolling(false);
-        heroTitle.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroTitle.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
-        heroSub = text("Movies and shows from your Plex Media Server", 14, Color.rgb(190,188,205), "sans-serif");
-        heroSub.setLineSpacing(p(3),1f); heroSub.setSingleLine(false); heroSub.setMaxLines(3); heroSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        heroSub.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroSub.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
-        heroLabel.setSingleLine(false); heroLabel.setMaxLines(2); heroLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        heroLabel.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroLabel.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
-        heroLabel.setVisibility(View.GONE);
-        heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(1f);
-        meta.addView(heroBadge, new LinearLayout.LayoutParams(p(80), p(22)));
-        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-2,-2); ml.topMargin=p(6); meta.addView(heroLabel, ml);
-        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(10); meta.addView(heroTitle, mt);
-        LinearLayout.LayoutParams mf = new LinearLayout.LayoutParams(p(40), Math.max(2,p(1.4f))); mf.topMargin=p(6); meta.addView(heroFocus, mf);
-        LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(-1,-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
-        heroMeta = meta;
-        hero.addView(meta, lp(p(360),-2,Gravity.TOP|Gravity.START,p(35),p(72),0,0));
-        heroBtn = new PillView(this, "Play Now", 4, true);
-        heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
-        heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
-        heroDots = new HeroDots();
-        hero.addView(heroDots, lp(-2, p(28), Gravity.TOP|Gravity.START, 0, p(270), 0, 0));
-        View.OnLayoutChangeListener dotsLay=(v,a,b,c,d,e,f,g,h2)->placeDots();
-        hero.addOnLayoutChangeListener(dotsLay);
-        heroDots.addOnLayoutChangeListener(dotsLay);
-        art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
-        heroG = hero; hero.setFocusable(false); hero.setClickable(false);
-        heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
-        root.addView(hero, 0, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
-
-        tabBar = new SegBar(); tabPlay=tabBar.play; tabLive=tabBar.live;
-        place(tabBar, 35, 298, -2, 31);
-
-        // Cards row: 5-tile viewport; clip off so scale+glow can draw; 6th hidden by alpha
-        cardWrap = new FrameLayout(this);
-        cardWrap.setClipChildren(false); cardWrap.setClipToPadding(false);
-        cardScroll = new HorizontalScrollView(this){
-            @Override protected int computeScrollDeltaToGetChildRectOnScreen(Rect r){ return 0; }
-        };
-        cardScroll.setHorizontalScrollBarEnabled(false);
-        cardScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        cardScroll.setClipChildren(false); cardScroll.setClipToPadding(false);
-        cardScroll.setPadding(p(20),p(20),p(20),p(20));
-        cardRow = new LinearLayout(this); cardRow.setClipChildren(false); cardRow.setClipToPadding(false);
-        cardScroll.addView(cardRow, new ViewGroup.LayoutParams(-2,-1));
-        cardWrap.addView(cardScroll, new FrameLayout.LayoutParams(-1,-1));
-        place(cardWrap, 15, 320, 994, 160);
-        cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardAlphas);
-
-        homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false); homeGrid.setClipToPadding(false);
-        place(homeGrid, 35, APP_GRID_Y, 954, APP_H+APP_VG);
-        ensureDim();
-        buildHomeGrid();
-
-        setContentView(root);
-        h.post(()->{ if (tabPlay.getVisibility()==View.VISIBLE) tabPlay.requestFocus(); else tabLive.requestFocus(); });
-    }
 
     // ---------- Pills with drawn icons ----------
     class PillView extends View {
