@@ -1242,7 +1242,7 @@ public class MainActivity extends Activity {
     void showHero(){
         final Object[] o;
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
-        bindHeroAction(o);
+        if (heroBtn==null || !heroBtn.isFocused()) bindHeroAction(o);
         final String uri = (String)o[3];
         final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=heroG!=null&&heroG.getHeight()>0?heroG.getHeight():p(400), g=++heroLoadGen;
         pool.execute(()->{
@@ -1262,13 +1262,17 @@ public class MainActivity extends Activity {
             heroFront = !heroFront;
         }
         final View[] texts = {heroTitle, heroSub, heroBadge, heroFocus, heroLabel};
-        for (View t: texts) t.animate().alpha(0f).translationX(-p(10)).setDuration(450).setInterpolator(new android.view.animation.AccelerateInterpolator()).start();
+        android.view.animation.Interpolator outIp=new android.view.animation.AccelerateInterpolator();
+        for (View t: texts) t.animate().alpha(0f).translationX(-p(10)).setDuration(450).setInterpolator(outIp).start();
+        final boolean ctaOn=heroBtn!=null && heroBtn.isFocused();
+        if (ctaOn){ heroBtn.animate().cancel(); heroBtn.animate().alpha(0f).setStartDelay(0).setDuration(450).setInterpolator(outIp).start(); }
         h.postDelayed(()->{
             bindHeroCopy(o);
             try { Drawable bd = pm.getApplicationBanner((String)o[0]); if (bd==null) bd = pm.getApplicationIcon((String)o[0]); heroBadge.setImageBitmap(glyph((String)o[0], bd));} catch(Exception e){}
             fitHeroMeta();
             if (heroDots!=null && heroDots.getVisibility()==View.VISIBLE){ int n; synchronized(heroLock){ n=heroItems.size(); } heroDots.bind(n, heroIdx, true); }
             int d=200; for (View t: texts){ t.setTranslationX(p(16)); t.animate().alpha(t==heroBadge?0.7f:1f).translationX(0).setStartDelay(d).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); d+=90; }
+            if (ctaOn && heroBtn!=null && heroBtn.isFocused()){ heroBtn.animate().cancel(); heroBtn.setAlpha(0f); heroBtn.animate().alpha(1f).setStartDelay(200).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); }
         }, 480);
     }
 
