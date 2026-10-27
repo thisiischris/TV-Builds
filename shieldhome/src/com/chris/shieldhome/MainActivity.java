@@ -812,8 +812,8 @@ public class MainActivity extends Activity {
             }
             if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
             if (k==KeyEvent.KEYCODE_BACK){ setDimPct(dimSlideWas); closeMenu(false); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_UP){ dimSlideBy(1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ if (dimPct()<=0){ closeMenu(false); return dispatchKeyEvent(e); } dimSlideBy(-1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_UP){ dimSlideBy(-1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ dimSlideBy(1); return true; }
             if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT){ closeMenu(false); return dispatchKeyEvent(e); }
             return true;
         }
@@ -1464,7 +1464,7 @@ public class MainActivity extends Activity {
                 Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
                 int sc=c.saveLayer(0,0,w,hh,null);
                 pt.setColor(Color.argb(50,255,255,255)); c.drawPaint(pt);
-                if (t>0){ float th=Math.max(t*hh, w); pt.setColor(Color.WHITE); c.drawRoundRect(0,hh-th,w,hh,rr,rr,pt); }
+                if (t>0){ float th=Math.max(t*hh, w); pt.setColor(Color.WHITE); c.drawRoundRect(0,0,w,th,rr,rr,pt); }
                 pt.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
                 c.drawRoundRect(0,0,w,hh,rr,rr,pt);
                 c.restoreToCount(sc);
