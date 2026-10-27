@@ -106,11 +106,11 @@ class TvData {
     }
 
     static final String YT = "com.google.android.youtube.tv";
-    static final int MAX_ITEMS = 20, YT_RESUME_MAX = 1;
+    static final int MAX_ITEMS = 20;
     static final float FINISHED_FRAC = 0.9f;
-    static final int WN_CONTINUE = 0, WN_NEXT = 1; // TvContract watch_next_type; NEW=2 / WATCHLIST=3 are recs, not Play Next
+    static final int WN_CONTINUE = 0, WN_NEXT = 1, WN_NEW = 2; // TvContract watch_next_type
 
-    /** Play Next: video-app resume points only: unfinished CONTINUE rows, NEXT episodes, ≤1 unfinished YouTube video. No recs. */
+    /** Play Next (video apps, ≤MAX_ITEMS): unfinished CONTINUE rows and NEXT episodes by engagement, then YouTube NEW rows. No recs. */
     List<Object[]> collectWatchNext() {
         List<Object[]> rows = new ArrayList<>();
         try (Cursor c = a.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, null, null, null, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC")) {
@@ -118,7 +118,6 @@ class TvData {
             while (c != null && c.moveToNext()) {
                 String pkg = s(c, "package_name");
                 if (pkg == null || !VIDEO_APPS.contains(pkg) || newsRow(c, pkg) || !a.installed(pkg)) continue;
-                if (YT.equals(pkg)) android.util.Log.i("ShieldHome", "wn yt type=" + l(c, "watch_next_type") + " pos=" + l(c, "last_playback_position_millis") + " dur=" + l(c, "duration_millis") + " title=" + s(c, "title"));
                 Object[] o = prog(c, true);
                 if (o == null || o[0] == null || o[2] == null) continue;
                 rows.add(new Object[]{o, l(c, "last_engagement_time_utc_millis"), l(c, "last_playback_position_millis"), l(c, "duration_millis"), (int) l(c, "watch_next_type"), clean(s(c, "title")), idx++, uriOf(o[3])});
@@ -140,9 +139,11 @@ class TvData {
         }
         List<Object[]> pick = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        Map<String, Integer> resumeBy = new LinkedHashMap<>();
-        int ytN = 0, dropDone = 0, dropZero = 0, dropType = 0;
+        List<Object[]> ytNew = new ArrayList<>();
+        Map<String, Integer> resumeBy = new LinkedHashMap<>(), ytTypes = new TreeMap<>();
+        int dropDone = 0, dropZero = 0, dropType = 0;
         for (Object[] r : rows) {
+            if (YT.equals(((Object[]) r[0])[0])) ytTypes.merge("t" + r[4], 1, Integer::sum);
             if (pick.size() >= MAX_ITEMS) break;
             Object[] o = (Object[]) r[0];
             String pkg = (String) o[0];
@@ -150,16 +151,17 @@ class TvData {
             int type = (Integer) r[4];
             // Nearly finished: hidden; a show's next episode is its own NEXT-type row and shows instead.
             if (finished(pos, dur)) { dropDone++; continue; }
-            if (type != WN_CONTINUE && type != WN_NEXT) { dropType++; continue; }
+            boolean ytNewRow = type == WN_NEW && YT.equals(pkg);
+            if (type != WN_CONTINUE && type != WN_NEXT && !ytNewRow) { dropType++; continue; }
             if (type == WN_CONTINUE && pos <= 0) { dropZero++; continue; }
-            boolean yt = YT.equals(pkg);
-            if (yt && (pos <= 0 || ytN >= YT_RESUME_MAX)) continue;
             if (!fresh(pkg, (String) r[5], (String) r[7], feat, seen)) continue;
-            if (yt) ytN++;
+            if (ytNewRow) { ytNew.add(o); continue; }
             pick.add(o);
             resumeBy.merge(pkg, 1, Integer::sum);
         }
-        android.util.Log.i("ShieldHome", "playnext resume=" + pick.size() + " " + resumeBy + " wnRows=" + rows.size() + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType);
+        int resumeN = pick.size();
+        pick.addAll(ytNew.subList(0, Math.min(ytNew.size(), MAX_ITEMS - resumeN)));
+        android.util.Log.i("ShieldHome", "playnext resume=" + resumeN + " " + resumeBy + " ytNew=" + (pick.size() - resumeN) + " wnRows=" + rows.size() + " ytTypes=" + ytTypes + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType);
         return pick;
     }
     /** True (and marks seen) when pkg|title and intent uri are not in the featured card or already in Play Next. */
