@@ -21,7 +21,7 @@ public class MainActivity extends Activity {
     PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255), BG = Color.rgb(8, 8, 16);
     static final int TILE_R = 11;
-    static final float APP_FOCUS=1.13f, APP_HOLD=1.16f;
+    static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
 
@@ -179,17 +179,20 @@ public class MainActivity extends Activity {
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroLabel = text("FEATURED", 8, Color.rgb(190,188,205), "sans-serif-medium");
         heroArt = art;
-        heroTitle = text("Your Library", 23, Color.rgb(220,220,230), "sans-serif-medium"); heroTitle.setSingleLine(); heroTitle.setEllipsize(null);
-        heroTitle.setAutoSizeTextTypeUniformWithConfiguration(p(16), p(23), 1, TypedValue.COMPLEX_UNIT_PX);
-        heroSub = text("Movies and shows from your\nPlex Media Server", 11, Color.rgb(190,188,205), "sans-serif"); heroSub.setLineSpacing(p(3),1f); heroSub.setMaxLines(2); heroSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        heroTitle = text("Your Library", 23, Color.rgb(220,220,230), "sans-serif-medium");
+        heroTitle.setSingleLine(false); heroTitle.setMaxLines(Integer.MAX_VALUE); heroTitle.setEllipsize(null); heroTitle.setHorizontallyScrolling(false);
+        heroSub = text("Movies and shows from your\nPlex Media Server", 11, Color.rgb(190,188,205), "sans-serif");
+        heroSub.setLineSpacing(p(3),1f); heroSub.setSingleLine(false); heroSub.setMaxLines(Integer.MAX_VALUE); heroSub.setEllipsize(null);
+        heroLabel.setSingleLine(false); heroLabel.setEllipsize(null);
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
         heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(0f);
         for (TextView tv: new TextView[]{heroLabel, heroTitle, heroSub}) tv.setShadowLayer(p(6), 0, p(2), Color.argb(180,0,0,0));
         meta.addView(heroLabel, new LinearLayout.LayoutParams(-2,-2));
-        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(p(340),-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
+        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
         LinearLayout.LayoutParams mf = new LinearLayout.LayoutParams(p(40), Math.max(2,p(1.4f))); mf.topMargin=p(6); meta.addView(heroFocus, mf);
-        LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(p(340),-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
-        LinearLayout.LayoutParams mb = new LinearLayout.LayoutParams(p(56),p(15)); mb.topMargin=p(10); meta.addView(heroBadge, mb);
+        LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(-1,-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
+        LinearLayout.LayoutParams mb = new LinearLayout.LayoutParams(p(100),p(27)); mb.topMargin=p(10); meta.addView(heroBadge, mb);
+        heroMeta = meta;
         hero.addView(meta, lp(p(360),-2,Gravity.TOP|Gravity.START,p(35),p(72),0,0));
         heroG = hero; hero.setFocusable(true); hero.setClickable(true);
         hero.setOnFocusChangeListener((x,f)->{
@@ -224,7 +227,7 @@ public class MainActivity extends Activity {
         cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardAlphas);
 
         homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false); homeGrid.setClipToPadding(false);
-        place(homeGrid, 35, 474, 954, 93);
+        place(homeGrid, 35, 483, 954, APP_H+APP_VG);
         ensureDim();
         buildHomeGrid();
 
@@ -436,6 +439,7 @@ public class MainActivity extends Activity {
 
     GridLayout homeGrid; boolean drawerOpen, editMode; int dragIdx=-1; View dragV; View[] tiles;
     final android.view.animation.Interpolator dragIp=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
+    final android.view.animation.Interpolator drawerIp=new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
     float[] tgtX, tgtY; boolean glideOn; int slotW, slotH, liftY;
     final android.view.Choreographer.FrameCallback glideCb=new android.view.Choreographer.FrameCallback(){
         public void doFrame(long t){
@@ -478,8 +482,8 @@ public class MainActivity extends Activity {
         return out;
     }
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).commit(); }
-    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(147); gl.height=p(81); gl.rightMargin = (i%6==5)?0:p(14.4f); gl.bottomMargin = p(12); return gl; }
-    int rowH(){ return p(93); }
+    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(APP_W); gl.height=p(APP_H); gl.rightMargin = (i%6==5)?0:p(APP_HG); gl.bottomMargin = p(APP_VG); return gl; }
+    int rowH(){ return p(APP_H+APP_VG); }
     View[] slideViews(){ return new View[]{clk, gear, searchV, qsPanel, heroG, tabPlay, tabLive, cardWrap, homeGrid}; }
     void setDrawer(boolean on){ boolean edge=drawerOpen!=on; drawerOpen=on; slideHome(edge); }
     void fadeChrome(boolean hide){
@@ -487,13 +491,13 @@ public class MainActivity extends Activity {
         for (View v: new View[]{clk, gear, searchV}){
             if (v==null) continue;
             v.setVisibility(View.VISIBLE);
-            v.animate().alpha(a).setDuration(360).setInterpolator(dragIp).withEndAction(()->{ if (drawerOpen) v.setVisibility(View.INVISIBLE); }).start();
+            v.animate().alpha(a).setDuration(600).setInterpolator(drawerIp).withEndAction(()->{ if (drawerOpen) v.setVisibility(View.INVISIBLE); }).start();
         }
         if (gear!=null) gear.setFocusable(!hide);
         if (searchV!=null) searchV.setFocusable(!hide && !qsOpen);
         if (qsPanel!=null){
-            if (hide) qsPanel.animate().alpha(0f).setDuration(360).setInterpolator(dragIp).withEndAction(()->{ if (drawerOpen) qsPanel.setVisibility(View.GONE); }).start();
-            else if (qsOpen){ qsPanel.setVisibility(View.VISIBLE); qsPanel.animate().alpha(1f).setDuration(360).setInterpolator(dragIp).start(); }
+            if (hide) qsPanel.animate().alpha(0f).setDuration(600).setInterpolator(drawerIp).withEndAction(()->{ if (drawerOpen) qsPanel.setVisibility(View.GONE); }).start();
+            else if (qsOpen){ qsPanel.setVisibility(View.VISIBLE); qsPanel.animate().alpha(1f).setDuration(600).setInterpolator(drawerIp).start(); }
         }
     }
     void boxLayer(View v, boolean on){ if (v!=null) v.setLayerType(on?View.LAYER_TYPE_HARDWARE:View.LAYER_TYPE_NONE, null); }
@@ -501,12 +505,12 @@ public class MainActivity extends Activity {
         if (homeGrid==null) return;
         int n=homeGrid.getChildCount(), rows=Math.max(1,(n+5)/6);
         for (int row=1; row<rows; row++){
-            int delay=open?(row-1)*30:(rows-1-row)*30;
+            int delay=open?(row-1)*40:(rows-1-row)*40;
             for (int c=0;c<6;c++){
                 int i=row*6+c; if (i>=n) break;
                 View t=homeGrid.getChildAt(i); t.animate().cancel();
                 if (open){ t.setAlpha(0f); t.setTranslationY(p(12)); }
-                t.animate().alpha(open?1f:0f).translationY(open?0:p(12)).setStartDelay(delay).setDuration(360).setInterpolator(dragIp).start();
+                t.animate().alpha(open?1f:0f).translationY(open?0:p(12)).setStartDelay(delay).setDuration(600).setInterpolator(drawerIp).start();
             }
         }
     }
@@ -516,7 +520,7 @@ public class MainActivity extends Activity {
         int r=0; View f=getCurrentFocus();
         if (f!=null && homeGrid!=null && f.getParent()==homeGrid) r=Math.max(0, (editMode?tileIx(f):homeGrid.indexOfChild(f))/6);
         final boolean open=drawerOpen;
-        float y = open ? -(p(396)+Math.max(0, r-4)*rowH()) : 0;
+        float y = open ? -(p(466)+Math.max(0, r-4)*rowH()) : 0;
         fadeChrome(open);
         if (open){
             for (View v: new View[]{tabPlay, tabLive, cardWrap, homeGrid}) if (v!=null) v.bringToFront();
@@ -531,8 +535,8 @@ public class MainActivity extends Activity {
             if (v==null) continue;
             boolean up=v==heroG||v==tabPlay||v==tabLive||v==cardWrap;
             if (v==heroG) boxLayer(v, true);
-            android.view.ViewPropertyAnimator an=v.animate().translationY(y).setDuration(360).setInterpolator(dragIp);
-            if (up) an.alpha(open?0.62f:1f).scaleX(open?0.98f:1f).scaleY(open?0.98f:1f);
+            android.view.ViewPropertyAnimator an=v.animate().translationY(y).setDuration(600).setInterpolator(drawerIp);
+            if (up) an.alpha(open?0f:1f).scaleX(open?0.98f:1f).scaleY(open?0.98f:1f);
             if (v==homeGrid) an.withEndAction(()->{ if (!editMode && getCurrentFocus()==null && focus!=null) focus.restore(); });
             else if (v==heroG) an.withEndAction(()->boxLayer(v, false));
             an.start();
@@ -646,7 +650,7 @@ public class MainActivity extends Activity {
         if (i<0 || i>=fullOrder.size() || homeGrid==null) return;
         int n=homeGrid.getChildCount();
         tiles=new View[n]; tgtX=new float[n]; tgtY=new float[n];
-        slotW=p(147)+p(14.4f); slotH=rowH(); liftY=p(6);
+        slotW=p(APP_W)+p(APP_HG); slotH=rowH(); liftY=p(6);
         for (int j=0;j<n;j++){ tiles[j]=homeGrid.getChildAt(j); tgtX[j]=0; tgtY[j]=0; }
         dragIdx=i; dragV=tiles[i];
         if (i>=6 && !drawerOpen) setDrawer(true);
@@ -857,16 +861,16 @@ public class MainActivity extends Activity {
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        p.setShader(new RadialGradient(w*0.62f, h*0.36f, Math.max(w,h)*0.72f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new RadialGradient(w*0.62f, h*0.36f, Math.max(w,h)*0.95f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
-        p.setShader(new LinearGradient(0,0,w*0.46f,0, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,0,w*0.30f,0, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,h,0,h*0.58f, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,h,0,h*0.73f, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,0,0,h*0.16f, Color.argb(170,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,0,0,h*0.10f, Color.argb(110,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(w,0,w*0.86f,0, Color.argb(150,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(w,0,w*0.91f,0, Color.argb(98,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         vigMask=bm; return bm;
     }
@@ -885,7 +889,21 @@ public class MainActivity extends Activity {
         }
     }
     // ---------- Featured hero ----------
-    ImageView heroArt, heroBadge; TextView heroTitle, heroSub; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0; LinearLayout heroDots;
+    ImageView heroArt, heroBadge; TextView heroTitle, heroSub; LinearLayout heroMeta; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0; LinearLayout heroDots;
+    void fitHeroMeta(){
+        if (heroMeta==null || heroTitle==null || heroSub==null) return;
+        ts(heroTitle, 23); ts(heroSub, 11);
+        int w=p(360), cap=p(300), minTop=p(20), top=p(72);
+        Runnable measure=()->heroMeta.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        measure.run();
+        if (top+heroMeta.getMeasuredHeight()>cap) ts(heroTitle, 17);
+        measure.run();
+        float sub=11f;
+        while (top+heroMeta.getMeasuredHeight()>cap && sub>8f){ sub-=0.8f; ts(heroSub, sub); measure.run(); }
+        if (top+heroMeta.getMeasuredHeight()>cap) top=Math.max(minTop, cap-heroMeta.getMeasuredHeight());
+        FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)heroMeta.getLayoutParams();
+        if (lp!=null){ lp.topMargin=top; lp.width=w; heroMeta.setLayoutParams(lp); }
+    }
     final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, 16000); return; } } showHero(); h.postDelayed(this, 16000); } };
     ImageView heroArt2; boolean heroFront=true;
     void loadHero(){ applyFeaturedCache(); }
@@ -971,6 +989,7 @@ public class MainActivity extends Activity {
         h.postDelayed(()->{
             heroTitle.setText((String)o[1]); heroSub.setText(o[2]==null?"":(String)o[2]);
             try { Drawable bd = pm.getApplicationBanner((String)o[0]); if (bd==null) bd = pm.getApplicationIcon((String)o[0]); heroBadge.setImageBitmap(glyph((String)o[0], bd));} catch(Exception e){}
+            fitHeroMeta();
             int d=200; for (View t: texts){ t.setTranslationX(p(16)); t.animate().alpha(t==heroBadge?0.7f:1f).translationX(0).setStartDelay(d).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); d+=90; }
         }, 480);
     }

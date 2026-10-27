@@ -108,7 +108,11 @@ class FocusController {
         }
         if (t != null && t != f) {
             t.requestFocus();
-            if (t.getParent() == a.homeGrid) a.slideHome();
+            if (t.getParent() == a.homeGrid){
+                int i = a.homeGrid.indexOfChild(t);
+                if (a.drawerOpen && i < 6) a.setDrawer(false);
+                else a.slideHome();
+            }
             android.util.Log.i("ShieldHome", "nav " + name(f) + " -> " + name(t));
         }
         return true;
@@ -221,7 +225,6 @@ class FocusController {
         int ix = Math.max(0, cur.indexOf(fr));
         if (sec >= 0 && sec < lastIdx.length) lastIdx[sec] = ix;
         if (sec == 3 && a.cardScroll != null) lastCardX = a.cardScroll.getScrollX();
-        if (up && sec == 4 && a.drawerOpen) { a.setDrawer(false); return fr; }
         boolean multi = sec >= 3;
         for (int s2 = sec + (up ? -1 : 1); s2 >= 0 && s2 < nSecs(); s2 += up ? -1 : 1) {
             List<View> it = secItems(s2);
