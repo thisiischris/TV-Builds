@@ -155,7 +155,8 @@ public class MainActivity extends Activity {
         PillView search = searchV = new PillView(this, "Search", 3, false);
         search.setOnClickListener(v->openAssistant()); place(search, 71, 17, 104, 28);
         qsPanel = new LinearLayout(this); qsPanel.setClipChildren(false); qsPanel.setVisibility(View.GONE);
-        qsDim = new PillView(this, "", 4, false); qsDim.setOnClickListener(v->{ int i=(dimIdx()+1)%DIMS.length; prefs().edit().putInt("dim", i).apply(); applyDim(); qsLabels(); });
+        qsDim = new PillView(this, "", 4, false); qsDim.setOnClickListener(v->cycleDim());
+        qsDim.setOnLongClickListener(v->{ openDimSlide(); return true; });
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(p(104), p(28)); qsPanel.addView(qsDim, q2);
         place(qsPanel, 73, 17, 290, 28); qsLabels();
 
@@ -174,7 +175,7 @@ public class MainActivity extends Activity {
         heroTitle = text("Your Library", 23, Color.rgb(220,220,230), "sans-serif-medium");
         heroTitle.setSingleLine(false); heroTitle.setMaxLines(2); heroTitle.setEllipsize(android.text.TextUtils.TruncateAt.END); heroTitle.setHorizontallyScrolling(false);
         heroTitle.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroTitle.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
-        heroSub = text("Movies and shows from your Plex Media Server", 11, Color.rgb(190,188,205), "sans-serif");
+        heroSub = text("Movies and shows from your Plex Media Server", 13, Color.rgb(190,188,205), "sans-serif");
         heroSub.setLineSpacing(p(3),1f); heroSub.setSingleLine(false); heroSub.setMaxLines(3); heroSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         heroSub.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroSub.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
         heroLabel.setSingleLine(false); heroLabel.setMaxLines(2); heroLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -192,7 +193,7 @@ public class MainActivity extends Activity {
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(244), 0, 0));
+        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(250), 0, 0));
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ Bitmap src=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,w,h); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)->{
@@ -262,13 +263,12 @@ public class MainActivity extends Activity {
                 c.drawCircle(cx-p(1),cy-p(1),p(4.2f),pt); c.drawLine(cx+p(2),cy+p(2),cx+p(5),cy+p(5),pt);
                 if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
                 int ax=(int)(cx+p(8)); asst.setBounds(ax, (int)(cy-p(7.5f)), ax+p(15), (int)(cy+p(7.5f))); asst.draw(c); }
-            else if (icon==5){ float gx=w/2f, by=cy-p(0.6f);
-                c.drawCircle(gx, by, p(3.6f), pt);
-                c.drawLine(gx-p(1.5f), by+p(3.4f), gx-p(1.3f), by+p(4.8f), pt);
-                c.drawLine(gx+p(1.5f), by+p(3.4f), gx+p(1.3f), by+p(4.8f), pt);
-                c.drawLine(gx-p(1.7f), by+p(5.0f), gx+p(1.7f), by+p(5.0f), pt);
-                c.drawLine(gx-p(1.2f), by+p(6.2f), gx+p(1.2f), by+p(6.2f), pt);
-                for (int i=-2;i<=2;i++){ double a=Math.toRadians(-90+i*36); float s=p(4.8f), e=p(6.8f); c.drawLine(gx+(float)Math.cos(a)*s, by+(float)Math.sin(a)*s, gx+(float)Math.cos(a)*e, by+(float)Math.sin(a)*e, pt); } }
+            else if (icon==5){ float gx=w/2f, r=p(4.0f);
+                pt.setStrokeWidth(p(1.5f));
+                c.drawCircle(gx, cy, r, pt);
+                pt.setStrokeWidth(p(1.3f));
+                for (int i=0;i<8;i++){ double a=Math.toRadians(i*45); float s=r+p(1.5f), e=r+p(3.3f); c.drawLine(gx+(float)Math.cos(a)*s, cy+(float)Math.sin(a)*s, gx+(float)Math.cos(a)*e, cy+(float)Math.sin(a)*e, pt); }
+                if (dimFill>0.01f){ c.save(); c.clipRect(gx+r-2*r*dimFill, cy-r-1, gx+r+1, cy+r+1); pt.setStyle(Paint.Style.FILL); c.drawCircle(gx, cy, r-p(0.3f), pt); pt.setStyle(Paint.Style.STROKE); c.restore(); } }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(this==heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
@@ -802,6 +802,14 @@ public class MainActivity extends Activity {
     }
     boolean menuKey(KeyEvent e){
         int k=e.getKeyCode();
+        if (dimSlide){
+            if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
+            if (k==KeyEvent.KEYCODE_BACK){ setDimPct(dimSlideWas); closeMenu(false); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_UP){ dimSlideBy(1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ dimSlideBy(-1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_CENTER||k==KeyEvent.KEYCODE_ENTER||k==KeyEvent.KEYCODE_NUMPAD_ENTER){ prefs().edit().putInt("dim_custom", dimPct()).apply(); closeMenu(false); return true; }
+            return true;
+        }
         if (k==KeyEvent.KEYCODE_BACK){ if (e.getAction()==KeyEvent.ACTION_DOWN) closeMenu(); return true; }
         if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT) return true;
         if (k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN){
@@ -846,12 +854,15 @@ public class MainActivity extends Activity {
     void closeMenu(){ closeMenu(true); }
     void closeMenu(boolean back){
         if (appMenu==null) return;
+        boolean slide=dimSlide;
+        if (slide && back) setDimPct(dimSlideWas);
+        dimSlide=false; dimSlideLab=null; dimSlideTrack=null;
         lockBehind(false);
         menuOwner=null;
         final View m=appMenu; appMenu=null;
         m.animate().cancel();
         m.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(140).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{ if (m.getParent()!=null) root.removeView(m); }).start();
-        if (back && focus!=null) focus.restore();
+        if ((back || slide) && focus!=null) focus.restore();
     }
     void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
     Bitmap vigMask; final Map<String,Bitmap> heroMasked=new HashMap<>();
@@ -864,9 +875,9 @@ public class MainActivity extends Activity {
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
         p.setShader(new LinearGradient(0,0,w*0.30f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,h,0,h*0.62f, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,h,0,h*0.50f, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(w,0,w*0.90f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(w,0,w*0.97f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,0,0,h*0.08f, Color.argb(230,255,255,255), Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
@@ -890,7 +901,7 @@ public class MainActivity extends Activity {
     ImageView heroArt, heroBadge; TextView heroTitle, heroSub; LinearLayout heroMeta; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
     void fitHeroMeta(){
         if (heroTitle==null) return;
-        ts(heroTitle, 23); ts(heroSub, 11);
+        ts(heroTitle, 23); ts(heroSub, 13);
         if (heroTitle.getPaint().measureText(heroTitle.getText().toString())>p(360)) ts(heroTitle, 17);
     }
     void bindHeroCopy(Object[] o){
@@ -1414,10 +1425,63 @@ public class MainActivity extends Activity {
         }
     }
 
-    PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false; View heroG, heroFocus, inAppDim;
+    PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false, dimSlide=false; View heroG, heroFocus, inAppDim, dimSlideTrack; TextView dimSlideLab;
     static final int[] DIMS = {0,25,50,70,90};
+    float dimFill; int dimSlideWas; android.animation.ValueAnimator dimFillAnim;
     int dimIdx(){ return Math.max(0, Math.min(DIMS.length-1, prefs().getInt("dim", 0))); }
-    void qsLabels(){ int d=DIMS[dimIdx()]; qsDim.label = "Dim: "+(d==0?"Off":d+"%"); qsDim.setOn(d>0); }
+    int dimPct(){ int v=prefs().contains("dim_pct")?prefs().getInt("dim_pct",0):DIMS[dimIdx()]; return Math.max(0, Math.min(90, v)); }
+    void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); qsLabels(); }
+    int[] dimPresets(){
+        int c=prefs().getInt("dim_custom",-1); java.util.ArrayList<Integer> l=new java.util.ArrayList<>();
+        for (int d: DIMS) l.add(d);
+        if (c>=0 && c<=90){ boolean hit=false; for (int d: DIMS) if (d==c) hit=true; if (!hit){ l.add(c); java.util.Collections.sort(l); } }
+        int[] a=new int[l.size()]; for (int i=0;i<l.size();i++) a[i]=l.get(i); return a;
+    }
+    void cycleDim(){ int[] ps=dimPresets(); int cur=dimPct(), n=ps[0]; for (int i=0;i<ps.length;i++) if (ps[i]==cur){ n=ps[(i+1)%ps.length]; break; } setDimPct(n); }
+    void qsLabels(){ int d=dimPct(); if (qsDim==null) return; qsDim.label="Dim: "+(d==0?"Off":d+"%"); qsDim.setOn(d>0); qsDim.invalidate(); }
+    void syncDimFill(boolean anim){
+        float to=dimPct()/100f;
+        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); return; }
+        if (dimFillAnim!=null) dimFillAnim.cancel();
+        dimFillAnim=android.animation.ValueAnimator.ofFloat(dimFill, to); dimFillAnim.setDuration(200);
+        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); });
+        dimFillAnim.start();
+    }
+    void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); if (dimSlideLab!=null) dimSlideLab.setText(dimPct()+"%"); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); }
+    void openDimSlide(){
+        if (appMenu!=null || qsDim==null) return;
+        if (focus!=null) focus.remember();
+        dimSlide=true; dimSlideWas=dimPct();
+        LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.VERTICAL); p.setGravity(Gravity.CENTER_HORIZONTAL);
+        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,28,28,32)); bg.setCornerRadius(p(14)); bg.setStroke(Math.max(1,p(1)), Color.argb(51,255,255,255));
+        p.setBackground(bg); p.setPadding(p(10),p(12),p(10),p(12)); p.setElevation(p(18)); p.setTranslationZ(p(80));
+        dimSlideLab=text(dimPct()+"%", 12, Color.WHITE, "sans-serif-medium"); dimSlideLab.setGravity(Gravity.CENTER);
+        p.addView(dimSlideLab, new LinearLayout.LayoutParams(-2,-2));
+        dimSlideTrack=new View(this){
+            @Override protected void onDraw(Canvas c){
+                float w=getWidth(), hh=getHeight(), rr=w/2f, t=dimPct()/90f;
+                Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
+                pt.setColor(Color.argb(50,255,255,255)); c.drawRoundRect(0,0,w,hh,rr,rr,pt);
+                float th=Math.max(rr*2, hh*t); pt.setColor(Color.WHITE); c.drawRoundRect(0,hh-th,w,hh,rr,rr,pt);
+            }
+        };
+        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(p(10), p(120)); tp.topMargin=p(8); p.addView(dimSlideTrack, tp);
+        p.setFocusable(true); p.setClickable(true);
+        p.measure(0,0);
+        int mw=p.getMeasuredWidth(), mh=p.getMeasuredHeight();
+        int[] loc=new int[2]; qsDim.getLocationInWindow(loc);
+        int sw=root.getWidth()>0?root.getWidth():p(1024), sh=root.getHeight()>0?root.getHeight():p(576);
+        int x=loc[0]+qsDim.getWidth()+p(10), y=loc[1];
+        if (x+mw>sw-p(8)) x=loc[0]-mw-p(10);
+        if (x<p(8)) x=p(8);
+        if (y+mh>sh-p(8)) y=sh-mh-p(8);
+        if (y<p(8)) y=p(8);
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(mw, mh); lp.leftMargin=x; lp.topMargin=y;
+        p.setPivotX(0); p.setPivotY(0); p.setAlpha(0f); p.setScaleX(0.3f); p.setScaleY(0.3f);
+        appMenu=p; root.addView(p, lp); lockBehind(true);
+        p.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        h.post(()->{ if (appMenu==p) p.requestFocus(); });
+    }
     void toggleQs(){
         qsOpen=!qsOpen; gear.setOn(qsOpen);
         android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.2f,0f,0f,1f);
@@ -1436,7 +1500,7 @@ public class MainActivity extends Activity {
             searchV.animate().alpha(1f).translationX(0).setDuration(300).setStartDelay(120).setInterpolator(ease).withEndAction(null).start(); }
     }
     void applyDim(){
-        int pct = DIMS[dimIdx()];
+        int pct = dimPct(); syncDimFill(true);
         boolean overlay = android.provider.Settings.canDrawOverlays(this);
         Intent si = new Intent(this, DimService.class).putExtra("pct", pct);
         try { if (overlay){ if (pct>0) startForegroundService(si); else stopService(si); } } catch (Exception e){ android.util.Log.w("ShieldHome","dimsvc "+e); overlay=false; }
