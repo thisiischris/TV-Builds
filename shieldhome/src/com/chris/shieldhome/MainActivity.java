@@ -327,7 +327,7 @@ public class MainActivity extends Activity {
         heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(1f);
         meta.addView(heroBadge, new LinearLayout.LayoutParams(p(80), p(22)));
         LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-2,-2); ml.topMargin=p(6); meta.addView(heroLabel, ml);
-        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
+        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(10); meta.addView(heroTitle, mt);
         LinearLayout.LayoutParams mf = new LinearLayout.LayoutParams(p(40), Math.max(2,p(1.4f))); mf.topMargin=p(6); meta.addView(heroFocus, mf);
         LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(-1,-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
         heroMeta = meta;
@@ -366,7 +366,7 @@ public class MainActivity extends Activity {
         cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardAlphas);
 
         homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false); homeGrid.setClipToPadding(false);
-        place(homeGrid, 35, 483, 954, APP_H+APP_VG);
+        place(homeGrid, 35, 467.5f, 954, APP_H+APP_VG); // peek: same 9px of drawer row as pre-v38 (474+93)
         ensureDim();
         buildHomeGrid();
 
@@ -755,7 +755,7 @@ public class MainActivity extends Activity {
         int r=0; View f=getCurrentFocus();
         if (f!=null && homeGrid!=null && f.getParent()==homeGrid) r=Math.max(0, (editMode?tileIx(f):homeGrid.indexOfChild(f))/6);
         final boolean open=drawerOpen;
-        float y = open ? -(p(466)+Math.max(0, r-4)*rowH()) : 0;
+        float y = open ? -(p(450.5f)+Math.max(0, r-4)*rowH()) : 0; // 467.5-17, same open dock as 483-466
         fadeChrome(open);
         if (open){
             for (View v: new View[]{tabBar, cardWrap, homeGrid}) if (v!=null) v.bringToFront();
@@ -1179,6 +1179,7 @@ public class MainActivity extends Activity {
         int nl=raw.indexOf('\n');
         if ("NEW".equals(tag) && nl>=0){ meta=raw.substring(0,nl).trim(); desc=raw.substring(nl+1); }
         desc=desc.replaceAll("\\s+"," ").trim();
+        int dot=desc.indexOf(". "); if (dot>=0) desc=desc.substring(0,dot+1); // PreviewPrograms has no tagline; first sentence of short_description
         if (heroLabel!=null){ heroLabel.setText(meta); heroLabel.setVisibility(meta.isEmpty()?View.GONE:View.VISIBLE); }
         heroTitle.setText((String)o[1]); heroSub.setText(desc);
         bindHeroAction(o);
