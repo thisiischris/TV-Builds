@@ -811,10 +811,10 @@ public class MainActivity extends Activity {
                 closeMenu(false); return true;
             }
             if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
-            if (k==KeyEvent.KEYCODE_BACK){ setDimPct(dimSlideWas); closeMenu(false); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_UP){ dimSlideBy(-1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ dimSlideBy(1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT){ closeMenu(false); return dispatchKeyEvent(e); }
+            if (k==KeyEvent.KEYCODE_BACK){ closeMenu(false); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_LEFT){ dimSlideBy(-1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_RIGHT){ dimSlideBy(1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN){ closeMenu(false); return dispatchKeyEvent(e); }
             return true;
         }
         if (k==KeyEvent.KEYCODE_BACK){ if (e.getAction()==KeyEvent.ACTION_DOWN) closeMenu(); return true; }
@@ -862,7 +862,6 @@ public class MainActivity extends Activity {
     void closeMenu(boolean back){
         if (appMenu==null) return;
         boolean slide=dimSlide;
-        if (slide && back) setDimPct(dimSlideWas);
         dimSlide=false; dimSlideIgnore=false; dimSlideLab=null; dimSlideTrack=null;
         lockBehind(false);
         menuOwner=null;
@@ -1433,7 +1432,7 @@ public class MainActivity extends Activity {
     }
 
     PillView gear, qsDim, heroBtn, wxPill, timePill; LinearLayout qsPanel; boolean qsOpen=false, dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim, dimSlideTrack; TextView dimSlideLab;
-    float dimFill; int dimSlideWas; android.animation.ValueAnimator dimFillAnim;
+    float dimFill; android.animation.ValueAnimator dimFillAnim;
     int dimPct(){ return Math.max(0, Math.min(90, prefs().getInt("dim_pct",0))); }
     void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); qsLabels(); }
     void qsLabels(){ int d=dimPct(); if (qsDim==null) return; qsDim.label="Dim: "+(d==0?"Off":d+"%"); qsDim.setOn(d>0); qsDim.invalidate(); }
@@ -1449,8 +1448,8 @@ public class MainActivity extends Activity {
     void openDimSlide(){
         if (appMenu!=null || qsDim==null) return;
         if (focus!=null) focus.remember();
-        dimSlide=true; dimSlideIgnore=true; dimSlideWas=dimPct();
-        LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.VERTICAL); p.setGravity(Gravity.CENTER_HORIZONTAL);
+        dimSlide=true; dimSlideIgnore=true;
+        LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.HORIZONTAL); p.setGravity(Gravity.CENTER_VERTICAL);
         GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(240,18,18,22)); bg.setStroke(1, Color.argb(40,255,255,255));
         p.setBackground(bg); p.setPadding(p(10),p(12),p(10),p(12)); p.setElevation(p(4)); p.setTranslationZ(p(80));
         dimSlideLab=text("90%", 12, Color.WHITE, "sans-serif-medium"); dimSlideLab.setGravity(Gravity.CENTER);
@@ -1460,18 +1459,14 @@ public class MainActivity extends Activity {
         dimSlideLab.setText(dimPct()+"%");
         dimSlideTrack=new View(this){
             @Override protected void onDraw(Canvas c){
-                float w=getWidth(), hh=getHeight(), rr=w/2f, t=Math.max(0, Math.min(1, dimFill/0.9f));
+                float w=getWidth(), hh=getHeight(), rr=hh/2f, t=Math.max(0, Math.min(1, dimFill/0.9f));
                 Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-                int sc=c.saveLayer(0,0,w,hh,null);
-                pt.setColor(Color.argb(50,255,255,255)); c.drawPaint(pt);
-                if (t>0){ float th=Math.max(t*hh, w); pt.setColor(Color.WHITE); c.drawRoundRect(0,0,w,th,rr,rr,pt); }
-                pt.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-                c.drawRoundRect(0,0,w,hh,rr,rr,pt);
-                c.restoreToCount(sc);
+                pt.setColor(Color.argb(50,255,255,255)); c.drawRoundRect(0,0,w,hh,rr,rr,pt);
+                if (t>0){ float fw=Math.max(t*w, hh); pt.setColor(Color.WHITE); c.drawRoundRect(0,0,fw,hh,rr,rr,pt); }
             }
         };
         dimSlideTrack.setWillNotDraw(false);
-        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(p(6), p(120)); tp.topMargin=p(8); p.addView(dimSlideTrack, tp);
+        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(p(120), p(6)); tp.leftMargin=p(8); p.addView(dimSlideTrack, tp);
         p.setId(View.generateViewId());
         p.setNextFocusLeftId(p.getId()); p.setNextFocusRightId(p.getId());
         p.setNextFocusUpId(p.getId()); p.setNextFocusDownId(p.getId());
