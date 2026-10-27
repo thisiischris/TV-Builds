@@ -220,7 +220,7 @@ public class MainActivity extends Activity {
         if (cta && ("Play Now".equals(s) || "More Info".equals(s))) extra += (-pt.getFontMetrics().ascent)*0.78f + p(10);
         return Math.max(p(cta?34:28), Math.round(pt.measureText(s)+extra));
     }
-    void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(34); v.setLayoutParams(lp); } v.invalidate(); }
+    void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(34); v.setLayoutParams(lp); } v.invalidate(); if (v==heroBtn && heroDots!=null) heroDots.invalidate(); }
 
     void place(View v, float x, float y, float w, float hh){ FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w<0?-2:p(w), hh<0?-2:p(hh)); lp.leftMargin=p(x); lp.topMargin=p(y); root.addView(v, lp); }
     TextView text(String s, float size, int color, String font){ TextView t=new TextView(this); t.setText(s); ts(t,size); t.setTextColor(color); t.setTypeface(Typeface.create(font, Typeface.NORMAL)); t.setIncludeFontPadding(false); return t; }
@@ -489,12 +489,12 @@ public class MainActivity extends Activity {
             play.setTextColor(tab==0?d:l); live.setTextColor(tab==1?d:l);
         }
         void lift(boolean on){
-            float to=on?1.12f:1f;
+            float to=on?1.18f:1f;
             if (on && hs>1.02f) return;
             if (Math.abs(hs-to)<0.005f) return;
             if (pa!=null) pa.cancel();
-            pa=android.animation.ValueAnimator.ofFloat(hs, to); pa.setDuration(220);
-            pa.setInterpolator(new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f));
+            pa=android.animation.ValueAnimator.ofFloat(hs, to); pa.setDuration(340);
+            pa.setInterpolator(new android.view.animation.OvershootInterpolator(1.1f));
             pa.addUpdateListener(a->{ hs=(Float)a.getAnimatedValue(); invalidate(); });
             pa.start();
         }
@@ -525,7 +525,7 @@ public class MainActivity extends Activity {
             if (hw>0){
                 float cx=hx+hw/2, cy=hh/2, sw=hw*hs, sh=hh*hs, sr=sh/2;
                 Bitmap sb=shadowBmp(Math.max(1,(int)sw), Math.max(1,(int)sh), sr);
-                if (sb!=null){ Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG); sp.setAlpha(Math.min(130,(int)(130*(hs-1f)/0.04f))); int pad=p(48); c.drawBitmap(sb, cx-sw/2-pad, cy-sh/2-pad+p(19), sp); }
+                if (sb!=null){ Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG); sp.setAlpha(Math.max(0,Math.min(130,(int)(130*(hs-1f)/0.04f)))); int pad=p(48); c.drawBitmap(sb, cx-sw/2-pad, cy-sh/2-pad+p(19), sp); }
                 pt.setColor(Color.rgb(229,227,228));
                 c.drawRoundRect(cx-sw/2, cy-sh/2, cx+sw/2, cy+sh/2, sr, sr, pt);
             }
@@ -551,10 +551,11 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){
             if (n<=1) return;
             float d=p(5), g=p(7), row=(n-1)*(d+g)+d, padX=p(12), hh=getHeight(), rr=hh/2;
-            float bx=heroBtn!=null&&heroBtn.getWidth()>0?heroBtn.getLeft()+heroBtn.getWidth()/2f:p(104);
+            float bw=heroBtn!=null&&heroBtn.getWidth()>0?heroBtn.getWidth():p(138);
+            float bx=p(35)+bw/2f;
             float x0=bx-row/2f, pl=bx-(row+padX*2)/2f, pr=pl+row+padX*2, cy=hh/2f;
             Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-            pt.setColor(Color.argb(140,60,58,75));
+            pt.setColor(Color.argb(88,60,58,75));
             c.drawRoundRect(pl,0,pr,hh,rr,rr,pt);
             pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255));
             c.drawRoundRect(pl+.5f,.5f,pr-.5f,hh-.5f,rr,rr,pt);
