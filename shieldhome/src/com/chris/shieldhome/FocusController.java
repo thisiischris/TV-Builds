@@ -86,6 +86,7 @@ class FocusController {
         boolean hz = k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT;
         if (!(v || hz) || a.homeGrid == null || a.appMenu != null || a.editMode || a.dragIdx >= 0)
             return false;
+        if (a.searchTyping && hz) return false;
         View f = a.getCurrentFocus();
         int sec = f == null ? -1 : secOf(f);
         if (sec < 0) return false;
@@ -118,6 +119,7 @@ class FocusController {
     /** Overlays close themselves. Returns true if consumed (not the home short/long path). */
     boolean closeOverlay() {
         if (a.appMenu != null) { a.closeMenu(); return true; }
+        if (a.searchTyping) { a.closeSearchField(); if (a.searchV!=null) a.searchV.requestFocus(); return true; }
         if (a.dimSlide) { a.closeDimSlide(); return true; }
         if (a.editMode || a.dragIdx >= 0) { a.exitEdit(); return true; }
         if (a.drawerOpen) { a.setDrawer(false); a.focusHomeApp(); return true; }
@@ -155,6 +157,7 @@ class FocusController {
         if (sec == 0) {
             if (a.gear != null) o.add(a.gear);
             if (a.searchOpen){ if (a.speakV!=null) o.add(a.speakV); if (a.typeV!=null) o.add(a.typeV); }
+            else if (a.searchTyping && a.searchField!=null) o.add(a.searchField);
             else if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
         } else if (sec == 1) { if (a.heroShown() && a.heroBtn != null) o.add(a.heroBtn); }
         else if (sec == 2) { if (a.tabPlay.getVisibility()==View.VISIBLE) o.add(a.tabPlay); o.add(a.tabLive); }
@@ -188,7 +191,7 @@ class FocusController {
     int secOf(View f) {
         if (a.homeGrid == null || a.cardRow == null) return -1;
         for (View x = f; x != null; x = x.getParent() instanceof View ? (View) x.getParent() : null) {
-            if (x == a.gear || x == a.searchV || x == a.speakV || x == a.typeV) return 0;
+            if (x == a.gear || x == a.searchV || x == a.speakV || x == a.typeV || x == a.searchField) return 0;
             if (x == a.heroG) return 1;
             if (x == a.tabPlay || x == a.tabLive) return 2;
             if (x.getParent() == a.cardRow) return 3;
@@ -199,7 +202,7 @@ class FocusController {
 
     int topIdx(View v) {
         if (v == a.gear) return 0;
-        if (v == a.searchV || v == a.speakV) return 1;
+        if (v == a.searchV || v == a.speakV || v == a.searchField) return 1;
         if (v == a.typeV) return 2;
         return -1;
     }
@@ -240,7 +243,7 @@ class FocusController {
 
     String name(View v) {
         if (v == a.gear) return "gear";
-        if (v == a.searchV) return "search";
+        if (v == a.searchV || v == a.searchField) return "search";
         if (v == a.speakV) return "speak";
         if (v == a.typeV) return "type";
         if (v == a.heroG || v == a.heroBtn) return "hero";
