@@ -681,7 +681,6 @@ public class MainActivity extends Activity {
         if (owner!=null) pressSettle(owner);
         if (back && focus!=null) focus.restore();
     }
-    void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
     Bitmap vigMask; final Map<String,Bitmap> heroMasked=new HashMap<>();
     Bitmap alphaMask(int w, int h){
         if (vigMask!=null && vigMask.getWidth()==w && vigMask.getHeight()==h) return vigMask;

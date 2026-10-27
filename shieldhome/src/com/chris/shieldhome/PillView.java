@@ -9,7 +9,6 @@ import android.widget.*;
 class PillView extends View {
         final MainActivity activity; String label; int icon; boolean on; Drawable asst; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
         PillView(MainActivity activity, Context c, String l, int ic, boolean o){ super(c); this.activity=activity; label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
-        void setOn(boolean o){ on=o; invalidate(); }
         @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==activity.heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(activity.focusInterpolator).start(); setElevation(f?activity.p(4):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
             float w=getWidth(), hh=getHeight(), r=this==activity.heroBtn?activity.p(14):hh/2;
