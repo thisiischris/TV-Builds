@@ -87,6 +87,7 @@ public class MainActivity extends Activity {
     String name(View v){ return focus!=null?focus.name(v):"?"; }
     @Override protected void onNewIntent(Intent i){ super.onNewIntent(i); focus.restoreNow(); }
     boolean editLp=false;
+    @Override public void onWindowFocusChanged(boolean has){ super.onWindowFocusChanged(has); if (!has && dimSlide) closeMenu(false); }
     @Override public boolean dispatchKeyEvent(KeyEvent e){
         if (appMenu!=null) return menuKey(e);
         // v17: in edit mode a long-press on a home row tile does nothing (no drag, no click on release)
@@ -812,8 +813,8 @@ public class MainActivity extends Activity {
             if (e.getAction()!=KeyEvent.ACTION_DOWN) return true;
             if (k==KeyEvent.KEYCODE_BACK){ setDimPct(dimSlideWas); closeMenu(false); return true; }
             if (k==KeyEvent.KEYCODE_DPAD_UP){ dimSlideBy(1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ if (dimPct()<=0) closeMenu(false); else dimSlideBy(-1); return true; }
-            if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT){ closeMenu(false); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_DOWN){ if (dimPct()<=0){ closeMenu(false); return dispatchKeyEvent(e); } dimSlideBy(-1); return true; }
+            if (k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT){ closeMenu(false); return dispatchKeyEvent(e); }
             return true;
         }
         if (k==KeyEvent.KEYCODE_BACK){ if (e.getAction()==KeyEvent.ACTION_DOWN) closeMenu(); return true; }
@@ -1438,10 +1439,10 @@ public class MainActivity extends Activity {
     void qsLabels(){ int d=dimPct(); if (qsDim==null) return; qsDim.label="Dim: "+(d==0?"Off":d+"%"); qsDim.setOn(d>0); qsDim.invalidate(); }
     void syncDimFill(boolean anim){
         float to=dimPct()/100f;
-        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); return; }
+        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); return; }
         if (dimFillAnim!=null) dimFillAnim.cancel();
         dimFillAnim=android.animation.ValueAnimator.ofFloat(dimFill, to); dimFillAnim.setDuration(200);
-        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); });
+        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); });
         dimFillAnim.start();
     }
     void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); if (dimSlideLab!=null) dimSlideLab.setText(dimPct()+"%"); if (dimSlideTrack!=null) dimSlideTrack.invalidate(); }
@@ -1450,23 +1451,32 @@ public class MainActivity extends Activity {
         if (focus!=null) focus.remember();
         dimSlide=true; dimSlideIgnore=true; dimSlideWas=dimPct();
         LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.VERTICAL); p.setGravity(Gravity.CENTER_HORIZONTAL);
-        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(150,120,118,140)); bg.setStroke(1, Color.argb(40,255,255,255));
+        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(240,18,18,22)); bg.setStroke(1, Color.argb(40,255,255,255));
         p.setBackground(bg); p.setPadding(p(10),p(12),p(10),p(12)); p.setElevation(p(4)); p.setTranslationZ(p(80));
-        dimSlideLab=text(dimPct()+"%", 12, Color.WHITE, "sans-serif-medium"); dimSlideLab.setGravity(Gravity.CENTER);
-        p.addView(dimSlideLab, new LinearLayout.LayoutParams(-2,-2));
+        dimSlideLab=text("90%", 12, Color.WHITE, "sans-serif-medium"); dimSlideLab.setGravity(Gravity.CENTER);
+        dimSlideLab.setSingleLine(true); dimSlideLab.setMaxLines(1);
+        dimSlideLab.measure(0,0); int lw=dimSlideLab.getMeasuredWidth();
+        dimSlideLab.setText(dimPct()+"%");
+        p.addView(dimSlideLab, new LinearLayout.LayoutParams(lw,-2));
         dimSlideTrack=new View(this){
             @Override protected void onDraw(Canvas c){
-                float w=getWidth(), hh=getHeight(), rr=w/2f, t=dimPct()/90f;
+                float w=getWidth(), hh=getHeight(), rr=w/2f, t=Math.max(0, Math.min(1, dimFill/0.9f));
                 Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-                Path cap=new Path(); cap.addRoundRect(0,0,w,hh,rr,rr,Path.Direction.CW);
-                c.save(); c.clipPath(cap);
+                int sc=c.saveLayer(0,0,w,hh,null);
                 pt.setColor(Color.argb(50,255,255,255)); c.drawPaint(pt);
-                if (t>0){ float th=Math.max(hh*t, rr*2); pt.setColor(Color.WHITE); c.drawRoundRect(0,hh-th,w,hh,rr,rr,pt); }
-                c.restore();
+                if (t>0){ float th=Math.max(t*hh, w); pt.setColor(Color.WHITE); c.drawRoundRect(0,hh-th,w,hh,rr,rr,pt); }
+                pt.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+                c.drawRoundRect(0,0,w,hh,rr,rr,pt);
+                c.restoreToCount(sc);
             }
         };
+        dimSlideTrack.setWillNotDraw(false);
         LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(p(6), p(120)); tp.topMargin=p(8); p.addView(dimSlideTrack, tp);
+        p.setId(View.generateViewId());
+        p.setNextFocusLeftId(p.getId()); p.setNextFocusRightId(p.getId());
+        p.setNextFocusUpId(p.getId()); p.setNextFocusDownId(p.getId());
         p.setFocusable(true); p.setClickable(true);
+        p.setOnFocusChangeListener((v,f)->{ if (!f && dimSlide) closeMenu(false); });
         p.measure(0,0);
         int mw=p.getMeasuredWidth(), mh=p.getMeasuredHeight();
         bg.setCornerRadius(mh/2f);
@@ -1479,9 +1489,8 @@ public class MainActivity extends Activity {
         if (y<p(8)) y=p(8);
         FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(mw, mh); lp.leftMargin=x; lp.topMargin=y;
         p.setPivotX(0); p.setPivotY(0); p.setAlpha(0f); p.setScaleX(0.3f); p.setScaleY(0.3f);
-        appMenu=p; root.addView(p, lp); lockBehind(true);
+        appMenu=p; root.addView(p, lp); p.requestFocus(); lockBehind(true);
         p.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
-        h.post(()->{ if (appMenu==p) p.requestFocus(); });
     }
     void toggleQs(){
         qsOpen=!qsOpen; gear.setOn(qsOpen);
