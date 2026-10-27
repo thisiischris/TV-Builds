@@ -23,11 +23,7 @@ class FocusController {
             savedIdx = a.prefs().getInt("f_idx", 0);
             int ft = a.prefs().getInt("f_tab", 0);
             if (a.wnPickCache != null && a.wnPickCache.isEmpty()) ft = 1;
-            if (ft != a.tab && a.tabPlay != null) {
-                a.tab = ft;
-                a.tabPlay.setOn(a.tab == 0);
-                a.tabLive.setOn(a.tab == 1);
-            }
+            if (ft != a.tab) a.tab = ft;
         }
     }
 

@@ -18,7 +18,7 @@ import java.util.*;
 public class MainActivity extends Activity {
     // All geometry is in mockup pixels (1024x576 reference), scaled to the real screen.
     float u; PackageManager pm; FrameLayout root; LinearLayout cardRow; HorizontalScrollView cardScroll; FrameLayout cardWrap; View clk;
-    PillView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
+    SegBar tabBar; TextView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255), BG = Color.rgb(8, 8, 16);
     static final int TILE_R = 11;
     static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f;
@@ -203,11 +203,8 @@ public class MainActivity extends Activity {
         });
         root.addView(hero, 0, lp(-1, p(328), Gravity.TOP, 0,0,0,0));
 
-        // Tabs
-        tabPlay = new PillView(this, "Play Next", 0, true); tabLive = new PillView(this, "Live TV", 1, false);
-        place(tabPlay, 35, 308, 129, 28); place(tabLive, 175, 308, 110, 28);
-        View.OnFocusChangeListener tl = (v,f)->{ if(f){ int t = v==tabPlay?0:1; if (t!=tab){ tab=t; tabPlay.setOn(tab==0); tabLive.setOn(tab==1); refreshCards(); resetCardRow(); } } };
-        tabPlay.setOnFocusChangeListener(tl); tabLive.setOnFocusChangeListener(tl);
+        tabBar = new SegBar(); tabPlay=tabBar.play; tabLive=tabBar.live;
+        place(tabBar, 35, 308, -2, 28);
 
         // Cards row: 5-tile viewport; clip off so scale+glow can draw; 6th hidden by alpha
         cardWrap = new FrameLayout(this);
@@ -231,7 +228,6 @@ public class MainActivity extends Activity {
         buildHomeGrid();
 
         setContentView(root);
-        tabPlay.setNextFocusDownId(View.NO_ID); tabLive.setNextFocusDownId(View.NO_ID);
         h.post(()->{ if (tabPlay.getVisibility()==View.VISIBLE) tabPlay.requestFocus(); else tabLive.requestFocus(); });
     }
 
@@ -267,10 +263,7 @@ public class MainActivity extends Activity {
             }
             pt.setColor(fg); pt.setStrokeWidth(p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
             float cx = icon==3 ? p(19) : p(icon==2?18:28) - (icon==2?p(4):0), cy = hh/2;
-            if (icon==0){ pt.setStyle(Paint.Style.FILL); pt.setPathEffect(new CornerPathEffect(p(1.1f))); Path tr=new Path(); tr.moveTo(cx-p(3.7f),cy-p(5.8f)); tr.lineTo(cx+p(5.5f),cy); tr.lineTo(cx-p(3.7f),cy+p(5.8f)); tr.close(); c.drawPath(tr,pt); pt.setPathEffect(null); }
-            else if (icon==1){ pt.setStyle(Paint.Style.FILL); c.drawCircle(cx,cy,p(1.6f),pt); pt.setStyle(Paint.Style.STROKE);
-                for (float rr: new float[]{4.5f,7.5f}){ RectF o=new RectF(cx-p(rr),cy-p(rr),cx+p(rr),cy+p(rr)); c.drawArc(o,-40,80,false,pt); c.drawArc(o,140,80,false,pt);} }
-            else if (icon==3){ // magnifier + mic
+            if (icon==3){ // magnifier + mic
                 c.drawCircle(cx-p(1),cy-p(1),p(4.2f),pt); c.drawLine(cx+p(2),cy+p(2),cx+p(5),cy+p(5),pt);
                 if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
                 int ax=(int)(cx+p(8)); asst.setBounds(ax, (int)(cy-p(7.5f)), ax+p(15), (int)(cy+p(7.5f))); asst.draw(c); }
@@ -283,8 +276,81 @@ public class MainActivity extends Activity {
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(this==heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
+            if (this==heroBtn && "Play Now".equals(label)){
+                float tw=pt.measureText(label), cap=-fm.ascent, th=cap, twt=cap*0.78f, gap=p(5), x0=(w-twt-gap-tw)/2;
+                pt.setPathEffect(new CornerPathEffect(Math.max(1, cap*0.12f)));
+                Path tr=new Path(); tr.moveTo(x0, cy-th/2); tr.lineTo(x0+twt, cy); tr.lineTo(x0, cy+th/2); tr.close();
+                c.drawPath(tr, pt); pt.setPathEffect(null);
+                pt.setTextAlign(Paint.Align.LEFT);
+                c.drawText(label, x0+twt+gap, cy-(fm.ascent+fm.descent)/2, pt);
+                return;
+            }
             if (icon==4) pt.setTextAlign(Paint.Align.CENTER); else pt.setTextAlign(Paint.Align.LEFT);
             if (label.length()>0) c.drawText(label, icon==4? w/2f : p(icon==2?24:icon==3?46:43), cy-(fm.ascent+fm.descent)/2, pt);
+        }
+    }
+
+    class SegBar extends LinearLayout {
+        TextView play, live; float hx, hw; android.animation.ValueAnimator ha;
+        SegBar(){
+            super(MainActivity.this);
+            setOrientation(HORIZONTAL); setGravity(Gravity.CENTER_VERTICAL);
+            setPadding(p(3),p(3),p(3),p(3)); setWillNotDraw(false); setClipToPadding(false);
+            play=mk("Play Next"); live=mk("Live TV"); addView(play); addView(live);
+            play.setOnFocusChangeListener((v,f)->{ if(f) pick(0); });
+            live.setOnFocusChangeListener((v,f)->{ if(f) pick(1); });
+            play.setId(View.generateViewId()); live.setId(View.generateViewId());
+            play.setNextFocusRightId(live.getId()); live.setNextFocusLeftId(play.getId());
+            play.setNextFocusDownId(View.NO_ID); live.setNextFocusDownId(View.NO_ID);
+            play.setNextFocusUpId(View.NO_ID); live.setNextFocusUpId(View.NO_ID);
+        }
+        TextView mk(String s){
+            TextView t=text(s,12,Color.rgb(232,232,240),"sans-serif");
+            t.setFocusable(true); t.setClickable(true); t.setGravity(Gravity.CENTER);
+            t.setPadding(p(14),0,p(14),0); t.setSingleLine(true); t.setMinHeight(p(22));
+            return t;
+        }
+        void pick(int t){
+            if (t!=tab){ tab=t; refreshCards(); resetCardRow(); }
+            slide(hw>0); color();
+        }
+        void color(){
+            int d=Color.rgb(22,22,30), l=Color.rgb(232,232,240);
+            play.setTextColor(tab==0?d:l); live.setTextColor(tab==1?d:l);
+        }
+        void showPlay(boolean on){ play.setVisibility(on?VISIBLE:GONE); play.setFocusable(on); requestLayout(); }
+        void slide(boolean anim){
+            TextView s=(tab==0 && play.getVisibility()==VISIBLE)?play:live;
+            float nx=s.getLeft(), nw=s.getWidth();
+            if (nw<=0){ post(()->slide(false)); return; }
+            if (!anim){ hx=nx; hw=nw; invalidate(); return; }
+            if (ha!=null) ha.cancel();
+            float x0=hx, w0=hw;
+            ha=android.animation.ValueAnimator.ofFloat(0,1); ha.setDuration(220);
+            ha.setInterpolator(new android.view.animation.PathInterpolator(0.42f,0,0.58f,1));
+            ha.addUpdateListener(a->{ float u=(Float)a.getAnimatedValue(); hx=x0+(nx-x0)*u; hw=w0+(nw-w0)*u; invalidate(); });
+            ha.start();
+        }
+        @Override protected void onLayout(boolean ch, int l, int t, int r, int b){
+            super.onLayout(ch,l,t,r,b);
+            if (hw<=0) slide(false);
+            color();
+        }
+        @Override protected void dispatchDraw(Canvas c){
+            float w=getWidth(), hh=getHeight(), rr=hh/2;
+            boolean fo=play.isFocused()||live.isFocused();
+            Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
+            pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
+            c.drawRoundRect(0,0,w,hh,rr,rr,pt);
+            pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255));
+            c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,rr,rr,pt);
+            pt.setStyle(Paint.Style.FILL);
+            if (hw>0){
+                float pad=p(3), h=hh-pad*2;
+                pt.setColor(Color.rgb(229,227,228));
+                c.drawRoundRect(hx, pad, hx+hw, pad+h, h/2f, h/2f, pt);
+            }
+            super.dispatchDraw(c);
         }
     }
 
@@ -496,7 +562,7 @@ public class MainActivity extends Activity {
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] a: l){ if (a==null) continue; if (sb.length()>0) sb.append(','); sb.append(a[0]).append('/').append(a[1]); } prefs().edit().putString("order", sb.toString()).commit(); }
     GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=p(APP_W); gl.height=p(APP_H); gl.rightMargin = (i%6==5)?0:p(APP_HG); gl.bottomMargin = p(APP_VG); return gl; }
     int rowH(){ return p(APP_H+APP_VG); }
-    View[] slideViews(){ return new View[]{clk, gear, searchV, heroG, tabPlay, tabLive, cardWrap, homeGrid}; }
+    View[] slideViews(){ return new View[]{clk, gear, searchV, heroG, tabBar, cardWrap, homeGrid}; }
     void setDrawer(boolean on){ boolean edge=drawerOpen!=on; drawerOpen=on; slideHome(edge); }
     void fadeChrome(boolean hide){
         float a=hide?0f:1f;
@@ -531,7 +597,7 @@ public class MainActivity extends Activity {
         float y = open ? -(p(466)+Math.max(0, r-4)*rowH()) : 0;
         fadeChrome(open);
         if (open){
-            for (View v: new View[]{tabPlay, tabLive, cardWrap, homeGrid}) if (v!=null) v.bringToFront();
+            for (View v: new View[]{tabBar, cardWrap, homeGrid}) if (v!=null) v.bringToFront();
         } else {
             if (clk!=null) clk.bringToFront();
             if (gear!=null) gear.bringToFront();
@@ -540,7 +606,7 @@ public class MainActivity extends Activity {
         if (editMode) stackEditDim();
         for (View v: slideViews()){
             if (v==null) continue;
-            boolean up=v==heroG||v==tabPlay||v==tabLive||v==cardWrap;
+            boolean up=v==heroG||v==tabBar||v==cardWrap;
             if (v==heroG) boxLayer(v, true);
             android.view.ViewPropertyAnimator an=v.animate().translationY(y).setDuration(600).setInterpolator(drawerIp);
             if (up) an.alpha(open?0f:1f).scaleX(open?0.98f:1f).scaleY(open?0.98f:1f);
@@ -1066,16 +1132,12 @@ public class MainActivity extends Activity {
     boolean playNextOn(){ return wnPickCache!=null && !wnPickCache.isEmpty(); }
     void applyTabs(){
         boolean pn=playNextOn();
-        tabPlay.setVisibility(pn?View.VISIBLE:View.GONE);
-        tabPlay.setFocusable(pn);
-        if (tabLive.getLayoutParams() instanceof FrameLayout.LayoutParams){
-            ((FrameLayout.LayoutParams)tabLive.getLayoutParams()).leftMargin=p(pn?175:35);
-            tabLive.requestLayout();
-        }
+        if (tabBar!=null) tabBar.showPlay(pn);
         if (!pn){
-            if (tab==0){ tab=1; tabPlay.setOn(false); tabLive.setOn(true); }
-            if (tabPlay.hasFocus()) tabLive.requestFocus();
+            if (tab==0) tab=1;
+            if (tabPlay!=null && tabPlay.hasFocus() && tabLive!=null) tabLive.requestFocus();
         }
+        if (tabBar!=null) tabBar.slide(false);
     }
     String cardSig(){
         StringBuilder b=new StringBuilder(tab==0?"P|":"L|");
