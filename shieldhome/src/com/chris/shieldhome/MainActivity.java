@@ -222,10 +222,10 @@ public class MainActivity extends Activity {
     }
     void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(34); v.setLayoutParams(lp); } v.invalidate(); if (v==heroBtn) placeDots(); }
     void placeDots(){
-        if (heroBtn==null || heroDots==null) return;
-        int bw=heroBtn.getWidth(), dw=heroDots.getWidth();
-        if (bw<=0 || dw<=0) return;
-        heroDots.setTranslationX(heroBtn.getLeft()+(bw-dw)/2f);
+        if (heroDots==null) return;
+        int dw=heroDots.getWidth(), sw=heroG!=null?heroG.getWidth():(root!=null?root.getWidth():0);
+        if (dw<=0 || sw<=0) return;
+        heroDots.setTranslationX((sw-dw)/2f);
     }
 
     void place(View v, float x, float y, float w, float hh){ FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w<0?-2:p(w), hh<0?-2:p(hh)); lp.leftMargin=p(x); lp.topMargin=p(y); root.addView(v, lp); }
@@ -337,7 +337,7 @@ public class MainActivity extends Activity {
         heroDots = new HeroDots();
         hero.addView(heroDots, lp(-2, p(28), Gravity.TOP|Gravity.START, 0, p(280), 0, 0));
         View.OnLayoutChangeListener dotsLay=(v,a,b,c,d,e,f,g,h2)->placeDots();
-        heroBtn.addOnLayoutChangeListener(dotsLay);
+        hero.addOnLayoutChangeListener(dotsLay);
         heroDots.addOnLayoutChangeListener(dotsLay);
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
@@ -1233,7 +1233,9 @@ public class MainActivity extends Activity {
         for (Object[] o: l) b.append(o[0]).append('|').append(o[1]).append('|').append(o[3]).append(',');
         return b.toString();
     }
+    long heroGate;
     void heroStep(boolean next){
+        if (android.os.SystemClock.uptimeMillis()<heroGate) return;
         synchronized(heroLock){
             int n=heroItems.size();
             if (n<=1) return;
@@ -1246,6 +1248,7 @@ public class MainActivity extends Activity {
     void showHero(){
         final Object[] o;
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
+        heroGate=android.os.SystemClock.uptimeMillis()+650;
         if (heroBtn==null || !heroBtn.isFocused()) bindHeroAction(o);
         final String uri = (String)o[3];
         final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=heroG!=null&&heroG.getHeight()>0?heroG.getHeight():p(400), g=++heroLoadGen;
