@@ -571,9 +571,6 @@ public class MainActivity extends Activity {
             Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
             pt.setColor(Color.argb(88,60,58,75));
             c.drawRoundRect(0,0,getWidth(),hh,rr,rr,pt);
-            pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255));
-            c.drawRoundRect(.5f,.5f,getWidth()-.5f,hh-.5f,rr,rr,pt);
-            pt.setStyle(Paint.Style.FILL);
             pt.setColor(Color.argb(89,255,255,255));
             for (int i=0;i<n;i++) c.drawCircle(x0+slot(i)+d/2, cy, d/2, pt);
             pt.setColor(Color.WHITE);
