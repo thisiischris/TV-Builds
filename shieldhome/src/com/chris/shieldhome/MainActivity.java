@@ -162,14 +162,15 @@ public class MainActivity extends Activity {
         // Hero: NVIDIA-style featured art, upper-right, fade into bg
         FrameLayout hero = new FrameLayout(this); hero.setClipChildren(false);
         FrameLayout artHost = new FrameLayout(this); artHost.setClipChildren(true);
-        VignetteView art = new VignetteView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        heroArt2 = new VignetteView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
+        ImageView art = new ImageView(this); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.FIT_XY);
+        heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.FIT_XY); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
         hero.addView(artHost, lp(p(640), p(328), Gravity.TOP|Gravity.END, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
-        heroLabel = text("FEATURED", 8, Color.rgb(190,188,205), "sans-serif-medium");
         heroArt = art;
+        heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
+        heroLabel = text("", 8, Color.rgb(190,188,205), "sans-serif-medium");
         heroTitle = text("Your Library", 23, Color.rgb(220,220,230), "sans-serif-medium");
         heroTitle.setSingleLine(false); heroTitle.setMaxLines(2); heroTitle.setEllipsize(android.text.TextUtils.TruncateAt.END); heroTitle.setHorizontallyScrolling(false);
         heroTitle.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroTitle.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
@@ -178,20 +179,21 @@ public class MainActivity extends Activity {
         heroSub.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroSub.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
         heroLabel.setSingleLine(false); heroLabel.setMaxLines(2); heroLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
         heroLabel.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroLabel.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
-        heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
+        heroLabel.setVisibility(View.GONE);
         heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(1f);
         for (TextView tv: new TextView[]{heroLabel, heroTitle, heroSub}) tv.setShadowLayer(p(6), 0, p(2), Color.argb(180,0,0,0));
-        meta.addView(heroLabel, new LinearLayout.LayoutParams(-2,-2));
+        meta.addView(heroBadge, new LinearLayout.LayoutParams(p(80), p(22)));
+        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-2,-2); ml.topMargin=p(6); meta.addView(heroLabel, ml);
         LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
         LinearLayout.LayoutParams mf = new LinearLayout.LayoutParams(p(40), Math.max(2,p(1.4f))); mf.topMargin=p(6); meta.addView(heroFocus, mf);
         LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(-1,-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
-        LinearLayout.LayoutParams mb = new LinearLayout.LayoutParams(p(100),p(27)); mb.topMargin=p(10); meta.addView(heroBadge, mb);
         heroMeta = meta;
         hero.addView(meta, lp(p(360),-2,Gravity.TOP|Gravity.START,p(35),p(72),0,0));
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(272), 0, 0));
+        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(244), 0, 0));
+        art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ Bitmap src=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,w,h); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)->{
             heroTitle.setTextColor(f?Color.WHITE:Color.rgb(220,220,230));
@@ -260,12 +262,13 @@ public class MainActivity extends Activity {
                 c.drawCircle(cx-p(1),cy-p(1),p(4.2f),pt); c.drawLine(cx+p(2),cy+p(2),cx+p(5),cy+p(5),pt);
                 if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
                 int ax=(int)(cx+p(8)); asst.setBounds(ax, (int)(cy-p(7.5f)), ax+p(15), (int)(cy+p(7.5f))); asst.draw(c); }
-            else if (icon==5){ float gx=w/2f;
-                c.drawCircle(gx, cy-p(1.6f), p(4.5f), pt);
-                c.drawLine(gx-p(1.8f), cy+p(3.2f), gx-p(1.5f), cy+p(4.8f), pt);
-                c.drawLine(gx+p(1.8f), cy+p(3.2f), gx+p(1.5f), cy+p(4.8f), pt);
-                c.drawLine(gx-p(2.0f), cy+p(5.0f), gx+p(2.0f), cy+p(5.0f), pt);
-                c.drawLine(gx-p(1.5f), cy+p(6.4f), gx+p(1.5f), cy+p(6.4f), pt); }
+            else if (icon==5){ float gx=w/2f, by=cy-p(0.6f);
+                c.drawCircle(gx, by, p(3.6f), pt);
+                c.drawLine(gx-p(1.5f), by+p(3.4f), gx-p(1.3f), by+p(4.8f), pt);
+                c.drawLine(gx+p(1.5f), by+p(3.4f), gx+p(1.3f), by+p(4.8f), pt);
+                c.drawLine(gx-p(1.7f), by+p(5.0f), gx+p(1.7f), by+p(5.0f), pt);
+                c.drawLine(gx-p(1.2f), by+p(6.2f), gx+p(1.2f), by+p(6.2f), pt);
+                for (int i=-2;i<=2;i++){ double a=Math.toRadians(-90+i*36); float s=p(4.8f), e=p(6.8f); c.drawLine(gx+(float)Math.cos(a)*s, by+(float)Math.sin(a)*s, gx+(float)Math.cos(a)*e, by+(float)Math.sin(a)*e, pt); } }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
             pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(this==heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
@@ -851,40 +854,37 @@ public class MainActivity extends Activity {
         if (back && focus!=null) focus.restore();
     }
     void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
-    Bitmap vigMask;
-    Bitmap vignetteMask(int w, int h){
+    Bitmap vigMask; final Map<String,Bitmap> heroMasked=new HashMap<>();
+    Bitmap alphaMask(int w, int h){
         if (vigMask!=null && vigMask.getWidth()==w && vigMask.getHeight()==h) return vigMask;
         Bitmap bm=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(bm);
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        p.setShader(new RadialGradient(w*0.62f, h*0.36f, Math.max(w,h)*1.015f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,0,w*0.30f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
-        p.setShader(new LinearGradient(0,0,w*0.32f,0, Color.argb(248,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,h,0,h*0.62f, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,h,0,h*0.62f, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(w,0,w*0.90f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,0,0,h*0.08f, Color.argb(26,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(w,0,w*0.94f,0, Color.argb(26,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,0,0,h*0.08f, Color.argb(230,255,255,255), Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         vigMask=bm; return bm;
     }
-    class VignetteView extends ImageView {
-        final Paint xp=new Paint(Paint.ANTI_ALIAS_FLAG);
-        VignetteView(Context c){ super(c); }
-        @Override protected void onDraw(Canvas c){
-            int w=getWidth(), h=getHeight();
-            if (w<=0||h<=0){ super.onDraw(c); return; }
-            int s=c.saveLayer(0,0,w,h,null);
-            super.onDraw(c);
-            xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-            c.drawBitmap(vignetteMask(w,h),0,0,xp);
-            xp.setXfermode(null);
-            c.restoreToCount(s);
-        }
+    Bitmap maskHero(String key, Bitmap src, int tw, int th){
+        if (tw<=0||th<=0||src==null) return src;
+        Bitmap hit=heroMasked.get(key);
+        if (hit!=null && !hit.isRecycled() && hit.getWidth()==tw && hit.getHeight()==th) return hit;
+        Bitmap out=Bitmap.createBitmap(tw,th,Bitmap.Config.ARGB_8888);
+        Canvas c=new Canvas(out);
+        float s=Math.max(tw/(float)src.getWidth(), th/(float)src.getHeight());
+        float dw=src.getWidth()*s, dh=src.getHeight()*s;
+        c.drawBitmap(src, null, new RectF((tw-dw)/2f,(th-dh)/2f,(tw+dw)/2f,(th+dh)/2f), null);
+        Paint xp=new Paint(Paint.ANTI_ALIAS_FLAG);
+        xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+        c.drawBitmap(alphaMask(tw,th),0,0,xp);
+        heroMasked.put(key, out); return out;
     }
     // ---------- Featured hero ----------
     ImageView heroArt, heroBadge; TextView heroTitle, heroSub; LinearLayout heroMeta; List<Object[]> heroItems = new ArrayList<>(); int heroIdx=0;
@@ -895,13 +895,12 @@ public class MainActivity extends Activity {
     }
     void bindHeroCopy(Object[] o){
         String raw=o[2]==null?"":(String)o[2];
-        String tag=o.length>5?(String)o[5]:"FEATURED";
-        String meta, desc=raw;
+        String tag=o.length>5?(String)o[5]:"";
+        String meta="", desc=raw;
         int nl=raw.indexOf('\n');
         if ("NEW".equals(tag) && nl>=0){ meta=raw.substring(0,nl).trim(); desc=raw.substring(nl+1); }
-        else meta="NEW".equals(tag)?"NEW":"FEATURED";
         desc=desc.replaceAll("\\s+"," ").trim();
-        if (heroLabel!=null) heroLabel.setText(meta);
+        if (heroLabel!=null){ heroLabel.setText(meta); heroLabel.setVisibility(meta.isEmpty()?View.GONE:View.VISIBLE); }
         heroTitle.setText((String)o[1]); heroSub.setText(desc);
         bindHeroAction(o);
     }
@@ -965,7 +964,8 @@ public class MainActivity extends Activity {
         final String uri = (String)o[3];
         final int tw=p(640), th=p(328), g=++heroLoadGen;
         pool.execute(()->{
-            Bitmap bm = uri==null||images==null?null:images.decode(uri, tw, th);
+            Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
+            Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
             h.post(()->{ if (g!=heroLoadGen) return; heroOnScreen=o; transitionHero(o, bm); });
         });
     }
@@ -973,7 +973,7 @@ public class MainActivity extends Activity {
         android.view.animation.Interpolator ease = new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
         final ImageView in = heroFront ? heroArt2 : heroArt, out = heroFront ? heroArt : heroArt2;
         if (bm != null){
-            in.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            in.setScaleType(ImageView.ScaleType.FIT_XY);
             in.setImageBitmap(bm); in.setScaleX(1f); in.setScaleY(1f); in.setAlpha(0f); in.bringToFront();
             in.animate().alpha(1f).setDuration(1600).setInterpolator(ease).start();
             out.animate().alpha(0f).setDuration(1600).setInterpolator(ease).start();
