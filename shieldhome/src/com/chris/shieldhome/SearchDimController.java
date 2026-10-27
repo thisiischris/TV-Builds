@@ -25,7 +25,7 @@ class SearchDimController {
         a.speakV.setFocusable(true); a.typeV.setFocusable(true);
         float mid=a.p(28);
         android.view.animation.Interpolator ip=new android.view.animation.OvershootInterpolator(1.2f);
-        for (MainActivity.PillView pv: new MainActivity.PillView[]{a.speakV,a.typeV}){ pv.animate().cancel(); pv.setScaleX(0.86f); pv.setScaleY(0.86f); pv.setAlpha(0.35f); }
+        for (PillView pv: new PillView[]{a.speakV,a.typeV}){ pv.animate().cancel(); pv.setScaleX(0.86f); pv.setScaleY(0.86f); pv.setAlpha(0.35f); }
         a.speakV.setTranslationX(mid); a.typeV.setTranslationX(-mid);
         a.speakV.animate().translationX(0).scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).setInterpolator(ip).start();
         a.typeV.animate().translationX(0).scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).setInterpolator(ip).start();

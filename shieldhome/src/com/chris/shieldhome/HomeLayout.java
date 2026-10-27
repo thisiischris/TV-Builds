@@ -14,8 +14,8 @@ class HomeLayout {
         a.root.setBackgroundResource(R.drawable.bg);
         a.root.setClipChildren(false);
 
-        a.wxPill = a.new PillView(a, "", 4, false); a.wxPill.setFocusable(false); a.wxPill.setClickable(false);
-        a.timePill = a.new PillView(a, "", 4, false); a.timePill.setFocusable(false); a.timePill.setClickable(false);
+        a.wxPill = new PillView(a, a, "", 4, false); a.wxPill.setFocusable(false); a.wxPill.setClickable(false);
+        a.timePill = new PillView(a, a, "", 4, false); a.timePill.setFocusable(false); a.timePill.setClickable(false);
         LinearLayout tr = new LinearLayout(a); tr.setGravity(Gravity.CENTER_VERTICAL);
         tr.addView(a.wxPill, new LinearLayout.LayoutParams(a.p(28), a.p(28)));
         LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(a.p(8), a.p(28));
@@ -25,16 +25,16 @@ class HomeLayout {
         a.root.addView(a.clk, a.lp(-2,-2,Gravity.TOP|Gravity.END,0,a.p(17),a.p(46),0));
 
         // Quick settings a.gear + inline options
-        a.gear = a.new PillView(a, "", 5, false); a.gear.setId(View.generateViewId());
+        a.gear = new PillView(a, a, "", 5, false); a.gear.setId(View.generateViewId());
         a.gear.setOnClickListener(v->a.openDimSlide());
         a.gear.setOnFocusChangeListener((v,f)->{ if (!f && a.dimSlide) a.closeDimSlide(); });
         place(a.gear, 35, 17, 28, 28);
-        MainActivity.PillView search = a.searchV = a.new PillView(a, "Search", 3, false);
+        PillView search = a.searchV = new PillView(a, a, "Search", 3, false);
         search.setOnFocusChangeListener((v,f)->{ if (f && !a.dimSlide) a.expandSearch(); });
         place(search, 71, 17, 104, 28);
         a.searchSplit = new LinearLayout(a); a.searchSplit.setOrientation(LinearLayout.HORIZONTAL); a.searchSplit.setGravity(Gravity.CENTER_VERTICAL);
         a.searchSplit.setVisibility(View.GONE);
-        a.speakV = a.new PillView(a, "", 6, false); a.typeV = a.new PillView(a, "", 7, false);
+        a.speakV = new PillView(a, a, "", 6, false); a.typeV = new PillView(a, a, "", 7, false);
         a.speakV.setId(View.generateViewId()); a.typeV.setId(View.generateViewId());
         a.speakV.setNextFocusRightId(a.typeV.getId()); a.typeV.setNextFocusLeftId(a.speakV.getId());
         a.speakV.setNextFocusDownId(View.NO_ID); a.typeV.setNextFocusDownId(View.NO_ID);
@@ -75,7 +75,7 @@ class HomeLayout {
         });
         a.searchField.setOnFocusChangeListener((v,f)->{ if (!f) a.closeSearchField(); });
         place(a.searchField, 71, 17, 200, 28);
-        a.dimBar = a.new PillView(a, "", 5, false);
+        a.dimBar = new PillView(a, a, "", 5, false);
         a.dimBar.setFocusable(false); a.dimBar.setClickable(false); a.dimBar.setVisibility(View.GONE);
         a.dimBar.setPivotX(a.p(100)); a.dimBar.setPivotY(a.p(14));
         place(a.dimBar, 71, 17, 200, 28);
@@ -108,11 +108,11 @@ class HomeLayout {
         LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(-1,-2); ms.topMargin=a.p(8); meta.addView(a.heroSub, ms);
         a.heroMeta = meta;
         hero.addView(meta, a.lp(a.p(360),-2,Gravity.TOP|Gravity.START,a.p(35),a.p(72),0,0));
-        a.heroBtn = a.new PillView(a, "Play Now", 4, true);
+        a.heroBtn = new PillView(a, a, "Play Now", 4, true);
         a.heroBtn.setAlpha(0f); a.heroBtn.setTranslationY(a.p(8));
         a.heroBtn.setOnClickListener(v->a.heroAction());
         hero.addView(a.heroBtn, a.lp(a.p(138), a.p(34), Gravity.TOP|Gravity.START, a.p(35), a.p(237), 0, 0));
-        a.heroDots = a.new HeroDots();
+        a.heroDots = new HeroDots(a);
         hero.addView(a.heroDots, a.lp(-2, a.p(28), Gravity.TOP|Gravity.START, 0, a.p(270), 0, 0));
         View.OnLayoutChangeListener dotsLay=(v,a,b,c,d,e,f,g,h2)->HomeLayout.this.a.placeDots();
         hero.addOnLayoutChangeListener(dotsLay);
@@ -122,7 +122,7 @@ class HomeLayout {
         a.heroBtn.setOnFocusChangeListener((x,f)-> a.showHeroAction(f));
         a.root.addView(hero, 0, a.lp(-1, a.p(400), Gravity.TOP, 0,0,0,0));
 
-        a.tabBar = a.new SegBar(); a.tabPlay=a.tabBar.play; a.tabLive=a.tabBar.live;
+        a.tabBar = new SegBar(a); a.tabPlay=a.tabBar.play; a.tabLive=a.tabBar.live;
         place(a.tabBar, 35, 298, -2, 31);
 
         // Cards row: 5-tile viewport; clip off so scale+glow can draw; 6th hidden by alpha
