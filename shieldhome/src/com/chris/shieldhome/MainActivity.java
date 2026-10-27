@@ -23,6 +23,8 @@ public class MainActivity extends Activity {
     static final int HERO_SCRIM_RGB=0x050507; // darker than BG 0x080810 so the wash doesn't read as wallpaper
     static final float HERO_LEFT_FADE=0.24f;
     static final int TILE_R = 11;
+    static final long HERO_ROTATE_MS = 16000;
+    final android.view.animation.DecelerateInterpolator focusInterpolator = new android.view.animation.DecelerateInterpolator();
     static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f, APP_GRID_Y=467.5f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
@@ -379,10 +381,9 @@ public class MainActivity extends Activity {
         String label; int icon; boolean on; Drawable asst; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
         PillView(Context c, String l, int ic, boolean o){ super(c); label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
         void setOn(boolean o){ on=o; invalidate(); }
-        @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); setElevation(f?p(4):0); invalidate(); }
+        @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(focusInterpolator).start(); setElevation(f?p(4):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
             float w=getWidth(), hh=getHeight(), r=this==heroBtn?p(14):hh/2;
-            boolean lit = on || (icon==2 && isFocused());
             pt.setStyle(Paint.Style.FILL);
             boolean fo = isFocused();
             boolean bare = this==gear && !fo;
@@ -463,6 +464,7 @@ public class MainActivity extends Activity {
 
     class SegBar extends LinearLayout {
         TextView play, live; float hx, hw, hs=1f; android.animation.ValueAnimator ha, pa;
+        final Paint trackPaint=new Paint(Paint.ANTI_ALIAS_FLAG), highlightPaint=new Paint(Paint.ANTI_ALIAS_FLAG), shadowPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         SegBar(){
             super(MainActivity.this);
             setOrientation(HORIZONTAL); setGravity(Gravity.CENTER_VERTICAL);
@@ -529,16 +531,16 @@ public class MainActivity extends Activity {
         }
         @Override protected void dispatchDraw(Canvas c){
             float w=getWidth(), hh=getHeight(), rr=hh/2;
-            Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
+            Paint pt=trackPaint;
             pt.setColor(Color.argb(140,60,58,75));
             c.drawRoundRect(0,0,w,hh,rr,rr,pt);
             pt.setStyle(Paint.Style.FILL);
             if (hw>0){
                 float cx=hx+hw/2, cy=hh/2, sw=hw*hs, sh=hh*hs, sr=sh/2;
                 Bitmap sb=shadowBmp(Math.max(1,(int)sw), Math.max(1,(int)sh), sr);
-                if (sb!=null){ Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG); sp.setAlpha(Math.max(0,Math.min(130,(int)(130*(hs-1f)/0.04f)))); int pad=p(48); c.drawBitmap(sb, cx-sw/2-pad, cy-sh/2-pad+p(19), sp); }
-                pt.setColor(Color.rgb(229,227,228));
-                c.drawRoundRect(cx-sw/2, cy-sh/2, cx+sw/2, cy+sh/2, sr, sr, pt);
+                if (sb!=null){ shadowPaint.setAlpha(Math.max(0,Math.min(130,(int)(130*(hs-1f)/0.04f)))); int pad=p(48); c.drawBitmap(sb, cx-sw/2-pad, cy-sh/2-pad+p(19), shadowPaint); }
+                highlightPaint.setColor(Color.rgb(229,227,228));
+                c.drawRoundRect(cx-sw/2, cy-sh/2, cx+sw/2, cy+sh/2, sr, sr, highlightPaint);
             }
             super.dispatchDraw(c);
         }
@@ -546,6 +548,7 @@ public class MainActivity extends Activity {
 
     class HeroDots extends View {
         int n, cur; float ax; android.animation.ValueAnimator an;
+        final Paint dotsPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         HeroDots(){ super(MainActivity.this); setAlpha(0f); setVisibility(GONE); setFocusable(false); }
         float slot(int i){ return i*(p(5)+p(7)); }
         void snap(int i){ cur=i; ax=slot(i); invalidate(); }
@@ -570,7 +573,7 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){
             if (n<=1) return;
             float d=p(5), g=p(7), row=(n-1)*(d+g)+d, hh=getHeight(), rr=hh/2, x0=(getWidth()-row)/2f, cy=hh/2f;
-            Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
+            Paint pt=dotsPaint;
             pt.setColor(Color.argb(88,60,58,75));
             c.drawRoundRect(0,0,getWidth(),hh,rr,rr,pt);
             pt.setColor(Color.argb(89,255,255,255));
@@ -582,7 +585,7 @@ public class MainActivity extends Activity {
 
     // ---------- Focus helper: soft blue glow drawn outside the tile + scale ----------
     class GlowFrame extends FrameLayout {
-        FrameLayout inner; View badgeV; float radius; Paint sp = new Paint(Paint.ANTI_ALIAS_FLAG); float glow=0, fade=1; Bitmap shBm; int shPad;
+        FrameLayout inner; View badgeV; float radius; Paint sp = new Paint(Paint.ANTI_ALIAS_FLAG); float glow=0, fade=1; Bitmap shBm; int shPad; android.animation.ValueAnimator glowAnimator;
         GlowFrame(Context c, FrameLayout in, float r){ super(c); inner=in; radius=r; setClipChildren(false); setClipToPadding(false); setClipToOutline(false); setWillNotDraw(false); setLayerType(View.LAYER_TYPE_NONE, null); forceHasOverlappingRendering(false);
             shPad=p(48);
             addView(in, new FrameLayout.LayoutParams(-1,-1));
@@ -597,8 +600,8 @@ public class MainActivity extends Activity {
             if (badgeV!=null && badgeV.getAlpha()>0.01f){ c.saveLayerAlpha(badgeV.getLeft(), badgeV.getTop(), badgeV.getRight(), badgeV.getBottom(), Math.round(255*badgeV.getAlpha())); c.translate(badgeV.getLeft(), badgeV.getTop()); badgeV.draw(c); c.restore(); }
         }
     }
-    View focusable(final FrameLayout v, final GradientDrawable base, float radius, final Runnable click){ return focusable(v, base, radius, 1.13f, click); }
-    View focusable(final FrameLayout v, final GradientDrawable base, float radius, final float sc, final Runnable click){
+    View focusable(final FrameLayout v, float radius, final Runnable click){ return focusable(v, radius, 1.13f, click); }
+    View focusable(final FrameLayout v, float radius, final float sc, final Runnable click){
         final GlowFrame g = new GlowFrame(this, v, p(radius));
         g.setFocusable(true); g.setClickable(true);
         g.setOnFocusChangeListener((x,f)->{
@@ -606,10 +609,11 @@ public class MainActivity extends Activity {
             if (editMode){ if (x==dragV) x.setTranslationZ(p(18)); return; }
             if (x==menuOwner && !f) return;
             if (x==menuPop){ if (f) menuPop=null; return; }
-            x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+            x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(220).setInterpolator(focusInterpolator).start();
             x.setTranslationZ(f?p(12):0);
-            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(220);
-            va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.syncHalo(); }); va.start();
+            if (g.glowAnimator!=null) g.glowAnimator.cancel();
+            g.glowAnimator = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); g.glowAnimator.setDuration(220);
+            g.glowAnimator.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.syncHalo(); }); g.glowAnimator.start();
         });
         g.setOnClickListener(x->click.run());
         return g;
@@ -648,7 +652,7 @@ public class MainActivity extends Activity {
             f.addView(t, lp(-1, -2, Gravity.BOTTOM, p(6), 0, p(6), p(8)));
         }
         final Intent li = new Intent(Intent.ACTION_MAIN).setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        View gv = focusable(f, bg, TILE_R, APP_FOCUS, ()->{ try{ startActivity(li);}catch(Exception e){} });
+        View gv = focusable(f, TILE_R, APP_FOCUS, ()->{ try{ startActivity(li);}catch(Exception e){} });
         gv.setTag(pkg); return gv;
     }
     // Banner: use its edge colour so the banner blends into the tile. Icon: dominant (most saturated common) colour, darkened.
@@ -793,7 +797,7 @@ public class MainActivity extends Activity {
         homeGrid.removeAllViews();
         for (int i=0;i<all.size();i++) homeGrid.addView(homeTile(all.get(i), i), gridLp(i));
         ViewGroup.LayoutParams lp=homeGrid.getLayoutParams();
-        if (lp!=null){ lp.height=rowH()*Math.max(1,(all.size()+5)/6); homeGrid.setLayoutParams(lp); }
+        if (lp!=null){ int height=rowH()*Math.max(1,(all.size()+5)/6); if (lp.height!=height){ lp.height=height; homeGrid.setLayoutParams(lp); } }
         if (focusIdx>=0 && homeGrid.getChildCount()>0){
             final int f=Math.min(focusIdx, homeGrid.getChildCount()-1);
             homeGrid.getChildAt(f).requestFocus();
@@ -1238,7 +1242,7 @@ public class MainActivity extends Activity {
         try { if (o[4] instanceof Intent) startActivity(((Intent)o[4]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); else launchPkg((String)o[0]); }
         catch(Exception e){ launchPkg((String)o[0]); }
     }
-    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, 16000); return; } } showHero(); h.postDelayed(this, 16000); } };
+    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(heroLock){ if (heroItems.size()>1) heroIdx=(heroIdx+1)%heroItems.size(); else { h.postDelayed(this, HERO_ROTATE_MS); return; } } showHero(); h.postDelayed(this, HERO_ROTATE_MS); } };
     ImageView heroArt2; boolean heroFront=true;
     void loadHero(){ applyFeaturedCache(); }
     void applyFeaturedCache(){
@@ -1249,7 +1253,7 @@ public class MainActivity extends Activity {
         featuredBoundSig=fs;
         synchronized(heroLock){ heroItems.clear(); heroItems.addAll(feat); heroIdx=0; }
         h.removeCallbacks(heroRotate);
-        if (!heroItems.isEmpty()){ showHero(); h.postDelayed(heroRotate, 16000); }
+        if (!heroItems.isEmpty()){ showHero(); h.postDelayed(heroRotate, HERO_ROTATE_MS); }
         net.loadWhatsNew();
     }
     static String heroSig(List<Object[]> l){
@@ -1267,7 +1271,7 @@ public class MainActivity extends Activity {
         }
         h.removeCallbacks(heroRotate);
         showHero();
-        h.postDelayed(heroRotate, 16000);
+        h.postDelayed(heroRotate, HERO_ROTATE_MS);
     }
     void showHero(){
         final Object[] o;
@@ -1378,8 +1382,9 @@ public class MainActivity extends Activity {
 
     // ---------- Cards ----------
     void addCard(View v, int i){
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(p(184.4f), p(112)); lp.bottomMargin=p(8); lp.leftMargin = i==0?0:p(8);
-        if (v.getParent()==cardRow){ v.setLayoutParams(lp); return; }
+        int width=p(184.4f), height=p(112), bottom=p(8), left=i==0?0:p(8);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, height); lp.bottomMargin=bottom; lp.leftMargin=left;
+        if (v.getParent()==cardRow){ ViewGroup.LayoutParams old=v.getLayoutParams(); if (!(old instanceof LinearLayout.LayoutParams) || old.width!=width || old.height!=height || ((LinearLayout.LayoutParams)old).bottomMargin!=bottom || ((LinearLayout.LayoutParams)old).leftMargin!=left) v.setLayoutParams(lp); return; }
         if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v);
         if (!(v.getLayoutParams() instanceof LinearLayout.LayoutParams)){
             final View.OnFocusChangeListener base = v.getOnFocusChangeListener();
@@ -1463,7 +1468,7 @@ public class MainActivity extends Activity {
             bar.addView(fill, new FrameLayout.LayoutParams(Math.round(p(166)*progress), -1));
             f.addView(bar, lp(p(166), p(2.5f), Gravity.BOTTOM, p(9), 0, 0, p(8)));
         }
-        return focusable(f, bg, TILE_R, click);
+        return focusable(f, TILE_R, click);
     }
 
     void refreshCards(){
@@ -1481,7 +1486,7 @@ public class MainActivity extends Activity {
         if (n>0){ h.post(this::updateCardAlphas); return; }
         if (tab==0){ applyTabs(); if (tab==1){ loadLive(); h.post(this::updateCardAlphas); } return; }
         int i=0;
-        for (final String pk : (tab==0?PLAY_PKGS:LIVE_PKGS)){
+        for (final String pk : LIVE_PKGS){
             if (!installed(pk)) continue;
             Drawable art=null; try { art = pm.getApplicationBanner(pk); if (art==null){ Intent li=pm.getLeanbackLaunchIntentForPackage(pk); if(li!=null) art=pm.getActivityBanner(li);} if(art==null) art=pm.getApplicationIcon(pk);} catch(Exception e){}
             String cap = tab==1 && pk.equals("com.google.android.tv") ? "Free channels" : null;
@@ -1692,14 +1697,18 @@ public class MainActivity extends Activity {
     void useWhatsNew(String js){
         List<Object[]> nl = new ArrayList<>();
         try { org.json.JSONArray a = new org.json.JSONArray(js==null?"[]":js);
+            SimpleDateFormat whatsNewDateFormat=new SimpleDateFormat("yyyy-MM-dd",Locale.US);
+            SimpleDateFormat whatsNewDayFormat=new SimpleDateFormat("EEE",Locale.US);
+            SimpleDateFormat whatsNewWeekdayFormat=new SimpleDateFormat("EEEE",Locale.US);
+            Date whatsNewToday=whatsNewDateFormat.parse(whatsNewDateFormat.format(new Date()));
             for (int i=0;i<a.length();i++){ org.json.JSONObject o=a.getJSONObject(i); String pkg=o.getString("pkg"); if (!installed(pkg) || o.optString("img").isEmpty()) continue;
-                int dd=o.optInt("dd"); String when;
-                try { Date d = new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(o.getString("date")); long diff = Math.round((d.getTime() - new SimpleDateFormat("yyyy-MM-dd",Locale.US).parse(new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date())).getTime())/86400000.0);
-                    when = diff==0?"New today":diff==1?"Coming tomorrow":diff==-1?"Added yesterday":diff<0?"Added "+new SimpleDateFormat("EEE",Locale.US).format(d):"Coming "+new SimpleDateFormat("EEEE",Locale.US).format(d); } catch (Exception e){ when="New"; }
+                int dd=o.optInt("dd"); String when; Date itemDate=null;
+                try { itemDate = whatsNewDateFormat.parse(o.getString("date")); long diff = Math.round((itemDate.getTime() - whatsNewToday.getTime())/86400000.0);
+                    when = diff==0?"New today":diff==1?"Coming tomorrow":diff==-1?"Added yesterday":diff<0?"Added "+whatsNewDayFormat.format(itemDate):"Coming "+whatsNewWeekdayFormat.format(itemDate); } catch (Exception e){ when="New"; }
                 String ep = o.optInt("season")>0 ? "  \u00B7  S"+o.optInt("season")+(o.optInt("num")>0?" E"+o.optInt("num"):"") : "";
                 String sum = firstSentence(o.optString("summary"));
                 Intent li = pm.getLeanbackLaunchIntentForPackage(pkg); if (li==null) li = pm.getLaunchIntentForPackage(pkg);
-                long avail=0; try { Date ad=new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(o.getString("date")); if (ad!=null && ad.getTime()>System.currentTimeMillis()) avail=ad.getTime(); } catch (Exception e){}
+                long avail=0; if (itemDate!=null && itemDate.getTime()>System.currentTimeMillis()) avail=itemDate.getTime();
                 nl.add(new Object[]{pkg, o.getString("show"), when+" on "+o.optString("net")+ep+"\n"+sum, o.getString("img"), li, "NEW", avail});
             }
         } catch (Exception e){ android.util.Log.w("ShieldHome","whatsnew parse "+e); }
@@ -1710,7 +1719,7 @@ public class MainActivity extends Activity {
         if (mix.size()!=nf){
             Collections.shuffle(mix);
             synchronized(heroLock){ h.removeCallbacks(heroRotate); heroItems.clear(); heroItems.addAll(mix); heroIdx=0; }
-            showHero(); h.postDelayed(heroRotate, 16000);
+            showHero(); h.postDelayed(heroRotate, HERO_ROTATE_MS);
         }
     }
 

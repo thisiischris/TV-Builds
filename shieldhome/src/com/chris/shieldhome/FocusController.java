@@ -164,16 +164,20 @@ class FocusController {
         else if (sec == 3) {
             for (int i = 0; i < a.cardRow.getChildCount(); i++) {
                 View c = a.cardRow.getChildAt(i);
-                if (c.isFocusable() && c.getVisibility() == View.VISIBLE) o.add(c);
+                addVisibleFocusable(o, c);
             }
         } else {
             int r = sec - 4;
             for (int i = r * 6; i < Math.min(r * 6 + 6, a.homeGrid.getChildCount()); i++) {
                 View c = a.homeGrid.getChildAt(i);
-                if (c.isFocusable() && c.getVisibility() == View.VISIBLE) o.add(c);
+                addVisibleFocusable(o, c);
             }
         }
         return o;
+    }
+
+    void addVisibleFocusable(List<View> out, View v) {
+        if (v.isFocusable() && v.getVisibility() == View.VISIBLE) out.add(v);
     }
 
     int nSecs() { return 4 + (a.homeGrid.getChildCount() + 5) / 6; }
