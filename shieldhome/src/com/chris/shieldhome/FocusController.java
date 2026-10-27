@@ -3,6 +3,7 @@ package com.chris.shieldhome;
 import android.content.Intent;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,7 +44,7 @@ class FocusController {
             int sc = secOf(f);
             if (sc < 0) return;
             View root = secRoot(f, sc);
-            int idx = sc == 0 ? topIdx(root) : secItems(sc).indexOf(root);
+            int idx = sc == 0 ? topIdx(root) : secIndex(root, sc);
             if (idx < 0) return;
             savedSec = sc;
             savedIdx = idx;
@@ -98,7 +99,7 @@ class FocusController {
         if (v) t = navTarget(f, sec, k == KeyEvent.KEYCODE_DPAD_UP);
         else {
             List<View> it = secItems(sec);
-            int ix = it.indexOf(secRoot(f, sec));
+            int ix = secIndex(f, sec);
             int ni = ix + (k == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
             t = (ix >= 0 && ni >= 0 && ni < it.size()) ? it.get(ni) : f;
             if (t != f && ni >= 0 && sec >= 0 && sec < lastIdx.length) lastIdx[sec] = ni;
@@ -164,28 +165,63 @@ class FocusController {
         else if (sec == 3) {
             for (int i = 0; i < a.cardRow.getChildCount(); i++) {
                 View c = a.cardRow.getChildAt(i);
-                if (c.isFocusable() && c.getVisibility() == View.VISIBLE) o.add(c);
+                addVisibleFocusable(o, c);
             }
         } else {
             int r = sec - 4;
             for (int i = r * 6; i < Math.min(r * 6 + 6, a.homeGrid.getChildCount()); i++) {
                 View c = a.homeGrid.getChildAt(i);
-                if (c.isFocusable() && c.getVisibility() == View.VISIBLE) o.add(c);
+                addVisibleFocusable(o, c);
             }
         }
         return o;
     }
 
+    void addVisibleFocusable(List<View> out, View v) {
+        if (v.isFocusable() && v.getVisibility() == View.VISIBLE) out.add(v);
+    }
+
     int nSecs() { return 4 + (a.homeGrid.getChildCount() + 5) / 6; }
 
     View secRoot(View f, int sec) {
-        List<View> it = secItems(sec);
         View x = f;
         while (x != null) {
-            if (it.contains(x)) return x;
+            if (isSectionItem(x, sec)) return x;
             x = x.getParent() instanceof View ? (View) x.getParent() : null;
         }
         return f;
+    }
+
+    boolean isSectionItem(View v, int sec) {
+        if (sec == 0) return v == a.gear || (a.searchOpen && (v == a.speakV || v == a.typeV)) ||
+                (!a.searchOpen && a.searchTyping && a.searchField != null && v == a.searchField) ||
+                (!a.searchOpen && !a.searchTyping && a.searchV != null && a.searchV.getVisibility() == View.VISIBLE && v == a.searchV);
+        if (sec == 1) return a.heroShown() && v == a.heroBtn;
+        if (sec == 2) return (v == a.tabPlay && a.tabPlay.getVisibility() == View.VISIBLE) || v == a.tabLive;
+        if (sec == 3) return v.getParent() == a.cardRow && v.isFocusable() && v.getVisibility() == View.VISIBLE;
+        return v.getParent() == a.homeGrid && (a.homeGrid.indexOfChild(v) / 6) == sec - 4 && v.isFocusable() && v.getVisibility() == View.VISIBLE;
+    }
+
+    int secIndex(View f, int sec) {
+        View root = secRoot(f, sec);
+        if (sec == 0) return topIdx(root);
+        if (sec == 1) return root == a.heroBtn ? 0 : -1;
+        if (sec == 2) {
+            int i = 0;
+            if (a.tabPlay.getVisibility() == View.VISIBLE) { if (root == a.tabPlay) return i; i++; }
+            return root == a.tabLive ? i : -1;
+        }
+        ViewGroup group = sec == 3 ? a.cardRow : a.homeGrid;
+        int start = sec == 3 ? 0 : (sec - 4) * 6;
+        int end = sec == 3 ? group.getChildCount() : Math.min(start + 6, group.getChildCount());
+        int index = 0;
+        for (int i = start; i < end; i++) {
+            View child = group.getChildAt(i);
+            if (!child.isFocusable() || child.getVisibility() != View.VISIBLE) continue;
+            if (child == root) return index;
+            index++;
+        }
+        return -1;
     }
 
     int secOf(View f) {
@@ -222,8 +258,7 @@ class FocusController {
 
     View navTarget(View f, int sec, boolean up) {
         View fr = secRoot(f, sec);
-        List<View> cur = secItems(sec);
-        int ix = Math.max(0, cur.indexOf(fr));
+        int ix = Math.max(0, secIndex(fr, sec));
         if (sec >= 0 && sec < lastIdx.length) lastIdx[sec] = ix;
         if (sec == 3 && a.cardScroll != null) lastCardX = a.cardScroll.getScrollX();
         boolean multi = sec >= 3;
