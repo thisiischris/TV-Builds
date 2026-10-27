@@ -281,7 +281,7 @@ public class MainActivity extends Activity {
         heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        hero.addView(artHost, lp(-1, p(360), Gravity.TOP, 0,0,0,0));
+        hero.addView(artHost, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroArt = art;
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
@@ -310,7 +310,7 @@ public class MainActivity extends Activity {
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
-        root.addView(hero, 0, lp(-1, p(360), Gravity.TOP, 0,0,0,0));
+        root.addView(hero, 0, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
 
         tabBar = new SegBar(); tabPlay=tabBar.play; tabLive=tabBar.live;
         place(tabBar, 35, 308, -2, 31);
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
             if (x.getParent()==null) return;
             if (editMode){ if (x==dragV) x.setTranslationZ(p(18)); return; }
             if (x==menuOwner && !f) return;
+            if (x==menuPop){ if (f) menuPop=null; return; }
             x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
             x.setTranslationZ(f?p(12):0);
             android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(220);
@@ -620,7 +621,7 @@ public class MainActivity extends Activity {
             else glideOn=false;
         }
     };
-    LinearLayout appMenu; View menuOwner, dimV; boolean pressHeld;
+    LinearLayout appMenu; View menuOwner, menuPop, dimV; boolean pressHeld;
     android.content.SharedPreferences prefs(){ return getSharedPreferences("home", MODE_PRIVATE); }
     List<String[]> homeApps(){
         List<String[]> all = new ArrayList<>(apps());
@@ -898,10 +899,26 @@ public class MainActivity extends Activity {
     void pressPop(View v){
         pressHeld=false;
         if (v==null) return;
+        menuPop=v;
+        tileSpring(v, APP_HOLD, 1f);
+    }
+    void pressSettle(View v){
+        if (v==null) return;
+        menuPop=v;
+        tileSpring(v, APP_FOCUS, 1f);
+    }
+    void tileSpring(View v, float sc, float glowTo){
+        android.view.animation.Interpolator ip=new android.view.animation.OvershootInterpolator(1.3f);
         v.animate().cancel();
-        v.setTranslationZ(p(8));
-        if (v instanceof GlowFrame){ GlowFrame g=(GlowFrame)v; g.glow=1f; g.syncHalo(); g.invalidate(); }
-        v.animate().scaleX(APP_FOCUS).scaleY(APP_FOCUS).setDuration(220).setInterpolator(new android.view.animation.OvershootInterpolator(1.2f)).start();
+        v.setTranslationZ(sc>1f?p(8):0);
+        v.animate().scaleX(sc).scaleY(sc).setDuration(420).setInterpolator(ip).start();
+        if (v instanceof GlowFrame){
+            GlowFrame g=(GlowFrame)v;
+            android.animation.ValueAnimator va=android.animation.ValueAnimator.ofFloat(g.glow, glowTo);
+            va.setDuration(420); va.setInterpolator(ip);
+            va.addUpdateListener(a->{ g.glow=Math.max(0f, Math.min(1f,(Float)a.getAnimatedValue())); g.syncHalo(); });
+            va.start();
+        }
     }
     void appMenu(View anchor, String[] a, int idx){
         if (editMode || appMenu!=null) return;
@@ -1031,10 +1048,11 @@ public class MainActivity extends Activity {
         if (dimSlide) closeDimSlide();
         if (appMenu==null) return;
         lockBehind(false);
-        menuOwner=null;
+        View owner=menuOwner; menuOwner=null;
         final View m=appMenu; appMenu=null;
         m.animate().cancel();
         m.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(140).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{ if (m.getParent()!=null) root.removeView(m); }).start();
+        if (owner!=null) pressSettle(owner);
         if (back && focus!=null) focus.restore();
     }
     void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
@@ -1046,18 +1064,16 @@ public class MainActivity extends Activity {
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        float artW=Math.min(w,p(758)), artL=Math.max(0,w-artW), leftEnd=artL+artW*0.24f;
+        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*0.24f, botEnd=artB-artH*0.40f, botRange=h-botEnd;
         p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,h,0,h*0.60f, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(w,0,w-artW*0.10f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,h,0,botEnd, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, botRange<=0?0:(h-artB)/botRange, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,0,0,h*0.064f, Color.argb(240,255,255,255), Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        float rad=h*0.37f;
-        p.setShader(new RadialGradient(artL, h, rad, new int[]{Color.TRANSPARENT, Color.argb(50,255,255,255), Color.WHITE}, new float[]{0, 0.5f, 1}, Shader.TileMode.CLAMP));
-        c.drawRect(artL, h-rad, Math.min(w, artL+rad), h, p);
+        float rad=artH*0.37f;
+        p.setShader(new RadialGradient(artL, artB, rad, new int[]{Color.TRANSPARENT, Color.argb(50,255,255,255), Color.WHITE}, new float[]{0, 0.5f, 1}, Shader.TileMode.CLAMP));
+        c.drawRect(artL, artB-rad, Math.min(w, artL+rad), artB, p);
         vigMask=bm; return bm;
     }
     Bitmap maskHero(String key, Bitmap src, int tw, int th){
@@ -1067,9 +1083,9 @@ public class MainActivity extends Activity {
         Bitmap out=Bitmap.createBitmap(tw,th,Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(out);
         c.drawColor(0xFF050507);
-        float artW=Math.min(tw,p(758)), artL=tw-artW;
-        float s=Math.max(artW/src.getWidth(), th/(float)src.getHeight());
-        float dw=src.getWidth()*s, dh=src.getHeight()*s, cx=artL+artW/2f, cy=th/2f;
+        float artW=Math.min(tw,p(758)), artH=Math.min(th,p(360)), artL=tw-artW;
+        float s=Math.max(artW/src.getWidth(), artH/src.getHeight());
+        float dw=src.getWidth()*s, dh=src.getHeight()*s, cx=artL+artW/2f, cy=artH/2f;
         c.drawBitmap(src, null, new RectF(cx-dw/2,cy-dh/2,cx+dw/2,cy+dh/2), null);
         Paint xp=new Paint(Paint.ANTI_ALIAS_FLAG);
         xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
@@ -1153,7 +1169,7 @@ public class MainActivity extends Activity {
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
         bindHeroAction(o);
         final String uri = (String)o[3];
-        final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=p(360), g=++heroLoadGen;
+        final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=heroG!=null&&heroG.getHeight()>0?heroG.getHeight():p(400), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
             Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
