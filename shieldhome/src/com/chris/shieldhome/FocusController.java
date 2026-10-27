@@ -159,7 +159,7 @@ class FocusController {
             if (a.gear != null) o.add(a.gear);
             if (a.qsOpen) o.add(a.qsDim);
             else if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
-        } else if (sec == 1) { if (a.heroShown()) o.add(a.heroG); }
+        } else if (sec == 1) { if (a.heroShown() && a.heroBtn != null) o.add(a.heroBtn); }
         else if (sec == 2) { if (a.tabPlay.getVisibility()==View.VISIBLE) o.add(a.tabPlay); o.add(a.tabLive); }
         else if (sec == 3) {
             for (int i = 0; i < a.cardRow.getChildCount(); i++) {
@@ -244,7 +244,7 @@ class FocusController {
         if (v == a.gear) return "gear";
         if (v == a.searchV) return "search";
         if (v == a.qsDim) return "qsDim";
-        if (v == a.heroG) return "hero";
+        if (v == a.heroG || v == a.heroBtn) return "hero";
         if (v == a.tabPlay) return "tabPlay";
         if (v == a.tabLive) return "tabLive";
         if (v.getParent() == a.cardRow) return "card" + a.cardRow.indexOfChild(v);

@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.media.tv.TvContract;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 /** Watch Next, PreviewPrograms, Channels, apps, usage. No views. */
@@ -58,16 +59,20 @@ class TvData {
                 if (pkg == null || !VIDEO_APPS.contains(pkg)) continue;
                 String art = landArt(s(c, "thumbnail_uri"), s(c, "poster_art_uri"));
                 if (art == null) continue;
-                Intent in;
+                Intent in = null;
                 try {
-                    in = Intent.parseUri(s(c, "intent_uri"), Intent.URI_INTENT_SCHEME);
-                    if (in.resolveActivity(a.pm) == null) continue;
-                } catch (Exception e) { continue; }
+                    String u = s(c, "intent_uri");
+                    if (u != null) {
+                        in = Intent.parseUri(u, Intent.URI_INTENT_SCHEME);
+                        if (in.resolveActivity(a.pm) == null) in = null;
+                    }
+                } catch (Exception e) { in = null; }
                 String t = s(c, "title");
                 if (t == null) continue;
                 String d = s(c, "short_description");
                 if (d == null) d = s(c, "long_description");
-                all.add(new Object[]{pkg, t, d, art, in});
+                long avail = Math.max(l(c, "start_time_utc_millis"), parseRelease(s(c, "release_date")));
+                all.add(new Object[]{pkg, t, d, art, in, avail});
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "hero " + e); }
         return all;
@@ -91,8 +96,10 @@ class TvData {
         List<Object[]> out = new ArrayList<>();
         for (int r = 0; r < 3; r++)
             for (List<Object[]> l : by.values())
-                if (l.size() > r && out.size() < 10)
-                    out.add(new Object[]{l.get(r)[0], l.get(r)[1], l.get(r)[2], l.get(r)[3], l.get(r)[4], "FEATURED"});
+                if (l.size() > r && out.size() < 10) {
+                    Object[] row = l.get(r);
+                    out.add(new Object[]{row[0], row[1], row[2], row[3], row[4], "FEATURED", row.length > 5 ? row[5] : 0L});
+                }
         android.util.Log.i("ShieldHome", "hero items=" + out.size() + " apps=" + by.keySet());
         return out;
     }
@@ -240,6 +247,13 @@ class TvData {
         return t.isEmpty() ? null : t;
     }
     static String landArt(String thumb, String poster){ return thumb!=null?thumb:poster; }
+    static long parseRelease(String s) {
+        if (s == null || s.isEmpty()) return 0;
+        s = s.trim();
+        for (String f : new String[]{"yyyy-MM-dd", "yyyy-MM", "yyyy"})
+            try { Date d = new SimpleDateFormat(f, Locale.US).parse(s); if (d != null) return d.getTime(); } catch (Exception e) {}
+        return 0;
+    }
     static String s(Cursor c, String col) { int i = c.getColumnIndex(col); return i < 0 || c.isNull(i) ? null : c.getString(i); }
     static long l(Cursor c, String col) { int i = c.getColumnIndex(col); return i < 0 || c.isNull(i) ? 0 : c.getLong(i); }
 }
