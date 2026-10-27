@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
 
     FrameLayout.LayoutParams lp(int w,int h,int g,int l,int t,int r,int b){ FrameLayout.LayoutParams x=new FrameLayout.LayoutParams(w,h,g); x.setMargins(l,t,r,b); return x; }
     java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
-    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards; HeroController hero;
+    ImageLoader images; FocusController focus; TvData tv; NetData net; CardsController cards; HeroController hero; SearchDimController searchDim;
     java.util.concurrent.Future<?> dataFut; int dataGen, heroLoadGen;
     List<String[]> appsCache, fullOrder=new ArrayList<>();
     List<Object[]> featuredCache, wnPickCache;
@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
         net = new NetData(this);
         cards = new CardsController(this);
         hero = new HeroController(this);
+        searchDim = new SearchDimController(this);
         prefs().edit().remove("heromode").remove("featured").apply(); // v9: card mode removed
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         DisplayMetricsHolder();
@@ -130,93 +131,16 @@ public class MainActivity extends Activity {
     @Override public boolean onKeyDown(int k, KeyEvent e){ if (focus.keyDown(k,e)) return true; return super.onKeyDown(k,e); }
     @Override public boolean onKeyLongPress(int k, KeyEvent e){ if (focus.keyLong(k,e)) return true; return super.onKeyLongPress(k,e); }
     @Override public boolean onKeyUp(int k, KeyEvent e){ if (focus.keyUp(k,e)) return true; return super.onKeyUp(k,e); }
-    void openAssistant(){
-        Intent[] tries = {
-            new Intent(Intent.ACTION_ASSIST).setPackage("com.google.android.katniss"),
-            new Intent("android.speech.action.WEB_SEARCH").setPackage("com.google.android.katniss"),
-            new Intent(Intent.ACTION_SEARCH_LONG_PRESS).setPackage("com.google.android.katniss")
-        };
-        for (Intent i: tries){ try { if (i.resolveActivity(pm)!=null){ startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } } catch (Exception e) {} }
-    }
+    void openAssistant(){ searchDim.openAssistant(); }
     boolean searchOpen, searchTyping;
-    void expandSearch(){
-        if (searchOpen || dimSlide || searchTyping || searchSplit==null) return;
-        searchOpen=true;
-        searchV.animate().cancel();
-        searchV.setFocusable(false); searchV.setAlpha(1f); searchV.setVisibility(View.INVISIBLE);
-        searchSplit.setVisibility(View.VISIBLE); searchSplit.setAlpha(1f);
-        speakV.setFocusable(true); typeV.setFocusable(true);
-        float mid=p(28);
-        android.view.animation.Interpolator ip=new android.view.animation.OvershootInterpolator(1.2f);
-        for (PillView pv: new PillView[]{speakV,typeV}){ pv.animate().cancel(); pv.setScaleX(0.86f); pv.setScaleY(0.86f); pv.setAlpha(0.35f); }
-        speakV.setTranslationX(mid); typeV.setTranslationX(-mid);
-        speakV.animate().translationX(0).scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).setInterpolator(ip).start();
-        typeV.animate().translationX(0).scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).setInterpolator(ip).start();
-        speakV.requestFocus();
-    }
-    void maybeCollapseSearch(){
-        if (searchTyping || !searchOpen || dimSlide) return;
-        if (speakV!=null && (speakV.isFocused()||typeV.isFocused())) return;
-        collapseSearch();
-    }
-    void showKb(){
-        android.view.inputmethod.InputMethodManager imm=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
-        if (imm==null || searchField==null) return;
-        searchField.post(()->{
-            searchField.requestFocus();
-            if (!imm.showSoftInput(searchField, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT))
-                imm.showSoftInput(searchField, android.view.inputmethod.InputMethodManager.SHOW_FORCED);
-        });
-    }
-    void hideKb(){
-        android.view.inputmethod.InputMethodManager imm=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
-        if (imm==null || searchField==null) return;
-        imm.hideSoftInputFromWindow(searchField.getWindowToken(), 0);
-    }
-    void launchSearch(String q){
-        Intent[] tries = {
-            new Intent("android.search.action.GLOBAL_SEARCH").setPackage("com.google.android.katniss").putExtra(android.app.SearchManager.QUERY, q),
-            new Intent("android.speech.action.WEB_SEARCH").setPackage("com.google.android.katniss").putExtra(android.app.SearchManager.QUERY, q),
-            new Intent(Intent.ACTION_VIEW, Uri.parse("https://assistant.google.com/search?q="+Uri.encode(q))).setPackage("com.google.android.katniss")
-        };
-        for (Intent i: tries){ try { if (i.resolveActivity(pm)!=null){ startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); closeSearchField(); return; } } catch (Exception e) {} }
-    }
-    void openSearchField(){
-        if (searchTyping || dimSlide || searchField==null) return;
-        searchTyping=true; searchOpen=false;
-        if (speakV!=null){ speakV.animate().cancel(); typeV.animate().cancel(); speakV.setFocusable(false); typeV.setFocusable(false); }
-        if (searchSplit!=null) searchSplit.setVisibility(View.GONE);
-        if (searchV!=null){ searchV.setVisibility(View.INVISIBLE); searchV.setFocusable(false); }
-        searchField.setText(""); searchField.setVisibility(View.VISIBLE); searchField.bringToFront();
-        searchField.requestFocus(); showKb();
-    }
-    void closeSearchField(){
-        if (!searchTyping) return;
-        searchTyping=false; hideKb();
-        if (searchField!=null){ searchField.setVisibility(View.GONE); searchField.setText(""); }
-        if (!dimSlide && searchV!=null){ searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen); }
-    }
-    void collapseSearch(){
-        searchOpen=false;
-        if (speakV!=null){ speakV.setFocusable(false); typeV.setFocusable(false); }
-        if (searchSplit==null || searchSplit.getVisibility()!=View.VISIBLE){
-            if (!dimSlide && searchV!=null){ searchV.setVisibility(View.VISIBLE); searchV.setAlpha(1f); searchV.setFocusable(!drawerOpen); }
-            return;
-        }
-        float mid=p(28);
-        android.view.animation.Interpolator ip=new android.view.animation.DecelerateInterpolator();
-        speakV.animate().cancel(); typeV.animate().cancel();
-        speakV.animate().translationX(mid).scaleX(0.86f).scaleY(0.86f).alpha(0f).setDuration(280).setInterpolator(ip).start();
-        typeV.animate().translationX(-mid).scaleX(0.86f).scaleY(0.86f).alpha(0f).setDuration(280).setInterpolator(ip).withEndAction(()->{
-            if (searchOpen) return;
-            searchSplit.setVisibility(View.GONE);
-            if (!dimSlide && searchV!=null){
-                searchV.animate().cancel();
-                searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen);
-                searchV.setAlpha(0f); searchV.animate().alpha(1f).setDuration(160).start();
-            }
-        }).start();
-    }
+    void expandSearch(){ searchDim.expandSearch(); }
+    void maybeCollapseSearch(){ searchDim.maybeCollapseSearch(); }
+    void showKb(){ searchDim.showKb(); }
+    void hideKb(){ searchDim.hideKb(); }
+    void launchSearch(String q){ searchDim.launchSearch(q); }
+    void openSearchField(){ searchDim.openSearchField(); }
+    void closeSearchField(){ searchDim.closeSearchField(); }
+    void collapseSearch(){ searchDim.collapseSearch(); }
 
     void tick(){ setPill(timePill, new SimpleDateFormat("h:mm a", Locale.US).format(new Date())); h.postDelayed(this::tick, 15000); }
     int pillTextW(PillView v, String s){
@@ -1343,68 +1267,15 @@ public class MainActivity extends Activity {
 
     PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false, heroCtaOn; View heroG, heroFocus, inAppDim; HeroDots heroDots;
     float dimFill; android.animation.ValueAnimator dimFillAnim;
-    int dimPct(){ return Math.max(0, Math.min(90, prefs().getInt("dim_pct",0))); }
-    void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); }
-    void syncDimFill(boolean anim){
-        float to=dimPct()/100f;
-        if (!anim){ dimFill=to; if (gear!=null) gear.invalidate(); if (dimBar!=null) dimBar.invalidate(); return; }
-        if (dimFillAnim!=null) dimFillAnim.cancel();
-        dimFillAnim=android.animation.ValueAnimator.ofFloat(dimFill, to); dimFillAnim.setDuration(200);
-        dimFillAnim.addUpdateListener(a->{ dimFill=(Float)a.getAnimatedValue(); if (gear!=null) gear.invalidate(); if (dimBar!=null) dimBar.invalidate(); });
-        dimFillAnim.start();
-    }
-    void dimSlideBy(int dir){ setDimPct(dimPct()+dir*5); }
-    void hideSearch(boolean hide){
-        if (searchV==null) return;
-        android.view.animation.Interpolator ease=new android.view.animation.DecelerateInterpolator();
-        if (hide){
-            if (searchTyping){ searchTyping=false; hideKb(); if (searchField!=null){ searchField.setVisibility(View.GONE); searchField.setText(""); } }
-            searchOpen=false;
-            if (speakV!=null){ speakV.animate().cancel(); typeV.animate().cancel(); speakV.setFocusable(false); typeV.setFocusable(false); }
-            if (searchSplit!=null) searchSplit.setVisibility(View.GONE);
-            searchV.setFocusable(false);
-            searchV.animate().alpha(0f).setDuration(180).setInterpolator(ease).withEndAction(()->{ if (dimSlide) searchV.setVisibility(View.INVISIBLE); }).start();
-        } else {
-            searchV.setVisibility(View.VISIBLE); searchV.setFocusable(!drawerOpen);
-            searchV.animate().alpha(1f).setDuration(180).setInterpolator(ease).start();
-        }
-    }
-    void popDimBar(boolean on){
-        if (dimBar==null) return;
-        android.view.animation.Interpolator ease=new android.view.animation.DecelerateInterpolator();
-        dimBar.animate().cancel();
-        if (on){
-            dimBar.setVisibility(View.VISIBLE);
-            dimBar.setAlpha(0f); dimBar.setScaleX(0.88f); dimBar.setScaleY(0.88f);
-            dimBar.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(180).setInterpolator(ease).start();
-        } else {
-            dimBar.animate().alpha(0f).scaleX(0.88f).scaleY(0.88f).setDuration(140).setInterpolator(ease).withEndAction(()->{ if (!dimSlide) dimBar.setVisibility(View.GONE); }).start();
-        }
-    }
-    void openDimSlide(){
-        if (dimSlide || gear==null) return;
-        dimSlide=true; dimSlideIgnore=true;
-        gear.setNextFocusLeftId(gear.getId()); gear.setNextFocusRightId(gear.getId());
-        hideSearch(true);
-        popDimBar(true);
-        gear.requestFocus();
-    }
-    void closeDimSlide(){
-        if (!dimSlide) return;
-        dimSlide=false; dimSlideIgnore=false;
-        gear.setNextFocusLeftId(View.NO_ID); gear.setNextFocusRightId(View.NO_ID);
-        popDimBar(false);
-        hideSearch(false);
-    }
-    void applyDim(){
-        int pct = dimPct(); syncDimFill(true);
-        boolean overlay = android.provider.Settings.canDrawOverlays(this);
-        Intent si = new Intent(this, DimService.class).putExtra("pct", pct);
-        try { if (overlay){ if (pct>0) startForegroundService(si); else stopService(si); } } catch (Exception e){ android.util.Log.w("ShieldHome","dimsvc "+e); overlay=false; }
-        if (inAppDim==null){ inAppDim = new View(this); inAppDim.setBackgroundColor(Color.BLACK); inAppDim.setClickable(false); inAppDim.setFocusable(false); root.addView(inAppDim, new FrameLayout.LayoutParams(-1,-1)); inAppDim.setTranslationZ(p(60)); }
-        inAppDim.setAlpha(overlay?0f:pct/100f); inAppDim.setVisibility(!overlay && pct>0 ? View.VISIBLE : View.GONE);
-        android.util.Log.i("ShieldHome","dim pct="+pct+" overlay="+overlay);
-    }
+    int dimPct(){ return searchDim.dimPct(); }
+    void setDimPct(int pct){ searchDim.setDimPct(pct); }
+    void syncDimFill(boolean anim){ searchDim.syncDimFill(anim); }
+    void dimSlideBy(int dir){ searchDim.dimSlideBy(dir); }
+    void hideSearch(boolean hide){ searchDim.hideSearch(hide); }
+    void popDimBar(boolean on){ searchDim.popDimBar(on); }
+    void openDimSlide(){ searchDim.openDimSlide(); }
+    void closeDimSlide(){ searchDim.closeDimSlide(); }
+    void applyDim(){ searchDim.applyDim(); }
     final Runnable wxRun = this::weatherTick;
     void weatherTick(){
         h.removeCallbacks(wxRun);
