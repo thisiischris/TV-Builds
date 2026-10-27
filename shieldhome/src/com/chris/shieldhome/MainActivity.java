@@ -129,8 +129,8 @@ public class MainActivity extends Activity {
     }
 
     void tick(){ setPill(timePill, new SimpleDateFormat("h:mm a", Locale.US).format(new Date())); h.postDelayed(this::tick, 15000); }
-    int pillTextW(String s){ Paint pt=new Paint(); pt.setTextSize(p(12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL)); return Math.max(p(28), Math.round(pt.measureText(s)+p(24))); }
-    void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(s); v.setLayoutParams(lp); } v.invalidate(); }
+    int pillTextW(PillView v, String s){ boolean cta=v==heroBtn; Paint pt=new Paint(); pt.setTextSize(p(cta?14:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL)); return Math.max(p(cta?33:28), Math.round(pt.measureText(s)+p(cta?28:24))); }
+    void setPill(PillView v, String s){ if (v==null) return; v.label=s; ViewGroup.LayoutParams lp=v.getLayoutParams(); if (lp!=null){ lp.width=pillTextW(v,s); if (v==heroBtn) lp.height=p(33); v.setLayoutParams(lp); } v.invalidate(); }
 
     void place(View v, float x, float y, float w, float hh){ FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w<0?-2:p(w), hh<0?-2:p(hh)); lp.leftMargin=p(x); lp.topMargin=p(y); root.addView(v, lp); }
     TextView text(String s, float size, int color, String font){ TextView t=new TextView(this); t.setText(s); ts(t,size); t.setTextColor(color); t.setTypeface(Typeface.create(font, Typeface.NORMAL)); t.setIncludeFontPadding(false); return t; }
@@ -191,7 +191,7 @@ public class MainActivity extends Activity {
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(118), p(28), Gravity.TOP|Gravity.START, p(35), p(220), 0, 0));
+        hero.addView(heroBtn, lp(p(138), p(33), Gravity.TOP|Gravity.START, p(35), p(220), 0, 0));
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)->{
             heroTitle.setTextColor(f?Color.WHITE:Color.rgb(220,220,230));
@@ -269,7 +269,7 @@ public class MainActivity extends Activity {
                 else { pt.setStyle(Paint.Style.STROKE); pt.setStrokeJoin(Paint.Join.ROUND); }
                 c.drawPath(cres,pt); }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-p(3),cy-p(5)); tr.lineTo(cx+p(5),cy); tr.lineTo(cx-p(3),cy+p(5)); tr.close(); c.drawPath(tr,pt); }
-            pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+            pt.setStyle(Paint.Style.FILL); pt.setTextSize(p(this==heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             Paint.FontMetrics fm = pt.getFontMetrics();
             if (icon==4) pt.setTextAlign(Paint.Align.CENTER); else pt.setTextAlign(Paint.Align.LEFT);
             if (label.length()>0) c.drawText(label, icon==4? w/2f : p(icon==2?24:icon==3?46:43), cy-(fm.ascent+fm.descent)/2, pt);
@@ -861,16 +861,16 @@ public class MainActivity extends Activity {
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        p.setShader(new RadialGradient(w*0.62f, h*0.36f, Math.max(w,h)*1.08f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new RadialGradient(w*0.62f, h*0.36f, Math.max(w,h)*1.015f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
-        p.setShader(new LinearGradient(0,0,w*0.30f,0, Color.argb(184,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,0,w*0.30f,0, Color.argb(220,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,h,0,h*0.73f, Color.argb(184,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,h,0,h*0.73f, Color.argb(220,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,0,0,h*0.10f, Color.argb(79,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0,0,0,h*0.16f, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(w,0,w*0.91f,0, Color.argb(71,0,0,0), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(w,0,w*0.86f,0, Color.BLACK, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         vigMask=bm; return bm;
     }
@@ -898,7 +898,7 @@ public class MainActivity extends Activity {
         heroMeta.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
         if (heroBtn!=null){
             FrameLayout.LayoutParams bp=(FrameLayout.LayoutParams)heroBtn.getLayoutParams();
-            if (bp!=null){ bp.topMargin=top+heroMeta.getMeasuredHeight()+p(12); heroBtn.setLayoutParams(bp); }
+            if (bp!=null){ bp.topMargin=top+heroMeta.getMeasuredHeight()+p(26); bp.height=p(33); heroBtn.setLayoutParams(bp); }
         }
     }
     void bindHeroCopy(Object[] o){
@@ -924,8 +924,8 @@ public class MainActivity extends Activity {
         if (heroBtn==null) return;
         heroBtn.animate().cancel();
         android.view.animation.Interpolator ease=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
-        if (on){ heroBtn.setVisibility(View.VISIBLE); heroBtn.animate().alpha(1f).translationY(0).setDuration(160).setInterpolator(ease).start(); }
-        else heroBtn.animate().alpha(0f).translationY(p(8)).setDuration(120).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{ if (heroBtn!=null && !heroBtn.isFocused()) heroBtn.setVisibility(View.INVISIBLE); }).start();
+        if (on){ heroBtn.setFocusable(true); heroBtn.animate().alpha(1f).translationY(0).setDuration(160).setInterpolator(ease).start(); }
+        else heroBtn.animate().alpha(0f).translationY(p(8)).setDuration(120).setInterpolator(new android.view.animation.AccelerateInterpolator()).start();
     }
     void heroAction(){
         Object[] o=heroOnScreen;

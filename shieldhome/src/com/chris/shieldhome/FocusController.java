@@ -107,6 +107,7 @@ class FocusController {
             if (t != f && ni >= 0 && sec >= 0 && sec < lastIdx.length) lastIdx[sec] = ni;
         }
         if (t != null && t != f) {
+            if (t == a.heroBtn) { t.setVisibility(View.VISIBLE); t.setFocusable(true); }
             t.requestFocus();
             if (t.getParent() == a.homeGrid){
                 int i = a.homeGrid.indexOfChild(t);
