@@ -327,9 +327,14 @@ public class MainActivity extends Activity {
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
         heroDots = new HeroDots();
-        hero.addView(heroDots, lp(-1, p(28), Gravity.TOP, 0, p(280), 0, 0));
+        LinearLayout ctaCol = new LinearLayout(this);
+        ctaCol.setOrientation(LinearLayout.VERTICAL); ctaCol.setGravity(Gravity.CENTER_HORIZONTAL);
+        ctaCol.setClipChildren(false); ctaCol.setClipToPadding(false);
+        ctaCol.addView(heroBtn, new LinearLayout.LayoutParams(p(138), p(34)));
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(-2, p(28)); dlp.topMargin=p(9);
+        ctaCol.addView(heroDots, dlp);
+        hero.addView(ctaCol, lp(-2, -2, Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
@@ -538,8 +543,15 @@ public class MainActivity extends Activity {
         HeroDots(){ super(MainActivity.this); setAlpha(0f); setVisibility(GONE); setFocusable(false); }
         float slot(int i){ return i*(p(5)+p(7)); }
         void snap(int i){ cur=i; ax=slot(i); invalidate(); }
+        int pillW(){ float d=p(5), g=p(7), row=n<=1?d:(n-1)*(d+g)+d; return Math.round(row+p(24)); }
+        @Override protected void onMeasure(int wms, int hms){
+            int h=MeasureSpec.getMode(hms)==MeasureSpec.EXACTLY?MeasureSpec.getSize(hms):p(28);
+            setMeasuredDimension(pillW(), h);
+        }
         void bind(int nn, int i, boolean anim){
-            n=Math.max(0,nn); i=n==0?0:Math.max(0, Math.min(i,n-1));
+            int nn2=Math.max(0,nn); i=nn2==0?0:Math.max(0, Math.min(i,nn2-1));
+            if (nn2!=n) requestLayout();
+            n=nn2;
             if (!anim || getAlpha()<0.05f || n<=1){ snap(i); return; }
             if (an!=null) an.cancel();
             float to=slot(i), x0=ax; cur=i;
@@ -550,15 +562,12 @@ public class MainActivity extends Activity {
         }
         @Override protected void onDraw(Canvas c){
             if (n<=1) return;
-            float d=p(5), g=p(7), row=(n-1)*(d+g)+d, padX=p(12), hh=getHeight(), rr=hh/2;
-            float bw=heroBtn!=null&&heroBtn.getWidth()>0?heroBtn.getWidth():p(138);
-            float bx=p(35)+bw/2f;
-            float x0=bx-row/2f, pl=bx-(row+padX*2)/2f, pr=pl+row+padX*2, cy=hh/2f;
+            float d=p(5), g=p(7), row=(n-1)*(d+g)+d, hh=getHeight(), rr=hh/2, x0=(getWidth()-row)/2f, cy=hh/2f;
             Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
             pt.setColor(Color.argb(88,60,58,75));
-            c.drawRoundRect(pl,0,pr,hh,rr,rr,pt);
+            c.drawRoundRect(0,0,getWidth(),hh,rr,rr,pt);
             pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255));
-            c.drawRoundRect(pl+.5f,.5f,pr-.5f,hh-.5f,rr,rr,pt);
+            c.drawRoundRect(.5f,.5f,getWidth()-.5f,hh-.5f,rr,rr,pt);
             pt.setStyle(Paint.Style.FILL);
             pt.setColor(Color.argb(89,255,255,255));
             for (int i=0;i<n;i++) c.drawCircle(x0+slot(i)+d/2, cy, d/2, pt);
