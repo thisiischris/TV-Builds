@@ -1213,11 +1213,9 @@ public class MainActivity extends Activity {
         heroCtaOn=on;
         android.view.animation.Interpolator ease=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
         heroBtn.animate().cancel();
-        boxLayer(heroBtn, true);
         if (on) heroBtn.setFocusable(true);
         heroBtn.animate().alpha(on?1f:0f).translationY(on?0:p(8)).scaleX(on?1.07f:1f).scaleY(on?1.07f:1f)
-            .setStartDelay(0).setDuration(on?160:120).setInterpolator(ease)
-            .withEndAction(()->boxLayer(heroBtn, false)).start();
+            .setStartDelay(0).setDuration(on?160:120).setInterpolator(ease).withLayer().start();
         if (heroDots!=null){
             int n; synchronized(heroLock){ n=heroItems.size(); }
             heroDots.animate().cancel();
