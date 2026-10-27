@@ -337,7 +337,7 @@ public class MainActivity extends Activity {
         heroBtn.setOnClickListener(v->heroAction());
         hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
         heroDots = new HeroDots();
-        hero.addView(heroDots, lp(-2, p(28), Gravity.TOP|Gravity.START, 0, p(280), 0, 0));
+        hero.addView(heroDots, lp(-2, p(28), Gravity.TOP|Gravity.START, 0, p(270), 0, 0));
         View.OnLayoutChangeListener dotsLay=(v,a,b,c,d,e,f,g,h2)->placeDots();
         hero.addOnLayoutChangeListener(dotsLay);
         heroDots.addOnLayoutChangeListener(dotsLay);
@@ -347,7 +347,7 @@ public class MainActivity extends Activity {
         root.addView(hero, 0, lp(-1, p(400), Gravity.TOP, 0,0,0,0));
 
         tabBar = new SegBar(); tabPlay=tabBar.play; tabLive=tabBar.live;
-        place(tabBar, 35, 308, -2, 31);
+        place(tabBar, 35, 298, -2, 31);
 
         // Cards row: 5-tile viewport; clip off so scale+glow can draw; 6th hidden by alpha
         cardWrap = new FrameLayout(this);
