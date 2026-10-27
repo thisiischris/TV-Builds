@@ -1132,8 +1132,8 @@ public class MainActivity extends Activity {
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*0.38f, botEnd=artB-artH*0.40f, botRange=h-botEnd;
-        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:Math.min(1,(artL+artW*0.10f)/leftEnd), 1}, Shader.TileMode.CLAMP));
+        float artW=Math.min(w,p(758)), artH=Math.min(h,p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*0.24f, botEnd=artB-artH*0.40f, botRange=h-botEnd;
+        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,h,0,botEnd, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, botRange<=0?0:(h-artB)/botRange, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
@@ -1157,6 +1157,10 @@ public class MainActivity extends Activity {
         Paint xp=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); xp.setDither(true);
         xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
         c.drawBitmap(alphaMask(tw,th),0,0,xp);
+        float leftEnd=artL+artW*0.24f;
+        xp.setXfermode(null);
+        xp.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{0xE6050507,0xC2050507,0x00050507}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
+        c.drawRect(0,0,leftEnd,th,xp);
         heroMasked.put(key, out); return out;
     }
     // ---------- Featured hero ----------
