@@ -21,7 +21,7 @@ public class MainActivity extends Activity {
     SegBar tabBar; TextView tabPlay, tabLive; int tab = 0; Handler h = new Handler(Looper.getMainLooper());
     static final int TILE = Color.argb(34, 255, 255, 255), FOCUS = Color.rgb(64, 156, 255), BG = Color.rgb(8, 8, 16);
     static final int TILE_R = 11;
-    static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f;
+    static final float APP_FOCUS=1.09f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
 
@@ -176,7 +176,7 @@ public class MainActivity extends Activity {
         heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        hero.addView(artHost, lp(-1, p(360), Gravity.TOP|Gravity.END, 0,0,0,0));
+        hero.addView(artHost, lp(p(758), p(360), Gravity.TOP|Gravity.END, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroArt = art;
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
@@ -211,7 +211,7 @@ public class MainActivity extends Activity {
         root.addView(hero, 0, lp(-1, p(360), Gravity.TOP, 0,0,0,0));
 
         tabBar = new SegBar(); tabPlay=tabBar.play; tabLive=tabBar.live;
-        place(tabBar, 35, 308, -2, 34);
+        place(tabBar, 35, 308, -2, 31);
 
         // Cards row: 5-tile viewport; clip off so scale+glow can draw; 6th hidden by alpha
         cardWrap = new FrameLayout(this);
@@ -298,13 +298,13 @@ public class MainActivity extends Activity {
     }
 
     class SegBar extends LinearLayout {
-        TextView play, live; float hx, hw; android.animation.ValueAnimator ha;
+        TextView play, live; float hx, hw, hs=1.04f; android.animation.ValueAnimator ha, pa;
         SegBar(){
             super(MainActivity.this);
             setOrientation(HORIZONTAL); setGravity(Gravity.CENTER_VERTICAL);
             setPadding(0,0,0,0); setWillNotDraw(false); setClipChildren(false); setClipToPadding(false);
             play=mk("Play Next"); live=mk("Live TV");
-            int sw=Math.max(Math.round(play.getPaint().measureText("Play Next")), Math.round(live.getPaint().measureText("Live TV")))+p(40);
+            int sw=Math.max(Math.round(play.getPaint().measureText("Play Next")), Math.round(live.getPaint().measureText("Live TV")))+p(36);
             play.setLayoutParams(new LinearLayout.LayoutParams(sw,-1));
             live.setLayoutParams(new LinearLayout.LayoutParams(sw,-1));
             addView(play); addView(live);
@@ -316,7 +316,7 @@ public class MainActivity extends Activity {
             play.setNextFocusUpId(View.NO_ID); live.setNextFocusUpId(View.NO_ID);
         }
         TextView mk(String s){
-            TextView t=text(s,13.5f,Color.rgb(232,232,240),"sans-serif");
+            TextView t=text(s,12,Color.rgb(232,232,240),"sans-serif");
             t.setFocusable(true); t.setClickable(true); t.setGravity(Gravity.CENTER);
             t.setPadding(0,0,0,0); t.setSingleLine(true);
             return t;
@@ -332,12 +332,11 @@ public class MainActivity extends Activity {
             play.setTextColor(tab==0?d:l); live.setTextColor(tab==1?d:l);
         }
         void pop(){
-            TextView s=(tab==0 && play.getVisibility()==VISIBLE)?play:live, o=s==play?live:play;
-            android.view.animation.Interpolator ease=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
-            o.animate().cancel(); o.setScaleX(1f); o.setScaleY(1f); o.setElevation(0);
-            s.animate().cancel(); s.setScaleX(1f); s.setScaleY(1f); s.setElevation(p(3));
-            s.animate().scaleX(1.04f).scaleY(1.04f).setDuration(130).setInterpolator(ease)
-                .withEndAction(()->s.animate().scaleX(1f).scaleY(1f).setDuration(120).setInterpolator(ease).start()).start();
+            if (pa!=null) pa.cancel();
+            pa=android.animation.ValueAnimator.ofFloat(1f,1.08f,1.04f); pa.setDuration(220);
+            pa.setInterpolator(new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f));
+            pa.addUpdateListener(a->{ hs=(Float)a.getAnimatedValue(); invalidate(); });
+            pa.start();
         }
         void showPlay(boolean on){ play.setVisibility(on?VISIBLE:GONE); play.setFocusable(on); requestLayout(); }
         void slide(boolean anim){
@@ -365,8 +364,11 @@ public class MainActivity extends Activity {
             c.drawRoundRect(0,0,w,hh,rr,rr,pt);
             pt.setStyle(Paint.Style.FILL);
             if (hw>0){
+                float cx=hx+hw/2, cy=hh/2, sw=hw*hs, sh=hh*hs, sr=sh/2;
+                Bitmap sb=shadowBmp(Math.max(1,(int)sw), Math.max(1,(int)sh), sr);
+                if (sb!=null){ Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG); sp.setAlpha(Math.min(130,(int)(130*(hs-1f)/0.04f))); int pad=p(36); c.drawBitmap(sb, cx-sw/2-pad, cy-sh/2-pad+p(12), sp); }
                 pt.setColor(Color.rgb(229,227,228));
-                c.drawRoundRect(hx, 0, hx+hw, hh, rr, rr, pt);
+                c.drawRoundRect(cx-sw/2, cy-sh/2, cx+sw/2, cy+sh/2, sr, sr, pt);
             }
             super.dispatchDraw(c);
         }
@@ -374,39 +376,22 @@ public class MainActivity extends Activity {
 
     // ---------- Focus helper: soft blue glow drawn outside the tile + scale ----------
     class GlowFrame extends FrameLayout {
-        FrameLayout inner; ImageView halo; View badgeV; float radius; Paint gp = new Paint(Paint.ANTI_ALIAS_FLAG), rp = new Paint(Paint.ANTI_ALIAS_FLAG), sp = new Paint(); float glow=0, fade=1; Bitmap glowBm, shBm; int glowPad, shPad; boolean drop;
+        FrameLayout inner; View badgeV; float radius; Paint sp = new Paint(Paint.ANTI_ALIAS_FLAG); float glow=0, fade=1; Bitmap shBm; int shPad;
         GlowFrame(Context c, FrameLayout in, float r){ super(c); inner=in; radius=r; setClipChildren(false); setClipToPadding(false); setClipToOutline(false); setWillNotDraw(false); setLayerType(View.LAYER_TYPE_NONE, null); forceHasOverlappingRendering(false);
-            glowPad=p(18); shPad=p(28);
-            halo=new ImageView(c); halo.setScaleType(ImageView.ScaleType.FIT_XY); halo.setFocusable(false); halo.setVisibility(INVISIBLE);
-            FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-1,-1); hp.setMargins(-glowPad,-glowPad,-glowPad,-glowPad);
-            addView(halo, hp);
+            shPad=p(36);
             addView(in, new FrameLayout.LayoutParams(-1,-1));
-            in.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-            rp.setStyle(Paint.Style.STROKE); rp.setStrokeWidth(p(1.6f));
-            tint(FOCUS); }
-        void tint(int c){
-            gp.setColor(Color.argb(155, Color.red(c), Color.green(c), Color.blue(c)));
-            rp.setColor(Color.rgb(Math.min(255,Color.red(c)+40), Math.min(255,Color.green(c)+40), Math.min(255,Color.blue(c)+40)));
-            glowBm=null; syncHalo(); }
-        void warm(int w, int h){ if (w<=0||h<=0) return; glowBm=glowBmp(w,h,gp.getColor(),radius); if (drop) shBm=shadowBmp(w,h,radius); syncHalo(); }
-        void syncHalo(){
-            float g=glow*fade;
-            if (halo==null) return;
-            if (g>0.02f && glowBm==null && getWidth()>0) glowBm=glowBmp(getWidth(),getHeight(),gp.getColor(),radius);
-            halo.setImageBitmap(glowBm);
-            halo.setImageAlpha((int)(150*g));
-            halo.setVisibility(g>0.02f?VISIBLE:INVISIBLE);
-        }
+            in.setLayerType(View.LAYER_TYPE_HARDWARE, null); }
+        void warm(int w, int h){ if (w<=0||h<=0) return; shBm=shadowBmp(w,h,radius); }
+        void syncHalo(){ invalidate(); }
         @Override protected void onSizeChanged(int w, int h, int ow, int oh){ super.onSizeChanged(w,h,ow,oh); shBm=null; if (w>0&&h>0) warm(w,h); }
         @Override public void draw(Canvas c){
             float g=glow*fade;
-            if (g>0 && drop){ if (shBm==null) shBm=shadowBmp(getWidth(),getHeight(),radius); if (shBm!=null){ sp.setAlpha((int)(102*g)); c.drawBitmap(shBm,-shPad,-shPad+p(8),sp); } }
+            if (g>0.02f){ if (shBm==null) shBm=shadowBmp(getWidth(),getHeight(),radius); if (shBm!=null){ sp.setAlpha((int)(130*g)); c.drawBitmap(shBm,-shPad,-shPad+p(12),sp); } }
             super.draw(c);
-            if (g>0){ rp.setAlpha((int)(255*g)); c.drawRoundRect(0,0,getWidth(),getHeight(),radius,radius,rp); }
             if (badgeV!=null && badgeV.getAlpha()>0.01f){ c.saveLayerAlpha(badgeV.getLeft(), badgeV.getTop(), badgeV.getRight(), badgeV.getBottom(), Math.round(255*badgeV.getAlpha())); c.translate(badgeV.getLeft(), badgeV.getTop()); badgeV.draw(c); c.restore(); }
         }
     }
-    View focusable(final FrameLayout v, final GradientDrawable base, float radius, final Runnable click){ return focusable(v, base, radius, 1.07f, click); }
+    View focusable(final FrameLayout v, final GradientDrawable base, float radius, final Runnable click){ return focusable(v, base, radius, 1.09f, click); }
     View focusable(final FrameLayout v, final GradientDrawable base, float radius, final float sc, final Runnable click){
         final GlowFrame g = new GlowFrame(this, v, p(radius));
         g.setFocusable(true); g.setClickable(true);
@@ -414,79 +399,26 @@ public class MainActivity extends Activity {
             if (x.getParent()==null) return;
             if (editMode){ if (x==dragV) x.setTranslationZ(p(18)); return; }
             if (x==menuOwner && !f) return;
-            x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(sc<1.05f?260:180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
-            x.setTranslationZ(f?(sc>=1.12f?p(8):p(6)):0);
-            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(180);
-            va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.syncHalo(); g.invalidate(); }); va.start();
+            x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+            x.setTranslationZ(f?p(8):0);
+            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); va.setDuration(220);
+            va.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.syncHalo(); }); va.start();
         });
         g.setOnClickListener(x->click.run());
         return g;
     }
-    final Map<String,Integer> glowCache = new HashMap<>();
     final Map<String,Bitmap> glowBmps = new HashMap<>();
-    Bitmap glowBmp(int w, int h, int color, float r){
-        String k=w+"x"+h+":"+color+":"+(int)r;
-        Bitmap hit=glowBmps.get(k); if (hit!=null && !hit.isRecycled()) return hit;
-        int pad=p(18);
-        Bitmap bm=Bitmap.createBitmap(Math.max(1,w+pad*2), Math.max(1,h+pad*2), Bitmap.Config.ARGB_8888);
-        Canvas c=new Canvas(bm);
-        Paint bl=new Paint(Paint.ANTI_ALIAS_FLAG);
-        bl.setColor(color); bl.setMaskFilter(new BlurMaskFilter(p(9), BlurMaskFilter.Blur.NORMAL));
-        c.drawRoundRect(pad, pad, pad+w, pad+h, r, r, bl);
-        glowBmps.put(k, bm); return bm;
-    }
     Bitmap shadowBmp(int w, int h, float r){
         String k="sh:"+w+"x"+h+":"+(int)r;
         Bitmap hit=glowBmps.get(k); if (hit!=null && !hit.isRecycled()) return hit;
-        int pad=p(28);
+        int pad=p(36);
         Bitmap bm=Bitmap.createBitmap(Math.max(1,w+pad*2), Math.max(1,h+pad*2), Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(bm);
         Paint bl=new Paint(Paint.ANTI_ALIAS_FLAG);
-        bl.setColor(Color.BLACK); bl.setMaskFilter(new BlurMaskFilter(p(16), BlurMaskFilter.Blur.NORMAL));
+        bl.setColor(Color.BLACK); bl.setMaskFilter(new BlurMaskFilter(p(22), BlurMaskFilter.Blur.NORMAL));
         c.drawRoundRect(pad, pad, pad+w, pad+h, r, r, bl);
         glowBmps.put(k, bm); return bm;
     }
-    int glowColor(String pkg){
-        if (pkg==null) return FOCUS;
-        if (pkg.contains("netflix")||pkg.contains("youtube")) return Color.rgb(210,48,48);
-        if (pkg.contains("spotify")) return Color.rgb(30,215,96);
-        if (pkg.contains("amazon")) return Color.rgb(48,148,210);
-        if (pkg.contains("disney")) return Color.rgb(64,112,214);
-        if (pkg.contains("hulu")) return Color.rgb(40,186,118);
-        if (pkg.contains("wbd.stream")) return Color.rgb(138,104,208);
-        if (pkg.contains("crunchyroll")) return Color.rgb(224,128,48);
-        if (pkg.contains("plex")) return Color.rgb(214,168,48);
-        if (pkg.contains("pluto")) return Color.rgb(32,186,186);
-        if (pkg.contains("haystack")) return Color.rgb(88,168,80);
-        if (pkg.contains("tvlauncher")) return Color.rgb(72,132,220);
-        Integer hit=glowCache.get(pkg); if (hit!=null) return hit;
-        int c=sampleGlow(pkg); glowCache.put(pkg,c); return c;
-    }
-    int sampleGlow(String pkg){
-        Drawable d=null;
-        try { d=pm.getApplicationBanner(pkg); if (d==null) d=pm.getApplicationIcon(pkg); } catch (Exception e){}
-        int c=vibrantColor(d); return c!=0?c:FOCUS;
-    }
-    int vibrantColor(Drawable d){
-        if (d==null) return 0;
-        try {
-            Bitmap bm=Bitmap.createBitmap(64,36,Bitmap.Config.ARGB_8888); Canvas c=new Canvas(bm); d.setBounds(0,0,64,36); d.draw(c);
-            Map<Integer,Integer> hist=new HashMap<>(); int best=0,bestN=0;
-            for (int x=0;x<64;x++) for (int y=0;y<36;y++){
-                int px=bm.getPixel(x,y); if (Color.alpha(px)<200) continue;
-                float[] hsv=new float[3]; Color.colorToHSV(px,hsv);
-                if (hsv[1]<0.22f || hsv[2]<0.15f || (hsv[2]>0.92f && hsv[1]<0.25f)) continue;
-                int k=(int)(hsv[0]/20); int n=(hist.containsKey(k)?hist.get(k):0)+1; hist.put(k,n);
-                if (n>bestN){ bestN=n; best=px; }
-            }
-            if (bestN==0) return 0;
-            float[] hsv=new float[3]; Color.colorToHSV(best,hsv);
-            hsv[1]=Math.max(0.5f,Math.min(1f,hsv[1])); hsv[2]=Math.max(0.5f,Math.min(0.85f,hsv[2]));
-            return Color.HSVToColor(hsv);
-        } catch (Exception e){ return 0; }
-    }
-    void tintCard(View v, String pkg){ if (v instanceof GlowFrame) ((GlowFrame)v).tint(glowColor(pkg)); }
-
     View appTile(final String pkg, String cls, String label){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
         GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(TILE); bg.setStroke(1, Color.argb(30,255,255,255)); f.setBackground(bg);
@@ -510,7 +442,7 @@ public class MainActivity extends Activity {
         }
         final Intent li = new Intent(Intent.ACTION_MAIN).setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         View gv = focusable(f, bg, TILE_R, APP_FOCUS, ()->{ try{ startActivity(li);}catch(Exception e){} });
-        ((GlowFrame)gv).drop=true; gv.setTag(pkg); tintCard(gv, pkg); return gv;
+        gv.setTag(pkg); return gv;
     }
     // Banner: use its edge colour so the banner blends into the tile. Icon: dominant (most saturated common) colour, darkened.
     int brandColor(Drawable d, boolean edge){
@@ -1072,7 +1004,7 @@ public class MainActivity extends Activity {
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
         bindHeroAction(o);
         final String uri = (String)o[3];
-        final int tw=p(1024), th=p(360), g=++heroLoadGen;
+        final int tw=p(758), th=p(360), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
             Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
@@ -1234,7 +1166,7 @@ public class MainActivity extends Activity {
     View card(Drawable art, String artUri, boolean fitArt, String badgePkg, String caption, float progress, final Runnable click){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);
         GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(p(TILE_R)); bg.setColor(Color.argb(96,190,185,220)); bg.setStroke(Math.max(1,p(.6f)), Color.argb(60,255,255,255)); f.setBackground(bg);
-        f.setOutlineProvider(ViewOutlineProvider.BACKGROUND); f.setElevation(p(11)); if (Build.VERSION.SDK_INT>=28){ f.setOutlineSpotShadowColor(Color.BLACK); f.setOutlineAmbientShadowColor(Color.BLACK); }
+        f.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
         ImageView iv = new ImageView(this); iv.setScaleType(ImageView.ScaleType.CENTER_CROP); if (art!=null) iv.setImageDrawable(art); if (fitArt){ iv.setScaleType(ImageView.ScaleType.FIT_CENTER); iv.setPadding(p(30),p(18),p(30),p(30)); } loadInto(iv, artUri, fitArt);
         f.addView(iv, new FrameLayout.LayoutParams(-1,-1));
         View shade = new View(this); shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(70,0,0,0), Color.argb(160,0,0,0), Color.argb(204,0,0,0)}));
@@ -1255,9 +1187,7 @@ public class MainActivity extends Activity {
             bar.addView(fill, new FrameLayout.LayoutParams(Math.round(p(166)*progress), -1));
             f.addView(bar, lp(p(166), p(2.5f), Gravity.BOTTOM, p(9), 0, 0, p(8)));
         }
-        View g = focusable(f, bg, TILE_R, click);
-        if (badgePkg!=null) tintCard(g, badgePkg);
-        return g;
+        return focusable(f, bg, TILE_R, click);
     }
 
     void refreshCards(){
@@ -1279,7 +1209,7 @@ public class MainActivity extends Activity {
             if (!installed(pk)) continue;
             Drawable art=null; try { art = pm.getApplicationBanner(pk); if (art==null){ Intent li=pm.getLeanbackLaunchIntentForPackage(pk); if(li!=null) art=pm.getActivityBanner(li);} if(art==null) art=pm.getApplicationIcon(pk);} catch(Exception e){}
             String cap = tab==1 && pk.equals("com.google.android.tv") ? "Free channels" : null;
-            View v=card(art, null, false, null, cap, -1, ()->launchPkg(pk)); tintCard(v, pk); addCard(v, i++);
+            View v=card(art, null, false, null, cap, -1, ()->launchPkg(pk)); addCard(v, i++);
         }
         h.post(this::updateCardAlphas);
     }
@@ -1319,12 +1249,7 @@ public class MainActivity extends Activity {
                 if (tl!=null && tl.length()>0){ org.json.JSONObject t0=tl.getJSONObject(0); m.put(ch.optString("name"), t0.optString("title")); String img=plutoGuideArt(t0, ban); if (img!=null) art.put(ch.optString("name"), img); }
                 String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
             android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels art="+art.size()+" logos="+logos.size());
-            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoLogo.clear(); plutoLogo.putAll(logos); plutoAt=System.currentTimeMillis(); applyLiveNow();
-                if (liveCache==null) return;
-                List<String[]> extra=new ArrayList<>();
-                for (Map.Entry<String,String> e: plutoSlug.entrySet()) if (!liveSlugs.contains(e.getValue())) extra.add(new String[]{e.getValue(), e.getKey()});
-                if (!extra.isEmpty()) appendLive(extra, false);
-            });
+            h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoLogo.clear(); plutoLogo.putAll(logos); plutoAt=System.currentTimeMillis(); applyLiveNow(); });
         } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); } });
     }
     static String plutoGuideArt(org.json.JSONObject t0, Set<String> ban){
@@ -1357,19 +1282,22 @@ public class MainActivity extends Activity {
     int loadLive(){
         if (liveCache!=null && !liveCache.isEmpty()){ showLiveCache(); fillPlutoNow(plutoCaps); return liveCache.size(); }
         liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
-        if (installed("com.google.android.tvlauncher")){ View v=freeplayLiveTile(); tintCard(v,"com.google.android.tvlauncher"); putLive(v, null); }
-        List<String[]> rest=new ArrayList<>();
         if (installed("tv.pluto.android")){
-            for (Map.Entry<String,String> e: liveSlugNames().entrySet()){
-                if (liveCache.size()<6) putLive(plutoTile(e.getKey(), e.getValue(), true), e.getKey());
-                else rest.add(new String[]{e.getKey(), e.getValue()});
+            LinkedHashMap<String,String> names=liveSlugNames();
+            for (String slug: LIVE_SLUGS){
+                if (liveCache.size()>=4) break;
+                String nm=names.get(slug); if (nm==null) continue;
+                putLive(plutoTile(slug, nm, true), slug);
             }
         }
-        boolean hay=installed("com.haystack.android");
-        if (hay && liveCache.size()<6){ putLive(haystackTile(), "haystack"); hay=false; }
-        if (!rest.isEmpty() || hay){ final List<String[]> r=rest; final boolean h2=hay; h.post(()->appendLive(r,h2)); }
-        else if (!plutoCaps.isEmpty()) fillPlutoNow(plutoCaps);
+        putLive(plutoGuideTile(), "pluto-guide");
+        if (!plutoCaps.isEmpty()) fillPlutoNow(plutoCaps);
         return liveCache.size();
+    }
+    View plutoGuideTile(){
+        Drawable ban=null, ic=null;
+        try { ban=pm.getApplicationBanner("tv.pluto.android"); ic=pm.getApplicationIcon("tv.pluto.android"); } catch (Exception e){}
+        return card(ban!=null?ban:ic, null, ban==null, null, "Pluto TV guide", -1, ()->startSafe(plutoIntent(null), "tv.pluto.android"));
     }
     LinkedHashMap<String,String> liveSlugNames(){
         LinkedHashMap<String,String> slugName=new LinkedHashMap<>();
@@ -1390,16 +1318,10 @@ public class MainActivity extends Activity {
         int i=0; for (View v: liveCache){ if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v); addCard(v, i++); }
         applyLiveNow();
     }
-    void appendLive(List<String[]> rest, boolean hay){
-        for (String[] e: rest){ if (liveSlugs.contains(e[0])) continue; View v=plutoTile(e[0], e[1], false); liveCache.add(v); liveSlugs.add(e[0]); if (tab==1) addCard(v, liveCache.size()-1); }
-        if (hay && !liveSlugs.contains("haystack")){ View v=haystackTile(); liveCache.add(v); liveSlugs.add("haystack"); if (tab==1) addCard(v, liveCache.size()-1); }
-        if (tab==1) updateCardAlphas();
-        if (!plutoCaps.isEmpty()) fillPlutoNow(plutoCaps);
-    }
     View plutoTile(String slug, String nm, boolean loadArt){
         Map<String,Long> plutoIds=plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
         final Intent in=plutoIntent(slug); Long id=plutoId(plutoIds, nm, slug);
-        View v=card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android")); tintCard(v, "tv.pluto.android");
+        View v=card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android"));
         ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0);
         TextView ov=chName(nm);
         ((GlowFrame)v).inner.addView(ov, lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0));
@@ -1464,37 +1386,11 @@ public class MainActivity extends Activity {
         } catch (Exception e){}
         return null;
     }
-    String freeplayNowArt(){
-        try (Cursor c=getContentResolver().query(TvContract.Channels.CONTENT_URI, null, null, null, null)){
-            while (c!=null && c.moveToNext()){
-                int pi=c.getColumnIndex("package_name"); String pkg=pi>=0&&!c.isNull(pi)?c.getString(pi):null;
-                if (pkg==null || !(pkg.contains("tvlauncher")||pkg.equals("com.google.android.tv"))) continue;
-                int i=c.getColumnIndex("_id"); if (i<0) continue;
-                String art=tifNowArt(c.getLong(i)); if (art!=null) return art;
-            }
-        } catch (Exception e){}
-        return null;
-    }
-    View haystackTile(){
-        Drawable art=null; try { art=pm.getApplicationBanner("com.haystack.android"); } catch(Exception e){}
-        View v=card(art, null, true, null, "Haystack News \u00B7 Live", -1, ()->startSafe(pm.getLeanbackLaunchIntentForPackage("com.haystack.android")==null?new Intent():pm.getLeanbackLaunchIntentForPackage("com.haystack.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "com.haystack.android"));
-        tintCard(v,"com.haystack.android"); return v;
-    }
     boolean installed(String p){ try { pm.getApplicationInfo(p,0); return true; } catch(Exception e){ return false; } }
     void launchPkg(String pkg){ Intent i = pm.getLeanbackLaunchIntentForPackage(pkg); if (i==null) i = pm.getLaunchIntentForPackage(pkg); if (i!=null) startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
 
     // ---------- v6: quick settings, featured toggle, dimmer, weather ----------
     PillView searchV; TextView heroLabel;
-    // v12: Google TV Freeplay via the stock launcher's exported TvContentIntentReceiver (tv://freeplay -> FreeplayActivity, resumes the last Freeplay channel)
-    void playFreeplay(){ try { Intent b=new Intent("com.google.android.tvlauncher.action.VIEW", Uri.parse("tv://freeplay")); b.setComponent(new android.content.ComponentName("com.google.android.tvlauncher","com.google.android.tvlauncher.TvContentIntentReceiver")); b.addFlags(Intent.FLAG_RECEIVER_FOREGROUND); sendBroadcast(b); android.util.Log.i("ShieldHome","freeplay broadcast sent"); } catch(Exception e){ android.util.Log.w("ShieldHome","freeplay "+e); } }
-    View freeplayLiveTile(){
-        String art=freeplayNowArt();
-        Drawable ic=null; if (art==null) try { android.content.res.Resources r=pm.getResourcesForApplication("com.google.android.tvlauncher"); int id=r.getIdentifier("freeplay_icon","drawable","com.google.android.tvlauncher"); if (id!=0) ic=r.getDrawable(id,null); } catch(Exception e){}
-        View v=card(ic, art, art==null, null, "Google TV Freeplay \u00B7 Live", -1, ()->playFreeplay());
-        TextView tg=text("LIVE", 7, Color.WHITE, "sans-serif-medium"); tg.setLetterSpacing(.08f); tg.setPadding(p(5),p(2),p(5),p(2)); GradientDrawable gb=new GradientDrawable(); gb.setCornerRadius(p(3)); gb.setColor(Color.rgb(200,30,40)); tg.setBackground(gb);
-        ((GlowFrame)v).inner.addView(tg, lp(-2,-2,Gravity.TOP|Gravity.START,p(7),p(7),0,0));
-        if (art!=null){ TextView ov=chName("Freeplay"); ((GlowFrame)v).inner.addView(ov, lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0)); }
-        return v; }
     void useWhatsNew(String js){
         List<Object[]> nl = new ArrayList<>();
         try { org.json.JSONArray a = new org.json.JSONArray(js==null?"[]":js);
