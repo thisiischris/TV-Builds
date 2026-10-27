@@ -396,11 +396,11 @@ public class MainActivity extends Activity {
                 c.drawArc(mx-p(5), cy-p(1.2f), mx+p(5), cy+p(5.6f), 12, 156, false, pt);
             }
             else if (icon==7){
-                float kx=w/2f, l=kx-p(8), r=kx+p(8), t=cy-p(5.2f), b=cy+p(5.2f);
+                float kx=w/2f, l=kx-p(8), rr=kx+p(8), t=cy-p(5.2f), b=cy+p(5.2f);
                 pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(p(1.1f)); pt.setStrokeJoin(Paint.Join.ROUND);
-                c.drawRoundRect(l, t, r, b, p(2.2f), p(2.2f), pt);
+                c.drawRoundRect(l, t, rr, b, p(2.2f), p(2.2f), pt);
                 pt.setStyle(Paint.Style.FILL);
-                float inset=p(2.4f), kl=l+inset, kr=r-inset, kt=t+inset, gapx=(kr-kl)/4f, gapy=p(2.35f), kd=p(0.85f);
+                float inset=p(2.4f), kl=l+inset, kr=rr-inset, kt=t+inset, gapx=(kr-kl)/4f, gapy=p(2.35f), kd=p(0.85f);
                 for (int row=0; row<2; row++) for (int col=0; col<5; col++) c.drawCircle(kl+col*gapx, kt+row*gapy, kd, pt);
                 float by=kt+2*gapy, sh=p(1.15f);
                 c.drawCircle(kl, by, kd, pt); c.drawCircle(kr, by, kd, pt);
