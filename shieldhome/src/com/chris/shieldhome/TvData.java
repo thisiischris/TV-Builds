@@ -83,7 +83,7 @@ class TvData {
         for (Object[] row : previewRows) {
             String pkg = (String) row[0];
             if (pkg == null || !VIDEO_APPS.contains(pkg)) continue;
-            if ("com.google.android.youtube.tv".equals(pkg)) continue; // YT recs live in Play Next only
+            if (YT.equals(pkg)) continue; // YT recs live in Play Next only
             all.add(row);
         }
         Collections.sort(all, (x, y) -> Long.compare(a.grid.use((String) y[0]), a.grid.use((String) x[0])));
@@ -104,8 +104,13 @@ class TvData {
         return out;
     }
 
+    static final String YT = "com.google.android.youtube.tv";
+    static final int MAX_ITEMS = 12, YT_RESUME_MAX = 1;
+    static final float FINISHED_FRAC = 0.9f;
+    static final int WN_CONTINUE = 0, WN_NEXT = 1;
+
+    /** Play Next: resume points (≤1 YouTube, nothing ≥90% watched), then round-robin PreviewPrograms recs from most-used apps. */
     List<Object[]> collectWatchNext() {
-        String yt = "com.google.android.youtube.tv";
         List<Object[]> rows = new ArrayList<>();
         try (Cursor c = a.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, null, null, null, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC")) {
             int idx = 0;
@@ -114,77 +119,96 @@ class TvData {
                 if (pkg == null || newsRow(c, pkg) || !a.installed(pkg)) continue;
                 Object[] o = prog(c, true);
                 if (o == null || o[0] == null || o[2] == null) continue;
-                String uri = "";
-                try { uri = ((Intent) o[3]).toUri(Intent.URI_INTENT_SCHEME); } catch (Exception e) {}
-                rows.add(new Object[]{o, l(c, "last_engagement_time_utc_millis"), l(c, "last_playback_position_millis"), l(c, "duration_millis"), (int) l(c, "watch_next_type"), clean(s(c, "title")), idx++, uri});
+                rows.add(new Object[]{o, l(c, "last_engagement_time_utc_millis"), l(c, "last_playback_position_millis"), l(c, "duration_millis"), (int) l(c, "watch_next_type"), clean(s(c, "title")), idx++, uriOf(o[3])});
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "wn " + e); }
         Collections.sort(rows, (x, y) -> {
             long ex = (Long) x[1], ey = (Long) y[1];
             if (ex != ey) return Long.compare(ey, ex);
-            if (ex == 0) {
-                long px = (Long) x[2], py = (Long) y[2];
-                if (px != py) return Long.compare(py, px);
-            }
             return Integer.compare((Integer) x[6], (Integer) y[6]);
         });
         Set<String> feat = new HashSet<>();
         if (a.featuredCache != null) for (Object[] f : a.featuredCache) {
             if (f[0] != null && f[1] != null) feat.add(f[0] + "|" + clean((String) f[1]));
-            try { feat.add(((Intent) f[4]).toUri(Intent.URI_INTENT_SCHEME)); } catch (Exception e) {}
-        }
-        Map<String, Intent> next = new HashMap<>();
-        for (Object[] r : rows) {
-            if ((Integer) r[4] != 1 || r[5] == null) continue;
-            next.put(((Object[]) r[0])[0] + "|" + r[5], (Intent) ((Object[]) r[0])[3]);
+            feat.add(uriOf(f[4]));
         }
         List<Object[]> pick = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        int ytN = 0;
+        Map<String, Integer> resumeBy = new LinkedHashMap<>();
+        int ytN = 0, dropDone = 0, dropZero = 0;
         for (Object[] r : rows) {
+            if (pick.size() >= MAX_ITEMS) break;
             Object[] o = (Object[]) r[0];
-            String pkg = (String) o[0], title = (String) r[5], uri = (String) r[7], pkTitle = pkg + "|" + title;
-            if ((title != null && feat.contains(pkTitle)) || (uri != null && !uri.isEmpty() && feat.contains(uri))) continue;
-            if (title != null && !seen.add(pkTitle)) continue;
-            if (uri != null && !uri.isEmpty() && !seen.add(uri)) continue;
-            if (yt.equals(pkg)) { if (ytN >= 4) continue; ytN++; }
-            if ((Integer) r[4] == 1 || nearEnd((Long) r[2], (Long) r[3])) {
-                Intent nx = title == null ? null : next.get(pkTitle);
-                if (nx != null) o[3] = nx;
-            }
+            String pkg = (String) o[0];
+            long pos = (Long) r[2], dur = (Long) r[3];
+            int type = (Integer) r[4];
+            // Nearly finished: hidden; a show's next episode is its own WN_NEXT row and shows instead.
+            if (finished(pos, dur)) { dropDone++; continue; }
+            if (type == WN_CONTINUE && pos <= 0) { dropZero++; continue; }
+            boolean yt = YT.equals(pkg);
+            if (yt && (pos <= 0 || ytN >= YT_RESUME_MAX)) continue;
+            if (!fresh(pkg, (String) r[5], (String) r[7], feat, seen)) continue;
+            if (yt) ytN++;
             pick.add(o);
-            if (pick.size() >= 12) break;
+            resumeBy.merge(pkg, 1, Integer::sum);
         }
-        Object[] rec = ytPreviewRec(feat, seen);
-        if (rec != null) {
-            for (int i = pick.size() - 1; i >= 0 && ytN >= 4; i--)
-                if (yt.equals(pick.get(i)[0])) { pick.remove(i); ytN--; }
-            pick.add(0, rec);
-            ytN++;
-            if (pick.size() > 12) pick.remove(pick.size() - 1);
-        }
-        android.util.Log.i("ShieldHome", "playnext cw=" + pick.size() + " rows=" + rows.size() + " yt=" + ytN + " rec=" + (rec != null));
+        int resumeN = pick.size();
+        Map<String, Integer> recBy = previewRecs(pick, feat, seen);
+        android.util.Log.i("ShieldHome", "playnext resume=" + resumeN + " " + resumeBy + " recs=" + (pick.size() - resumeN) + " " + recBy + " wnRows=" + rows.size() + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero);
         return pick;
     }
-    Object[] ytPreviewRec(Set<String> feat, Set<String> seen) {
-        String yt = "com.google.android.youtube.tv";
-        if (!a.installed(yt)) return null;
+    /** Fills pick up to MAX_ITEMS with PreviewPrograms recs, one per app per round, apps by a.grid.use. Returns recs added per app. */
+    Map<String, Integer> previewRecs(List<Object[]> pick, Set<String> feat, Set<String> seen) {
+        Map<String, List<Object[]>> by = new HashMap<>();
+        Map<String, Integer> published = new TreeMap<>();
         try (Cursor c = a.getContentResolver().query(TvContract.PreviewPrograms.CONTENT_URI, null, null, null, null)) {
             while (c != null && c.moveToNext()) {
-                if (!yt.equals(s(c, "package_name")) || newsRow(c, yt)) continue;
+                String pkg = s(c, "package_name");
+                if (pkg == null) continue;
+                published.merge(pkg, 1, Integer::sum);
+                if (pkg.equals(a.getPackageName()) || !a.installed(pkg) || newsRow(c, pkg)) continue;
                 Object[] o = prog(c, false);
                 if (o == null || o[2] == null) continue;
-                String title = clean(s(c, "title")), uri = "";
-                try { uri = ((Intent) o[3]).toUri(Intent.URI_INTENT_SCHEME); } catch (Exception e) {}
-                String pkTitle = yt + "|" + title;
-                if (title != null && (feat.contains(pkTitle) || seen.contains(pkTitle))) continue;
-                if (!uri.isEmpty() && (feat.contains(uri) || seen.contains(uri))) continue;
-                return o;
+                o = new Object[]{o[0], o[1], o[2], o[3], o[4], clean(s(c, "title"))};
+                List<Object[]> l = by.get(pkg);
+                if (l == null) by.put(pkg, l = new ArrayList<>());
+                l.add(o);
             }
-        } catch (Exception e) { android.util.Log.w("ShieldHome", "ytrec " + e); }
-        return null;
+        } catch (Exception e) { android.util.Log.w("ShieldHome", "recs " + e); }
+        android.util.Log.i("ShieldHome", "playnext previewPublishers=" + published);
+        List<String> apps = new ArrayList<>(by.keySet());
+        Collections.sort(apps, (x, y) -> Long.compare(a.grid.use(y), a.grid.use(x)));
+        Map<String, Integer> added = new LinkedHashMap<>();
+        int[] at = new int[apps.size()];
+        for (boolean more = true; more && pick.size() < MAX_ITEMS; ) {
+            more = false;
+            for (int i = 0; i < apps.size() && pick.size() < MAX_ITEMS; i++) {
+                List<Object[]> l = by.get(apps.get(i));
+                while (at[i] < l.size()) {
+                    Object[] o = l.get(at[i]++);
+                    if (!fresh((String) o[0], (String) o[5], uriOf(o[3]), feat, seen)) continue;
+                    pick.add(new Object[]{o[0], o[1], o[2], o[3], -1f});
+                    added.merge((String) o[0], 1, Integer::sum);
+                    break;
+                }
+                if (at[i] < l.size()) more = true;
+            }
+        }
+        return added;
     }
-    static boolean nearEnd(long pos, long dur) { return dur > 0 && pos * 10 >= dur * 9; }
+    /** True (and marks seen) when pkg|title and intent uri are not in the featured card or already picked. */
+    static boolean fresh(String pkg, String title, String uri, Set<String> feat, Set<String> seen) {
+        String pkTitle = title == null ? null : pkg + "|" + title;
+        if (pkTitle != null && (feat.contains(pkTitle) || seen.contains(pkTitle))) return false;
+        if (!uri.isEmpty() && (feat.contains(uri) || seen.contains(uri))) return false;
+        if (pkTitle != null) seen.add(pkTitle);
+        if (!uri.isEmpty()) seen.add(uri);
+        return true;
+    }
+    static String uriOf(Object intent) {
+        try { return ((Intent) intent).toUri(Intent.URI_INTENT_SCHEME); } catch (Exception e) { return ""; }
+    }
+    static boolean finished(long pos, long dur) { return dur > 0 && pos >= dur * FINISHED_FRAC; }
 
     boolean newsRow(Cursor c, String pkg) {
         String genre = s(c, "canonical_genre");
