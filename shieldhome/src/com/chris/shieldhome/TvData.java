@@ -107,7 +107,7 @@ class TvData {
     static final String YT = "com.google.android.youtube.tv";
     static final int MAX_ITEMS = 12, YT_RESUME_MAX = 1;
     static final float FINISHED_FRAC = 0.9f;
-    static final int WN_CONTINUE = 0, WN_NEXT = 1;
+    static final int WN_CONTINUE = 0;
 
     /** Play Next: resume points (≤1 YouTube, nothing ≥90% watched), then round-robin PreviewPrograms recs from most-used apps. */
     List<Object[]> collectWatchNext() {
@@ -125,6 +125,10 @@ class TvData {
         Collections.sort(rows, (x, y) -> {
             long ex = (Long) x[1], ey = (Long) y[1];
             if (ex != ey) return Long.compare(ey, ex);
+            if (ex == 0) {
+                long px = (Long) x[2], py = (Long) y[2];
+                if (px != py) return Long.compare(py, px);
+            }
             return Integer.compare((Integer) x[6], (Integer) y[6]);
         });
         Set<String> feat = new HashSet<>();
@@ -142,7 +146,7 @@ class TvData {
             String pkg = (String) o[0];
             long pos = (Long) r[2], dur = (Long) r[3];
             int type = (Integer) r[4];
-            // Nearly finished: hidden; a show's next episode is its own WN_NEXT row and shows instead.
+            // Nearly finished: hidden; a show's next episode is its own NEXT-type row and shows instead.
             if (finished(pos, dur)) { dropDone++; continue; }
             if (type == WN_CONTINUE && pos <= 0) { dropZero++; continue; }
             boolean yt = YT.equals(pkg);
@@ -214,7 +218,7 @@ class TvData {
         if (in == null) return false;
         if (YT.equals(in.getPackage()) || (in.getComponent() != null && YT.equals(in.getComponent().getPackageName()))) return true;
         String host = in.getData() == null ? null : in.getData().getHost();
-        return host != null && (host.endsWith("youtube.com") || host.equals("youtu.be"));
+        return host != null && (host.equals("youtube.com") || host.endsWith(".youtube.com") || host.equals("youtu.be"));
     }
     static boolean finished(long pos, long dur) { return dur > 0 && pos >= dur * FINISHED_FRAC; }
 
