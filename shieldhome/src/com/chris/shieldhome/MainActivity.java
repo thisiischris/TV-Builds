@@ -1168,9 +1168,7 @@ public class MainActivity extends Activity {
         catch(Exception e){ launchPkg((String)o[0]); }
     }
     ImageView heroArt2;
-    void loadHero(){ hero.loadHero(); }
     void applyFeaturedCache(){ hero.applyFeaturedCache(); }
-    static String heroSig(List<Object[]> l){ return HeroController.heroSig(l); }
     long heroGate;
     void heroStep(boolean next){
         if (android.os.SystemClock.uptimeMillis()<heroGate) return;
@@ -1184,7 +1182,6 @@ public class MainActivity extends Activity {
         h.postDelayed(hero.heroRotate, HERO_ROTATE_MS);
     }
     void showHero(){ hero.showHero(); }
-    void transitionHero(final Object[] o, Bitmap bm){ hero.transitionHero(o,bm); }
 
     Map<String,Bitmap> glyphs=new HashMap<>();
     // v12: white monochrome mark extracted from the app banner (pixels that differ from the banner background become white, alpha by contrast), cropped, with a soft shadow
@@ -1247,15 +1244,9 @@ public class MainActivity extends Activity {
         }
         if (tabBar!=null) tabBar.slide(false);
     }
-    String cardSig(){ return cards.cardSig(); }
-    void addCard(View v,int i){ cards.addCard(v,i); }
-    void snapCardRow(View v){ cards.snapCardRow(v); }
     void resetCardRow(){ cards.resetCardRow(); }
     void updateCardAlphas(){ cards.updateCardAlphas(); }
     void refreshCards(){ cards.refreshCards(); }
-    int loadWatchNext(){ return cards.loadWatchNext(); }
-    int loadLive(){ return cards.loadLive(); }
-    void applyLiveNow(){ cards.applyLiveNow(); }
     List<String[]> apps(){ return appsCache!=null?appsCache:tv.queryApps(); }
 
     boolean installed(String p){ try { pm.getApplicationInfo(p,0); return true; } catch(Exception e){ return false; } }
