@@ -281,11 +281,11 @@ public class MainActivity extends Activity {
         heroArt2 = new ImageView(this); heroArt2.setScaleType(ImageView.ScaleType.CENTER_CROP); heroArt2.setAlpha(0f);
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(heroArt2, new FrameLayout.LayoutParams(-1,-1));
-        hero.addView(artHost, lp(p(758), p(360), Gravity.TOP|Gravity.END, 0,0,0,0));
+        hero.addView(artHost, lp(-1, p(360), Gravity.TOP, 0,0,0,0));
         LinearLayout meta = new LinearLayout(this); meta.setOrientation(LinearLayout.VERTICAL);
         heroArt = art;
         heroBadge = new ImageView(this); heroBadge.setScaleType(ImageView.ScaleType.FIT_START); heroBadge.setAlpha(0.7f);
-        heroLabel = text("", 8, Color.rgb(190,188,205), "sans-serif-medium");
+        heroLabel = text("", 11, Color.rgb(190,188,205), "sans-serif-medium");
         heroTitle = text("Your Library", 23, Color.rgb(220,220,230), "sans-serif-medium");
         heroTitle.setSingleLine(false); heroTitle.setMaxLines(2); heroTitle.setEllipsize(android.text.TextUtils.TruncateAt.END); heroTitle.setHorizontallyScrolling(false);
         heroTitle.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE); heroTitle.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
@@ -306,7 +306,7 @@ public class MainActivity extends Activity {
         heroBtn = new PillView(this, "Play Now", 4, true);
         heroBtn.setAlpha(0f); heroBtn.setTranslationY(p(8));
         heroBtn.setOnClickListener(v->heroAction());
-        hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(253), 0, 0));
+        hero.addView(heroBtn, lp(p(138), p(34), Gravity.TOP|Gravity.START, p(35), p(237), 0, 0));
         art.post(()->{ int w=art.getWidth(), h=art.getHeight(); if (w>0){ Drawable d=art.getDrawable(); if (d!=null){ int iw=Math.max(1,d.getIntrinsicWidth()), ih=Math.max(1,d.getIntrinsicHeight()); Bitmap src=Bitmap.createBitmap(iw,ih,Bitmap.Config.ARGB_8888); Canvas cv=new Canvas(src); d.setBounds(0,0,iw,ih); d.draw(cv); art.setImageBitmap(maskHero("hero", src, w, h)); } } });
         heroG = hero; hero.setFocusable(false); hero.setClickable(false);
         heroBtn.setOnFocusChangeListener((x,f)-> showHeroAction(f));
@@ -1044,16 +1044,20 @@ public class MainActivity extends Activity {
         Bitmap bm=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(bm);
         c.drawColor(Color.WHITE);
-        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        p.setShader(new LinearGradient(0,0,w*0.24f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
+        float artW=Math.min(w,p(758)), artL=Math.max(0,w-artW), leftEnd=artL+artW*0.24f;
+        p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,h,0,h*0.60f, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(w,0,w*0.90f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(w,0,w-artW*0.10f,0, Color.TRANSPARENT, Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,0,0,h*0.064f, Color.argb(240,255,255,255), Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
+        float rad=h*0.37f;
+        p.setShader(new RadialGradient(artL, h, rad, new int[]{Color.TRANSPARENT, Color.argb(50,255,255,255), Color.WHITE}, new float[]{0, 0.5f, 1}, Shader.TileMode.CLAMP));
+        c.drawRect(artL, h-rad, Math.min(w, artL+rad), h, p);
         vigMask=bm; return bm;
     }
     Bitmap maskHero(String key, Bitmap src, int tw, int th){
@@ -1062,12 +1066,15 @@ public class MainActivity extends Activity {
         if (hit!=null && !hit.isRecycled() && hit.getWidth()==tw && hit.getHeight()==th) return hit;
         Bitmap out=Bitmap.createBitmap(tw,th,Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(out);
-        float s=Math.max(tw/(float)src.getWidth(), th/(float)src.getHeight());
-        float dw=src.getWidth()*s, dh=src.getHeight()*s;
-        c.drawBitmap(src, null, new RectF((tw-dw)/2f,(th-dh)/2f,(tw+dw)/2f,(th+dh)/2f), null);
+        c.drawColor(0xFF050507);
+        float artW=Math.min(tw,p(758)), artL=tw-artW;
+        float s=Math.max(artW/src.getWidth(), th/(float)src.getHeight());
+        float dw=src.getWidth()*s, dh=src.getHeight()*s, cx=artL+artW/2f, cy=th/2f;
+        c.drawBitmap(src, null, new RectF(cx-dw/2,cy-dh/2,cx+dw/2,cy+dh/2), null);
         Paint xp=new Paint(Paint.ANTI_ALIAS_FLAG);
         xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
         c.drawBitmap(alphaMask(tw,th),0,0,xp);
+        c.drawColor(0xFF050507, PorterDuff.Mode.DST_OVER);
         heroMasked.put(key, out); return out;
     }
     // ---------- Featured hero ----------
@@ -1146,7 +1153,7 @@ public class MainActivity extends Activity {
         synchronized(heroLock){ if (heroItems.isEmpty()) return; o=heroItems.get(Math.min(heroIdx, heroItems.size()-1)); }
         bindHeroAction(o);
         final String uri = (String)o[3];
-        final int tw=p(758), th=p(360), g=++heroLoadGen;
+        final int tw=heroG!=null&&heroG.getWidth()>0?heroG.getWidth():p(1024), th=p(360), g=++heroLoadGen;
         pool.execute(()->{
             Bitmap raw = uri==null||images==null?null:images.decode(uri, tw, th);
             Bitmap bm = raw==null?null:maskHero(uri, raw, tw, th);
@@ -1163,7 +1170,7 @@ public class MainActivity extends Activity {
             out.animate().alpha(0f).setDuration(1600).setInterpolator(ease).start();
             heroFront = !heroFront;
         }
-        final View[] texts = {heroTitle, heroSub, heroBadge};
+        final View[] texts = {heroTitle, heroSub, heroBadge, heroFocus, heroLabel};
         for (View t: texts) t.animate().alpha(0f).translationX(-p(10)).setDuration(450).setInterpolator(new android.view.animation.AccelerateInterpolator()).start();
         h.postDelayed(()->{
             bindHeroCopy(o);
