@@ -83,7 +83,7 @@ class CardsController {
         View f=a.getCurrentFocus();
         if (f!=null && f.getParent()==a.cardRow) return;
         if (capLine!=null){ capLine.animate().cancel(); capLine.animate().alpha(0f).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start(); }
-        liftRow(false);
+        if (a.drawerOpen) rowLifted=false; else liftRow(false); // drawer slide owns translationY
     }
     /** Moves the tab bar and card row up together (never the app grid). */
     void liftRow(boolean up){
