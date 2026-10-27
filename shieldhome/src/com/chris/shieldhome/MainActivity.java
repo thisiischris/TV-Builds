@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     static final int HERO_SCRIM_RGB=0x050507; // darker than BG 0x080810 so the wash doesn't read as wallpaper
     static final float HERO_LEFT_FADE=0.24f;
     static final int TILE_R = 11;
-    static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f;
+    static final float APP_FOCUS=1.13f, APP_HOLD=1.16f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f, APP_GRID_Y=467.5f;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
 
@@ -327,7 +327,7 @@ public class MainActivity extends Activity {
         heroFocus = new View(this); heroFocus.setBackgroundColor(Color.WHITE); heroFocus.setAlpha(1f);
         meta.addView(heroBadge, new LinearLayout.LayoutParams(p(80), p(22)));
         LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-2,-2); ml.topMargin=p(6); meta.addView(heroLabel, ml);
-        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(6); meta.addView(heroTitle, mt);
+        LinearLayout.LayoutParams mt = new LinearLayout.LayoutParams(-1,-2); mt.topMargin=p(10); meta.addView(heroTitle, mt);
         LinearLayout.LayoutParams mf = new LinearLayout.LayoutParams(p(40), Math.max(2,p(1.4f))); mf.topMargin=p(6); meta.addView(heroFocus, mf);
         LinearLayout.LayoutParams ms = new LinearLayout.LayoutParams(-1,-2); ms.topMargin=p(8); meta.addView(heroSub, ms);
         heroMeta = meta;
@@ -366,7 +366,7 @@ public class MainActivity extends Activity {
         cardScroll.getViewTreeObserver().addOnScrollChangedListener(this::updateCardAlphas);
 
         homeGrid = new GridLayout(this); homeGrid.setColumnCount(6); homeGrid.setClipChildren(false); homeGrid.setClipToPadding(false);
-        place(homeGrid, 35, 483, 954, APP_H+APP_VG);
+        place(homeGrid, 35, APP_GRID_Y, 954, APP_H+APP_VG);
         ensureDim();
         buildHomeGrid();
 
@@ -379,7 +379,7 @@ public class MainActivity extends Activity {
         String label; int icon; boolean on; Drawable asst; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
         PillView(Context c, String l, int ic, boolean o){ super(c); label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
         void setOn(boolean o){ on=o; invalidate(); }
-        @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); setElevation(f?p(4):0); invalidate(); }
+        @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); setElevation(f?p(4):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
             float w=getWidth(), hh=getHeight(), r=this==heroBtn?p(14):hh/2;
             boolean lit = on || (icon==2 && isFocused());
@@ -739,7 +739,7 @@ public class MainActivity extends Activity {
     void staggerDrawer(boolean open){
         if (homeGrid==null) return;
         int n=homeGrid.getChildCount(), rows=Math.max(1,(n+5)/6);
-        for (int row=1; row<rows; row++){
+        for (int row=2; row<rows; row++){ // row 1 is the peek; leave it visible when closed
             int delay=open?(row-1)*40:(rows-1-row)*40;
             for (int c=0;c<6;c++){
                 int i=row*6+c; if (i>=n) break;
@@ -755,7 +755,7 @@ public class MainActivity extends Activity {
         int r=0; View f=getCurrentFocus();
         if (f!=null && homeGrid!=null && f.getParent()==homeGrid) r=Math.max(0, (editMode?tileIx(f):homeGrid.indexOfChild(f))/6);
         final boolean open=drawerOpen;
-        float y = open ? -(p(466)+Math.max(0, r-4)*rowH()) : 0;
+        float y = open ? -(p(APP_GRID_Y-17)+Math.max(0, r-4)*rowH()) : 0;
         fadeChrome(open);
         if (open){
             for (View v: new View[]{tabBar, cardWrap, homeGrid}) if (v!=null) v.bringToFront();
@@ -1178,10 +1178,28 @@ public class MainActivity extends Activity {
         String meta="", desc=raw;
         int nl=raw.indexOf('\n');
         if ("NEW".equals(tag) && nl>=0){ meta=raw.substring(0,nl).trim(); desc=raw.substring(nl+1); }
-        desc=desc.replaceAll("\\s+"," ").trim();
+        desc=firstSentence(desc.replaceAll("\\s+"," ").trim());
         if (heroLabel!=null){ heroLabel.setText(meta); heroLabel.setVisibility(meta.isEmpty()?View.GONE:View.VISIBLE); }
         heroTitle.setText((String)o[1]); heroSub.setText(desc);
         bindHeroAction(o);
+    }
+    static String firstSentence(String s){
+        if (s==null || s.isEmpty()) return s==null?"":s;
+        int n=s.length();
+        for (int i=0;i<n;i++){
+            char c=s.charAt(i);
+            if (c!='.' && c!='?' && c!='!') continue;
+            if (i<n-1 && s.charAt(i+1)!=' ') continue;
+            if (c=='?' || c=='!') return s.substring(0,i+1);
+            int b=i; while (b>0 && Character.isLetter(s.charAt(b-1))) b--;
+            String w=s.substring(b,i), lw=w.toLowerCase(Locale.US);
+            if (w.length()>3) return s.substring(0,i+1);
+            boolean cap=w.length()==1 && Character.isUpperCase(w.charAt(0));
+            boolean dotted=w.length()==1 && b>0 && s.charAt(b-1)=='.';
+            boolean title=lw.equals("dr")||lw.equals("mr")||lw.equals("mrs")||lw.equals("ms")||lw.equals("jr")||lw.equals("sr")||lw.equals("st")||lw.equals("vs");
+            if (!cap && !title && !dotted) return s.substring(0,i+1);
+        }
+        return s;
     }
     boolean heroPlayable(Object[] o){
         if (o==null || o.length<5 || !(o[4] instanceof Intent)) return false;
@@ -1191,11 +1209,13 @@ public class MainActivity extends Activity {
     }
     void bindHeroAction(Object[] o){ setPill(heroBtn, heroPlayable(o)?"Play Now":"More Info"); }
     void showHeroAction(boolean on){
-        if (heroBtn==null) return;
-        heroBtn.animate().cancel();
+        if (heroBtn==null || on==heroCtaOn) return;
+        heroCtaOn=on;
         android.view.animation.Interpolator ease=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
-        if (on){ heroBtn.setFocusable(true); heroBtn.animate().alpha(1f).translationY(0).setDuration(160).setInterpolator(ease).start(); }
-        else heroBtn.animate().alpha(0f).translationY(p(8)).setDuration(120).setInterpolator(new android.view.animation.AccelerateInterpolator()).start();
+        heroBtn.animate().cancel();
+        if (on) heroBtn.setFocusable(true);
+        heroBtn.animate().alpha(on?1f:0f).translationY(on?0:p(8)).scaleX(on?1.07f:1f).scaleY(on?1.07f:1f)
+            .setStartDelay(0).setDuration(on?160:120).setInterpolator(ease).withLayer().start();
         if (heroDots!=null){
             int n; synchronized(heroLock){ n=heroItems.size(); }
             heroDots.animate().cancel();
@@ -1677,7 +1697,7 @@ public class MainActivity extends Activity {
                 try { Date d = new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(o.getString("date")); long diff = Math.round((d.getTime() - new SimpleDateFormat("yyyy-MM-dd",Locale.US).parse(new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date())).getTime())/86400000.0);
                     when = diff==0?"New today":diff==1?"Coming tomorrow":diff==-1?"Added yesterday":diff<0?"Added "+new SimpleDateFormat("EEE",Locale.US).format(d):"Coming "+new SimpleDateFormat("EEEE",Locale.US).format(d); } catch (Exception e){ when="New"; }
                 String ep = o.optInt("season")>0 ? "  \u00B7  S"+o.optInt("season")+(o.optInt("num")>0?" E"+o.optInt("num"):"") : "";
-                String sum = o.optString("summary"); int dot = sum.indexOf(". "); if (dot>40) sum = sum.substring(0, dot+1);
+                String sum = firstSentence(o.optString("summary"));
                 Intent li = pm.getLeanbackLaunchIntentForPackage(pkg); if (li==null) li = pm.getLaunchIntentForPackage(pkg);
                 long avail=0; try { Date ad=new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(o.getString("date")); if (ad!=null && ad.getTime()>System.currentTimeMillis()) avail=ad.getTime(); } catch (Exception e){}
                 nl.add(new Object[]{pkg, o.getString("show"), when+" on "+o.optString("net")+ep+"\n"+sum, o.getString("img"), li, "NEW", avail});
@@ -1694,7 +1714,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false; View heroG, heroFocus, inAppDim; HeroDots heroDots;
+    PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false, heroCtaOn; View heroG, heroFocus, inAppDim; HeroDots heroDots;
     float dimFill; android.animation.ValueAnimator dimFillAnim;
     int dimPct(){ return Math.max(0, Math.min(90, prefs().getInt("dim_pct",0))); }
     void setDimPct(int pct){ prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); applyDim(); }
