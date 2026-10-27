@@ -21,6 +21,12 @@ import java.util.*;
 
 class CardsController {
     final MainActivity a;
+    // Card row geometry (mockup px) and the focus caption shown under the focused card.
+    static final float CARD_W=184.4f, CARD_H=112, CARD_GAP=8, ROW_PAD=20;
+    static final float CAP_GAP=10, CAP_H=16, CAP_ICON=16, CAP_TEXT=10.5f, CAP_MAX_W=600, ROW_LIFT=14;
+    static final int FOCUS_MS=220, VISIBLE_CARDS=5;
+    final Map<View,String[]> capMeta = new WeakHashMap<>();
+    LinearLayout capLine; ImageView capIcon; TextView capText; boolean rowLifted;
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
     String cardsBindSig="";
     Map<String,Long> plutoIdsCache=new HashMap<>();
@@ -34,22 +40,57 @@ class CardsController {
     }
     // ---------- Cards ----------
     void addCard(View v, int i){
-        int width=a.p(184.4f), height=a.p(112), bottom=a.p(8), left=i==0?0:a.p(8);
+        int width=a.p(CARD_W), height=a.p(CARD_H), bottom=a.p(CARD_GAP), left=i==0?0:a.p(CARD_GAP);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, height); lp.bottomMargin=bottom; lp.leftMargin=left;
         if (v.getParent()==a.cardRow){ ViewGroup.LayoutParams old=v.getLayoutParams(); if (!(old instanceof LinearLayout.LayoutParams) || old.width!=width || old.height!=height || ((LinearLayout.LayoutParams)old).bottomMargin!=bottom || ((LinearLayout.LayoutParams)old).leftMargin!=left) v.setLayoutParams(lp); return; }
         if (v.getParent()!=null) ((ViewGroup)v.getParent()).removeView(v);
         if (!(v.getLayoutParams() instanceof LinearLayout.LayoutParams)){
             final View.OnFocusChangeListener base = v.getOnFocusChangeListener();
-            v.setOnFocusChangeListener((x,f)->{ if (base!=null) base.onFocusChange(x,f); if (f) snapCardRow(x); });
+            v.setOnFocusChangeListener((x,f)->{ if (base!=null) base.onFocusChange(x,f); if (f) showCaption(x, snapCardRow(x)); else a.h.post(this::dropCaptionIfLeft); });
         }
         a.cardRow.addView(v, lp);
-        if (v instanceof GlowFrame) ((GlowFrame)v).warm(a.p(184.4f), a.p(112));
+        if (v instanceof GlowFrame) ((GlowFrame)v).warm(a.p(CARD_W), a.p(CARD_H));
     }
-    void snapCardRow(View v){
-        if (a.cardScroll==null) return;
-        int idx=a.cardRow.indexOfChild(v); if (idx<0) return;
-        int x=snapX(a.cardScroll.getScrollX(), idx, a.p(184.4f), a.p(8), a.p(954), a.cardRow.getChildCount());
+    /** Anchored scroll: the focused card slides to the first slot; returns the target scrollX. */
+    int snapCardRow(View v){
+        if (a.cardScroll==null) return 0;
+        int idx=a.cardRow.indexOfChild(v); if (idx<0) return a.cardScroll.getScrollX();
+        int x=anchorX(idx, a.p(CARD_W)+a.p(CARD_GAP), a.cardRow.getChildCount(), VISIBLE_CARDS);
         if (x!=a.cardScroll.getScrollX()) a.cardScroll.smoothScrollTo(x,0); else updateCardAlphas();
+        return x;
+    }
+    // ---------- Focus caption: app icon + title under the focused card; row and tabs lift to make room ----------
+    void showCaption(View card, int scrollX){
+        String[] m=capMeta.get(card); if (m==null || a.cardWrap==null) return;
+        if (capLine==null){
+            capLine=new LinearLayout(a); capLine.setOrientation(LinearLayout.HORIZONTAL); capLine.setGravity(Gravity.CENTER_VERTICAL); capLine.setAlpha(0f);
+            capIcon=new ImageView(a); capIcon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            capLine.addView(capIcon, new LinearLayout.LayoutParams(a.p(CAP_ICON), a.p(CAP_ICON)));
+            capText=a.text("", CAP_TEXT, Color.WHITE, "sans-serif-medium"); capText.setSingleLine(); capText.setEllipsize(android.text.TextUtils.TruncateAt.END); capText.setMaxWidth(a.p(CAP_MAX_W));
+            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(-2,-2); tl.leftMargin=a.p(6); capLine.addView(capText, tl);
+            a.cardWrap.addView(capLine, a.lp(-2, a.p(CAP_H), Gravity.TOP|Gravity.START, 0, a.p(ROW_PAD+CARD_H+CAP_GAP), 0, 0));
+        }
+        Drawable ic=null; try { if (m[0]!=null) ic=a.pm.getApplicationIcon(m[0]); } catch (Exception e){}
+        capIcon.setImageDrawable(ic); capIcon.setVisibility(ic==null?View.GONE:View.VISIBLE);
+        capText.setText(m[1]!=null?m[1]:m[0]!=null?a.tv.appName(m[0]):"");
+        float x=card.getLeft()-scrollX+a.p(ROW_PAD);
+        if (capLine.getAlpha()<0.05f) capLine.setTranslationX(x);
+        capLine.animate().cancel();
+        capLine.animate().alpha(1f).translationX(x).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start();
+        liftRow(true);
+    }
+    void dropCaptionIfLeft(){
+        View f=a.getCurrentFocus();
+        if (f!=null && f.getParent()==a.cardRow) return;
+        if (capLine!=null){ capLine.animate().cancel(); capLine.animate().alpha(0f).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start(); }
+        if (a.drawerOpen) rowLifted=false; else liftRow(false); // drawer slide owns translationY
+    }
+    /** Moves the tab bar and card row up together (never the app grid). */
+    void liftRow(boolean up){
+        if (up==rowLifted) return;
+        rowLifted=up;
+        float y=up?-a.p(ROW_LIFT):0;
+        for (View v: new View[]{a.tabBar, a.cardWrap}) if (v!=null) v.animate().translationY(y).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start();
     }
     void resetCardRow(){
         if (a.focus!=null){ a.focus.lastIdx[3]=0; a.focus.lastCardX=0; }
@@ -59,9 +100,9 @@ class CardsController {
     }
     void updateCardAlphas(){
         if (a.cardRow==null) return;
-        int sx=a.cardScroll==null?0:a.cardScroll.getScrollX(), stride=a.p(184.4f)+a.p(8);
+        int sx=a.cardScroll==null?0:a.cardScroll.getScrollX(), stride=a.p(CARD_W)+a.p(CARD_GAP);
         for (int i=0;i<a.cardRow.getChildCount();i++){
-            View c=a.cardRow.getChildAt(i); float a=tileAlpha(i,sx,stride,5);
+            View c=a.cardRow.getChildAt(i); float a=tileAlpha(i,sx,stride,VISIBLE_CARDS);
             if (c instanceof GlowFrame){
                 GlowFrame g=(GlowFrame)c; g.fade=a; g.setAlpha(1f); g.inner.setAlpha(a); g.syncHalo(); g.invalidate();
                 if (a>0.01f){
@@ -83,44 +124,30 @@ class CardsController {
         if (i==b+nFit) return t;
         return 0f;
     }
-    static int snapX(int sx, int idx, int cardW, int gap, int vis, int n){
-        int stride=cardW+gap;
+    /** Focused card at the first slot, clamped so the last page never over-scrolls. */
+    static int anchorX(int idx, int stride, int n, int nFit){
         if (stride<=0||n<=0) return 0;
-        int nFit=Math.max(1,(vis+gap)/stride);
-        int max=Math.max(0,n-nFit)*stride;
-        int left=idx*stride, right=left+cardW;
-        int target=sx;
-        if (left<sx) target=left;
-        else if (right>sx+vis) target=right-vis;
-        target=Math.round(target/(float)stride)*stride;
-        return Math.max(0, Math.min(target, max));
+        return Math.max(0, Math.min(idx, n-nFit))*stride;
     }
 
-    View card(Drawable art, String artUri, boolean fitArt, String badgePkg, String caption, float progress, final Runnable click){
+    /** Video card: art + optional progress bar. pkg and title feed the focus caption, not the tile. */
+    View card(Drawable art, String artUri, boolean fitArt, String pkg, String title, float progress, final Runnable click){
         FrameLayout f = new FrameLayout(a); f.setClipToOutline(true);
         GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(a.p(a.TILE_R)); bg.setColor(Color.argb(96,190,185,220)); bg.setStroke(Math.max(1,a.p(.6f)), Color.argb(60,255,255,255)); f.setBackground(bg);
         f.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
         ImageView iv = new ImageView(a); iv.setScaleType(ImageView.ScaleType.CENTER_CROP); if (art!=null) iv.setImageDrawable(art); if (fitArt){ iv.setScaleType(ImageView.ScaleType.FIT_CENTER); iv.setPadding(a.p(30),a.p(18),a.p(30),a.p(30)); } a.loadInto(iv, artUri, fitArt);
         f.addView(iv, new FrameLayout.LayoutParams(-1,-1));
         View shade = new View(a); shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(70,0,0,0), Color.argb(160,0,0,0), Color.argb(204,0,0,0)}));
-        if (caption!=null || progress>=0) f.addView(shade, new FrameLayout.LayoutParams(-1, a.p(56), Gravity.BOTTOM));
-        if (badgePkg != null){
-            ImageView b = new ImageView(a); b.setScaleType(ImageView.ScaleType.CENTER_CROP); b.setClipToOutline(true);
-            GradientDrawable bb = new GradientDrawable(); bb.setCornerRadius(a.p(4)); bb.setColor(Color.BLACK); b.setBackground(bb);
-            try { Drawable d = a.pm.getApplicationBanner(badgePkg); if (d==null) d = a.pm.getApplicationIcon(badgePkg); b.setImageDrawable(d);} catch(Exception e){}
-            f.addView(b, a.lp(a.p(36), a.p(20), Gravity.END|Gravity.TOP, 0, a.p(7), a.p(7), 0));
-        }
-        if (caption != null){
-            TextView t = a.text(caption, 10.5f, Color.WHITE, "sans-serif-medium"); t.setSingleLine(); t.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            f.addView(t, a.lp(-1,-2,Gravity.BOTTOM, a.p(9), 0, a.p(9), a.p(progress>=0?14:9)));
-        }
+        if (progress>=0) f.addView(shade, new FrameLayout.LayoutParams(-1, a.p(56), Gravity.BOTTOM));
         if (progress >= 0){
             FrameLayout bar = new FrameLayout(a); bar.setBackgroundColor(Color.argb(90,255,255,255));
             View fill = new View(a); fill.setBackgroundColor(Color.rgb(229,9,20));
             bar.addView(fill, new FrameLayout.LayoutParams(Math.round(a.p(166)*progress), -1));
             f.addView(bar, a.lp(a.p(166), a.p(2.5f), Gravity.BOTTOM, a.p(9), 0, 0, a.p(8)));
         }
-        return a.focusable(f, a.TILE_R, click);
+        View v=a.focusable(f, a.TILE_R, click);
+        capMeta.put(v, new String[]{pkg, title});
+        return v;
     }
 
     void refreshCards(){
@@ -142,7 +169,7 @@ class CardsController {
             if (!a.installed(pk)) continue;
             Drawable art=null; try { art = a.pm.getApplicationBanner(pk); if (art==null){ Intent li=a.pm.getLeanbackLaunchIntentForPackage(pk); if(li!=null) art=a.pm.getActivityBanner(li);} if(art==null) art=a.pm.getApplicationIcon(pk);} catch(Exception e){}
             String cap = a.tab==1 && pk.equals("com.google.android.tv") ? "Free channels" : null;
-            View v=card(art, null, false, null, cap, -1, ()->a.launchPkg(pk)); addCard(v, i++);
+            View v=card(art, null, false, pk, cap, -1, ()->a.launchPkg(pk)); addCard(v, i++);
         }
         a.h.post(this::updateCardAlphas);
     }
@@ -231,7 +258,7 @@ class CardsController {
     View plutoGuideTile(){
         Drawable ban=null, ic=null;
         try { ban=a.pm.getApplicationBanner("tv.pluto.android"); ic=a.pm.getApplicationIcon("tv.pluto.android"); } catch (Exception e){}
-        return card(ban!=null?ban:ic, null, ban==null, null, "Pluto TV guide", -1, ()->startSafe(plutoIntent(null), "tv.pluto.android"));
+        return card(ban!=null?ban:ic, null, ban==null, "tv.pluto.android", "Pluto TV guide", -1, ()->startSafe(plutoIntent(null), "tv.pluto.android"));
     }
     LinkedHashMap<String,String> liveSlugNames(){
         LinkedHashMap<String,String> slugName=new LinkedHashMap<>();
@@ -255,7 +282,7 @@ class CardsController {
     View plutoTile(String slug, String nm, boolean loadArt){
         Map<String,Long> plutoIds=plutoIdsCache!=null?plutoIdsCache:new HashMap<>();
         final Intent in=plutoIntent(slug); Long id=plutoId(plutoIds, nm, slug);
-        View v=card(null, null, false, null, nm, -1, ()->startSafe(in, "tv.pluto.android"));
+        View v=card(null, null, false, "tv.pluto.android", nm, -1, ()->startSafe(in, "tv.pluto.android"));
         ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0);
         TextView ov=chName(nm);
         ((GlowFrame)v).inner.addView(ov, a.lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0));
@@ -335,7 +362,7 @@ class CardsController {
     View freeplayLiveTile(){
         String art=freeplayNowArt();
         Drawable ic=null; if (art==null) try { android.content.res.Resources r=a.pm.getResourcesForApplication("com.google.android.tvlauncher"); int id=r.getIdentifier("freeplay_icon","drawable","com.google.android.tvlauncher"); if (id!=0) ic=r.getDrawable(id,null); } catch(Exception e){}
-        View v=card(ic, art, art==null, null, "Google TV Freeplay \u00B7 Live", -1, this::playFreeplay);
+        View v=card(ic, art, art==null, "com.google.android.tvlauncher", "Google TV Freeplay \u00B7 Live", -1, this::playFreeplay);
         TextView tg=a.text("LIVE", 7, Color.WHITE, "sans-serif-medium"); tg.setLetterSpacing(.08f); tg.setPadding(a.p(5),a.p(2),a.p(5),a.p(2)); GradientDrawable gb=new GradientDrawable(); gb.setCornerRadius(a.p(3)); gb.setColor(Color.rgb(200,30,40)); tg.setBackground(gb);
         ((GlowFrame)v).inner.addView(tg, a.lp(-2,-2,Gravity.TOP|Gravity.START,a.p(7),a.p(7),0,0));
         if (art!=null){ TextView ov=chName("Freeplay"); ((GlowFrame)v).inner.addView(ov, a.lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0)); }

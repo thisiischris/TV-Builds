@@ -101,7 +101,6 @@ class TvData {
                     out.add(new Object[]{row[0], row[1], row[2], row[3], row[4], "FEATURED", row.length > 5 ? row[5] : 0L});
                 }
         android.util.Log.i("ShieldHome", "hero items=" + out.size() + " apps=" + by.keySet());
-        for (Object[] o : out) android.util.Log.i("ShieldHome", "hero item src=preview pkg=" + o[0] + " title=" + o[1] + " target=" + uriOf(o[4]));
         return out;
     }
 

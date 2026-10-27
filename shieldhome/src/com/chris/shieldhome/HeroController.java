@@ -204,7 +204,7 @@ class HeroController {
                 String ep = o.optInt("season")>0 ? "  \u00B7  S"+o.optInt("season")+(o.optInt("num")>0?" E"+o.optInt("num"):"") : "";
                 String sum = this.a.firstSentence(o.optString("summary"));
                 Intent li = this.a.pm.getLeanbackLaunchIntentForPackage(pkg); if (li==null) li = this.a.pm.getLaunchIntentForPackage(pkg);
-                if (TvData.opensYouTube(pkg, li)){ android.util.Log.i("ShieldHome","hero skip src=whatsnew pkg="+pkg+" show="+o.optString("show")); continue; } // no YouTube in the hero
+                if (TvData.opensYouTube(pkg, li)) continue; // no YouTube in the hero
                 long avail=0; if (itemDate!=null && itemDate.getTime()>System.currentTimeMillis()) avail=itemDate.getTime();
                 nl.add(new Object[]{pkg, o.getString("show"), when+" on "+o.optString("net")+ep+"\n"+sum, o.getString("img"), li, "NEW", avail});
             }
@@ -213,7 +213,6 @@ class HeroController {
         List<Object[]> mix = new ArrayList<>(); for (Object[] o: this.a.heroItems) if (o.length>5 && "FEATURED".equals(o[5])) mix.add(o);
         int nf = mix.size(); Collections.shuffle(nl); for (int i=0;i<Math.min(8,nl.size());i++) mix.add(nl.get(i));
         android.util.Log.i("ShieldHome","hero mix featured="+nf+" new="+(mix.size()-nf));
-        for (int i=nf;i<mix.size();i++) android.util.Log.i("ShieldHome","hero item src=whatsnew pkg="+mix.get(i)[0]+" title="+mix.get(i)[1]+" target="+TvData.uriOf(mix.get(i)[4]));
         if (mix.size()!=nf){
             Collections.shuffle(mix);
             synchronized(this.a.heroLock){ this.a.h.removeCallbacks(heroRotate); this.a.heroItems.clear(); this.a.heroItems.addAll(mix); this.a.heroIdx=0; }
