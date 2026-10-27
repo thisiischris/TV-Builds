@@ -457,7 +457,7 @@ public class MainActivity extends Activity {
             else glideOn=false;
         }
     };
-    LinearLayout appMenu; View dimV;
+    LinearLayout appMenu; View dimV; boolean pressHeld;
     android.content.SharedPreferences prefs(){ return getSharedPreferences("home", MODE_PRIVATE); }
     List<String[]> homeApps(){
         List<String[]> all = new ArrayList<>(apps());
@@ -547,7 +547,7 @@ public class MainActivity extends Activity {
     }
     View homeTile(final String[] a, final int i){
         final GlowFrame g = (GlowFrame)appTile(a[0], a[1], a[2]);
-        g.setOnLongClickListener(v->{ if (!editMode) appMenu(g, a, homeGrid.indexOfChild(g)); return true; });
+        g.setOnLongClickListener(v->{ if (!editMode) appMenu(g, a, tileIx(g)); return true; });
         g.setOnKeyListener((v,k,e)->{
             int ix=tileIx(v);
             boolean dpad = k==KeyEvent.KEYCODE_DPAD_LEFT||k==KeyEvent.KEYCODE_DPAD_RIGHT||k==KeyEvent.KEYCODE_DPAD_UP||k==KeyEvent.KEYCODE_DPAD_DOWN;
@@ -563,7 +563,15 @@ public class MainActivity extends Activity {
                 return true;
             }
             if (editMode) return false;
-            if (ok && e.getAction()==KeyEvent.ACTION_DOWN && (e.isLongPress() || e.getRepeatCount()>=3)){ appMenu(g, a, ix); return true; }
+            if (ok){
+                if (e.getAction()==KeyEvent.ACTION_DOWN && e.getRepeatCount()==0 && !e.isLongPress()){ pressHold(g); return false; }
+                if (e.getAction()==KeyEvent.ACTION_DOWN && (e.isLongPress() || e.getRepeatCount()>=3)){ appMenu(g, a, ix); return true; }
+                if (e.getAction()==KeyEvent.ACTION_UP){
+                    if (appMenu!=null) return true;
+                    if (pressHeld) pressUp(g);
+                    return false;
+                }
+            }
             return false;
         });
         return g;
@@ -692,33 +700,41 @@ public class MainActivity extends Activity {
         try { int f=pm.getApplicationInfo(pkg,0).flags; return (f&(ApplicationInfo.FLAG_SYSTEM|ApplicationInfo.FLAG_UPDATED_SYSTEM_APP))!=0; }
         catch (Exception e){ return true; }
     }
-    static final int[] MENU_ICONS={R.drawable.ic_menu_edit,R.drawable.ic_menu_stop,R.drawable.ic_menu_delete,R.drawable.ic_menu_info};
+    static final int[] MENU_ICONS={R.drawable.ic_menu_edit,R.drawable.ic_menu_stop,R.drawable.ic_menu_info,R.drawable.ic_menu_delete};
+    void pressHold(View v){
+        pressHeld=true;
+        v.animate().cancel();
+        v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(ViewConfiguration.getLongPressTimeout()).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+    }
+    void pressUp(View v){
+        pressHeld=false;
+        v.animate().cancel();
+        v.animate().scaleX(APP_FOCUS).scaleY(APP_FOCUS).setDuration(180).setInterpolator(dragIp).start();
+    }
+    void pressPop(View v){
+        pressHeld=false;
+        if (v==null) return;
+        v.animate().cancel();
+        v.animate().scaleX(APP_FOCUS).scaleY(APP_FOCUS).setDuration(220).setInterpolator(new android.view.animation.OvershootInterpolator(1.2f)).start();
+    }
     void appMenu(View anchor, String[] a, int idx){
-        if (editMode) return;
+        if (editMode || appMenu!=null) return;
         if (focus!=null) focus.remember();
-        closeMenu(false);
+        pressPop(anchor);
         LinearLayout p=new LinearLayout(this); p.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,28,28,32)); bg.setCornerRadius(p(14)); bg.setStroke(Math.max(1,p(1)), Color.argb(51,255,255,255));
-        p.setBackground(bg); p.setPadding(p(8),p(10),p(8),p(10)); p.setElevation(p(18));
-        LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL); head.setPadding(p(8),p(2),p(8),p(8));
-        ImageView ic=new ImageView(this); ic.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        try { ic.setImageDrawable(pm.getApplicationIcon(a[0])); } catch (Exception e){}
-        head.addView(ic, new LinearLayout.LayoutParams(p(28),p(28)));
-        TextView nm=text(a[2], 13, Color.WHITE, "sans-serif-medium"); nm.setSingleLine(); nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,-2,1); np.leftMargin=p(8);
-        head.addView(nm, np);
-        p.addView(head, new LinearLayout.LayoutParams(p(200),-2));
-        String[] labs={"Edit Home Screen","Force Stop","Uninstall","App Info"};
+        p.setBackground(bg); p.setPadding(p(8),p(8),p(8),p(8)); p.setElevation(p(18));
+        String[] labs={"Edit Home Screen","Force Stop","App Info","Uninstall"};
         boolean sys=systemApp(a[0]);
         View first=null;
         java.util.ArrayList<View> rows=new java.util.ArrayList<>();
         for (int n=0;n<labs.length;n++){
             final int id=n;
-            boolean off=id==2 && sys;
+            boolean off=id==3 && sys;
             LinearLayout row=new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(p(10),0,p(10),0);
             row.setFocusable(!off); row.setClickable(!off);
             final ImageView li=new ImageView(this); li.setImageResource(MENU_ICONS[n]); li.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            int idle=off?Color.argb(80,255,255,255):(id==2?Color.rgb(224,112,112):Color.WHITE);
+            int idle=off?Color.argb(80,255,255,255):(id==3?Color.rgb(224,112,112):Color.WHITE);
             li.setColorFilter(idle, PorterDuff.Mode.SRC_IN);
             row.addView(li, new LinearLayout.LayoutParams(p(18),p(18)));
             final TextView t=text(labs[n], 12, idle, "sans-serif");
@@ -728,14 +744,12 @@ public class MainActivity extends Activity {
                 GradientDrawable pill=new GradientDrawable(); pill.setCornerRadius(p(8));
                 pill.setColor(f?Color.argb(240,255,255,255):Color.TRANSPARENT);
                 row.setBackground(pill);
-                int fg=off?Color.argb(80,255,255,255):(f?Color.rgb(22,22,30):(id==2?Color.rgb(224,112,112):Color.WHITE));
+                int fg=off?Color.argb(80,255,255,255):(f?Color.rgb(22,22,30):(id==3?Color.rgb(224,112,112):Color.WHITE));
                 t.setTextColor(fg); li.setColorFilter(fg, PorterDuff.Mode.SRC_IN);
             });
             if (!off) row.setOnClickListener(v->menuAct(id, a, idx));
             row.setOnKeyListener((v,k,e)->{ if (k==KeyEvent.KEYCODE_BACK && e.getAction()==KeyEvent.ACTION_DOWN){ closeMenu(); return true; } return false; });
-            LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(p(200), p(36));
-            if (n==0) rp.topMargin=p(4);
-            p.addView(row, rp);
+            p.addView(row, new LinearLayout.LayoutParams(p(200), p(36)));
             if (!off){ row.setId(View.generateViewId()); rows.add(row); if (first==null) first=row; }
         }
         for (int i=0;i<rows.size();i++){
@@ -755,10 +769,12 @@ public class MainActivity extends Activity {
         if (y<p(8)) y=p(8);
         FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(mw, mh);
         lp.leftMargin=x; lp.topMargin=y;
-        p.setAlpha(0f); p.setScaleX(0.94f); p.setScaleY(0.94f);
+        p.setPivotX(x>=loc[0]?0:mw);
+        p.setPivotY(Math.max(0, Math.min(mh, loc[1]+anchor.getHeight()/2f-y)));
+        p.setAlpha(0f); p.setScaleX(0.3f); p.setScaleY(0.3f);
         appMenu=p; root.addView(p, lp);
         lockBehind(true);
-        p.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(120).start();
+        p.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(new android.view.animation.OvershootInterpolator(0.9f)).start();
         final View f0=first;
         h.post(()->{ if (appMenu!=null && f0!=null) f0.requestFocus(); });
     }
@@ -802,14 +818,16 @@ public class MainActivity extends Activity {
     void menuAct(int id, String[] a, int idx){
         if (id==0){ enterEdit(idx); return; }
         closeMenu();
-        if (id==1 || id==3){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+a[0])).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} return; }
-        if (id==2 && !systemApp(a[0])){ try { startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:"+a[0])).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
+        if (id==1 || id==2){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+a[0])).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} return; }
+        if (id==3 && !systemApp(a[0])){ try { startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:"+a[0])).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
     }
     void closeMenu(){ closeMenu(true); }
     void closeMenu(boolean back){
         if (appMenu==null) return;
         lockBehind(false);
-        root.removeView(appMenu); appMenu=null;
+        final View m=appMenu; appMenu=null;
+        m.animate().cancel();
+        m.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(140).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{ if (m.getParent()!=null) root.removeView(m); }).start();
         if (back && focus!=null) focus.restore();
     }
     void appInfo(String pkg){ try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e){} }
