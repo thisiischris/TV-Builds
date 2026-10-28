@@ -189,10 +189,11 @@ class CardsController {
         List<Object[]> pick=a.wnPickCache;
         if (pick==null||pick.isEmpty()) return 0;
         int n=0;
-        for (Object[] o: pick){ final Intent fi=new Intent((Intent)o[3]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); final String pk2=(String)o[0]; boolean isNew=o.length>5;
+        for (Object[] o: pick){ final Intent fi=new Intent((Intent)o[3]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); final String pk2=(String)o[0]; boolean isNew=(Boolean)o[TvData.PICK_IS_NEW];
             View v = card(null,(String)o[2],false,pk2,(String)o[1], isNew?SUB_NEW:SUB_RESUME, isNew?-1f:(Float)o[4], ()->{try{a.startActivity(fi);}catch(Exception e){ a.launchPkg(pk2);} });
             addCard(v, n++); }
-        android.util.Log.i("ShieldHome","playnext shown="+n);
+        int nNew=0; for (Object[] o: pick) if ((Boolean)o[TvData.PICK_IS_NEW]) nNew++;
+        android.util.Log.i("ShieldHome","playnext shown="+n+" subNew="+nNew+" subResume="+(n-nNew));
         return n;
     }
     List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); Map<String,String> plutoArt = new HashMap<>(); Map<String,String> plutoLogo = new HashMap<>(); final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
