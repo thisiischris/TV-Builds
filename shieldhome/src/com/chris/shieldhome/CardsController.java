@@ -23,7 +23,7 @@ class CardsController {
     final MainActivity a;
     // Card row geometry (mockup px) and the focus caption shown under the focused card.
     static final float CARD_W=184.4f, CARD_H=112, CARD_GAP=8, ROW_PAD=20;
-    static final float CAP_GAP=10, CAP_H=26, CAP_TITLE=11.5f, CAP_SUB=9.5f, CAP_TEXT_GAP=8, CAP_MAX_W=600, ROW_LIFT=30;
+    static final float CAP_GAP=10, CAP_H=31, CAP_TITLE=13, CAP_SUB=10.5f, CAP_LINE_GAP=3, CAP_TEXT_GAP=8, CAP_MAX_W=600, ROW_LIFT=35;
     // Platform badge (the pre-v80 tile badge, 36x20 aspect) sized to the caption's two-line height.
     static final float BADGE_ASPECT=36f/20f, BADGE_R=4;
     static final float BAR_W=166, BAR_H=2.5f, BAR_X=9, BAR_Y=8;
@@ -76,7 +76,8 @@ class CardsController {
             capLine.addView(capIcon, new LinearLayout.LayoutParams(a.p(CAP_H*BADGE_ASPECT), a.p(CAP_H)));
             LinearLayout col=new LinearLayout(a); col.setOrientation(LinearLayout.VERTICAL); col.setGravity(Gravity.CENTER_VERTICAL);
             capText=capLabel(CAP_TITLE, Color.WHITE, "sans-serif-medium"); col.addView(capText);
-            capSub=capLabel(CAP_SUB, Color.argb(170,255,255,255), "sans-serif"); col.addView(capSub);
+            capSub=capLabel(CAP_SUB, Color.argb(170,255,255,255), "sans-serif");
+            LinearLayout.LayoutParams sl=new LinearLayout.LayoutParams(-2,-2); sl.topMargin=a.p(CAP_LINE_GAP); col.addView(capSub, sl);
             LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(-2, a.p(CAP_H)); tl.leftMargin=a.p(CAP_TEXT_GAP); capLine.addView(col, tl);
             a.cardWrap.addView(capLine, a.lp(-2, a.p(CAP_H), Gravity.TOP|Gravity.START, 0, a.p(ROW_PAD+CARD_H+CAP_GAP), 0, 0));
         }

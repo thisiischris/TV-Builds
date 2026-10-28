@@ -12,6 +12,8 @@ class FocusController {
     final int[] lastIdx = new int[16];
     int lastCardX;
     int savedSec = -1, savedIdx = 0;
+    /** App-grid tiles are restored by identity (tile tag = package), so a rebuilt or reordered grid still lands on the launched app. */
+    String savedKey;
     boolean backLong, pendingRestore;
 
     FocusController(MainActivity a) { this.a = a; }
@@ -21,14 +23,16 @@ class FocusController {
         if (savedSec < 0) {
             savedSec = a.prefs().getInt("f_sec", -1);
             savedIdx = a.prefs().getInt("f_idx", 0);
+            savedKey = a.prefs().getString("f_key", null);
             int ft = a.prefs().getInt("f_tab", 0);
             if (a.wnPickCache != null && a.wnPickCache.isEmpty()) ft = 1;
             if (ft != a.tab) a.tab = ft;
         }
     }
 
-    void afterData() {
-        if (!pendingRestore) return;
+    /** After every bind: the first one after resume restores, and so does any rebuild that dropped the focused view. */
+    void afterBind() {
+        if (!pendingRestore && a.getCurrentFocus() != null) return;
         pendingRestore = false;
         restoreNow();
     }
@@ -47,6 +51,7 @@ class FocusController {
             if (idx < 0) return;
             savedSec = sc;
             savedIdx = idx;
+            savedKey = sc >= 4 && root.getTag() instanceof String ? (String) root.getTag() : null;
             if (sc == 3 && a.cardScroll != null) lastCardX = a.cardScroll.getScrollX();
         } catch (Exception e) {}
     }
@@ -54,10 +59,11 @@ class FocusController {
     /** Posted requestFocus after layout. */
     void restore() {
         if (savedSec < 0 || a.appMenu != null) return;
-        final View t = savedView();
-        if (t == null) return;
-        t.setFocusable(true);
-        t.post(() -> {
+        if (savedView() == null) return;
+        a.root.post(() -> { // resolve after layout so a rebuild in between can't leave us holding a detached view
+            View t = savedView();
+            if (t == null || a.appMenu != null) return;
+            t.setFocusable(true);
             if (savedSec == 3 && a.cardScroll != null) a.cardScroll.scrollTo(lastCardX, 0);
             t.requestFocus();
             android.util.Log.i("ShieldHome", "focus restored " + name(t));
@@ -68,16 +74,28 @@ class FocusController {
         remember();
         if (savedSec < 0) return;
         try {
-            a.prefs().edit().putInt("f_sec", savedSec).putInt("f_idx", savedIdx).putInt("f_tab", a.tab).apply();
+            a.prefs().edit().putInt("f_sec", savedSec).putInt("f_idx", savedIdx).putString("f_key", savedKey).putInt("f_tab", a.tab).apply();
             android.util.Log.i("ShieldHome", "focus saved sec=" + savedSec + " idx=" + savedIdx);
         } catch (Exception e) {}
     }
 
-    void restoreNow() {
-        if (savedSec < 0) return;
-        if (a.appMenu != null || a.editMode) return;
-        if (savedSec >= 5) a.grid.setDrawer(true);
+    boolean restoreNow() {
+        if (savedSec < 0) return false;
+        if (a.appMenu != null || a.editMode) return false;
+        resolveKey();
+        if (savedSec >= 5 && !a.drawerOpen) {
+            int sec = savedSec, idx = savedIdx; String key = savedKey;
+            a.grid.setDrawer(true); // slideHome() calls remember(); keep the target we are restoring
+            savedSec = sec; savedIdx = idx; savedKey = key;
+        }
         restore();
+        return true;
+    }
+    /** Re-derive section/index from savedKey against the current grid. */
+    void resolveKey() {
+        if (savedKey == null || a.homeGrid == null) return;
+        for (int i = 0; i < a.homeGrid.getChildCount(); i++)
+            if (savedKey.equals(a.homeGrid.getChildAt(i).getTag())) { savedSec = 4 + i / 6; savedIdx = i % 6; return; }
     }
 
     boolean dispatch(KeyEvent e) {
@@ -88,7 +106,8 @@ class FocusController {
             return false;
         if (a.searchTyping && hz) return false;
         View f = a.getCurrentFocus();
-        int sec = f == null ? -1 : secOf(f);
+        if (f == null) return e.getAction() == KeyEvent.ACTION_DOWN && restoreNow(); // focus lost to a rebuild: recover instead of a dead d-pad
+        int sec = secOf(f);
         if (sec < 0) return false;
         if (e.getAction() != KeyEvent.ACTION_DOWN) return false; // ponytail: let ACTION_UP through
         if (sec == 1 && hz) { a.hero.heroStep(k == KeyEvent.KEYCODE_DPAD_RIGHT); return true; }
@@ -239,6 +258,7 @@ class FocusController {
         return -1;
     }
     View savedView() {
+        resolveKey();
         if (savedSec == 0) {
             if (savedIdx == 0) return a.gear;
             return a.searchV;

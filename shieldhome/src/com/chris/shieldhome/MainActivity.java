@@ -281,11 +281,12 @@ public class MainActivity extends Activity {
     }
     void bindFromCache(){
         if (cardRow==null) return;
+        if (focus!=null) focus.remember(); // identity of whatever is focused now, before views are rebuilt
         grid.buildHomeGrid();
         applyTabs();
         refreshCards();
         hero.applyFeaturedCache();
-        if (focus!=null) focus.afterData();
+        if (focus!=null) focus.afterBind();
     }
     boolean playNextOn(){ return wnPickCache!=null && !wnPickCache.isEmpty(); }
     void applyTabs(){
