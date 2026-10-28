@@ -7,6 +7,8 @@ import android.view.*;
 import android.widget.*;
 
 class PillView extends View {
+        // Search pill: Assistant icon at the left inner padding (where the magnifier began), label SEARCH_GAP after it.
+        static final float SEARCH_PAD=14, SEARCH_ASST=15, SEARCH_GAP=4;
         final MainActivity activity; String label; int icon; boolean on; Drawable asst; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
         PillView(MainActivity activity, Context c, String l, int ic, boolean o){ super(c); this.activity=activity; label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
         @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==activity.heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(activity.focusInterpolator).start(); setElevation(f?activity.p(4):0); invalidate(); }
@@ -37,10 +39,10 @@ class PillView extends View {
                 return;
             }
             pt.setColor(fg); pt.setStrokeWidth(activity.p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
-            float cx = icon==3 ? activity.p(19) : activity.p(icon==2?18:28) - (icon==2?activity.p(4):0), cy = hh/2;
+            float cx = activity.p(icon==2?18:28) - (icon==2?activity.p(4):0), cy = hh/2;
             if (icon==3){ // Assistant mic
                 if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
-                int ax=(int)(cx+activity.p(8)); asst.setBounds(ax, (int)(cy-activity.p(7.5f)), ax+activity.p(15), (int)(cy+activity.p(7.5f))); asst.draw(c); }
+                int ax=activity.p(SEARCH_PAD); asst.setBounds(ax, (int)(cy-activity.p(SEARCH_ASST/2)), ax+activity.p(SEARCH_ASST), (int)(cy+activity.p(SEARCH_ASST/2))); asst.draw(c); }
             else if (icon==5){ float gx=w/2f, sr=activity.p(4.0f);
                 pt.setStrokeWidth(activity.p(1.5f));
                 c.drawCircle(gx, cy, sr, pt);
@@ -85,6 +87,6 @@ class PillView extends View {
                 return;
             }
             if (icon==4) pt.setTextAlign(Paint.Align.CENTER); else pt.setTextAlign(Paint.Align.LEFT);
-            if (label.length()>0) c.drawText(label, icon==4? w/2f : activity.p(icon==2?24:icon==3?46:43), cy-(fm.ascent+fm.descent)/2, pt);
+            if (label.length()>0) c.drawText(label, icon==4? w/2f : activity.p(icon==2?24:icon==3?SEARCH_PAD+SEARCH_ASST+SEARCH_GAP:43), cy-(fm.ascent+fm.descent)/2, pt);
         }
     }
