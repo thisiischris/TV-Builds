@@ -126,8 +126,8 @@ class AppGridController {
         return out;
     }
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] app: l){ if (app==null) continue; if (sb.length()>0) sb.append(','); sb.append(app[0]).append('/').append(app[1]); } this.a.prefs().edit().putString("order", sb.toString()).commit(); }
-    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=this.a.p(this.a.APP_W); gl.height=this.a.p(this.a.APP_H); gl.rightMargin = (i%6==5)?0:this.a.p(this.a.APP_HG); gl.bottomMargin = this.a.p(this.a.APP_VG); return gl; }
-    int rowH(){ return this.a.p(this.a.APP_H+this.a.APP_VG); }
+    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=this.a.p(this.a.APP_W); gl.height=this.a.p(this.a.APP_H); gl.rightMargin = (i%6==5)?0:this.a.p(this.a.APP_HG); gl.bottomMargin = this.a.p(this.a.APP_ROW_GAP); return gl; }
+    int rowH(){ return this.a.p(this.a.APP_H+this.a.APP_ROW_GAP); }
     void buildHomeGrid(){ buildHomeGrid(-1); }
     void buildHomeGrid(int focusIdx){
         if (this.a.editMode) return;

@@ -14,7 +14,7 @@ class HeroDots extends View {
         /** Active dot stretches to ACTIVE_W and fills left-to-right over HERO_ROTATE_MS; MOVE_MS = stretch hand-off to the next dot. */
         static final float ACTIVE_W=22f; static final long MOVE_MS=250; static final int DOT_IDLE_A=89;
         static final android.view.animation.Interpolator MOVE_EASE=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
-        final MainActivity activity; int n, cur, prev; float mix=1f; android.animation.ValueAnimator an;
+        final MainActivity activity; int n, cur, prev; float mix=1f, prevFill; android.animation.ValueAnimator an; // prevFill: outgoing pill fill fraction, held while it shrinks
         long progStart; float pausedAt=-1f; // pausedAt>=0: fill frozen at that fraction
         final Paint dotsPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         HeroDots(MainActivity activity){ super(activity); this.activity=activity; setAlpha(0f); setVisibility(GONE); setFocusable(false); }
@@ -38,7 +38,7 @@ class HeroDots extends View {
             n=nn2;
             if (an!=null) an.cancel();
             if (!anim || getAlpha()<0.05f || n<=1 || i==cur){ prev=cur=i; mix=1f; invalidate(); return; }
-            prev=cur; cur=i; mix=0f;
+            prevFill=progress(); prev=cur; cur=i; mix=0f; // capture before the caller restarts progress, so the outgoing pill never flashes empty
             an=android.animation.ValueAnimator.ofFloat(0,1); an.setDuration(MOVE_MS); an.setInterpolator(MOVE_EASE);
             an.addUpdateListener(a->{ mix=(Float)a.getAnimatedValue(); invalidate(); });
             an.start();
@@ -53,6 +53,9 @@ class HeroDots extends View {
                 float w=dotW(i);
                 pt.setColor(Color.argb(DOT_IDLE_A,255,255,255));
                 c.drawRoundRect(x, cy-r, x+w, cy+r, r, r, pt);
+                if (i==prev && prev!=cur && mix<1f){ // outgoing pill keeps its fill while shrinking, fading white -> idle
+                    pt.setColor(Color.argb(Math.round(255+(DOT_IDLE_A-255)*mix),255,255,255)); c.drawRoundRect(x, cy-r, x+d+(w-d)*prevFill, cy+r, r, r, pt);
+                }
                 if (i==cur){ // progress fill: white from the left, at least a dot wide so it reads as the active dot
                     float fw=d+(w-d)*progress();
                     pt.setColor(Color.WHITE); c.drawRoundRect(x, cy-r, x+fw, cy+r, r, r, pt);

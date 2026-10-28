@@ -142,7 +142,7 @@ class HomeLayout {
         a.cardScroll.getViewTreeObserver().addOnScrollChangedListener(a::updateCardAlphas);
 
         a.homeGrid = new GridLayout(a); a.homeGrid.setColumnCount(6); a.homeGrid.setClipChildren(false); a.homeGrid.setClipToPadding(false);
-        place(a.homeGrid, 35, MainActivity.APP_GRID_Y, 954, MainActivity.APP_H+MainActivity.APP_VG);
+        place(a.homeGrid, 35, MainActivity.APP_GRID_Y, 954, MainActivity.APP_H+MainActivity.APP_ROW_GAP);
         a.grid.ensureDim();
         a.grid.buildHomeGrid();
 

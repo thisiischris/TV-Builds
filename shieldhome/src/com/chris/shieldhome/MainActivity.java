@@ -26,6 +26,8 @@ public class MainActivity extends Activity {
     static final long HERO_ROTATE_MS = 16000;
     final android.view.animation.DecelerateInterpolator focusInterpolator = new android.view.animation.DecelerateInterpolator();
     static final float APP_FOCUS=1.20f, APP_HOLD=1.23f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f, APP_GRID_Y=467.5f;
+    /** v82: extra breathing room between app rows (half above, half below each row); APP_GRID_Y fixed so row 1 still peeks. */
+    static final float APP_ROW_PAD=4f, APP_ROW_GAP=APP_VG+APP_ROW_PAD;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
 
     FrameLayout.LayoutParams lp(int w,int h,int g,int l,int t,int r,int b){ FrameLayout.LayoutParams x=new FrameLayout.LayoutParams(w,h,g); x.setMargins(l,t,r,b); return x; }

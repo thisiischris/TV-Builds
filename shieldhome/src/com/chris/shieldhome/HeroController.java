@@ -75,11 +75,12 @@ class HeroController {
         for (View t: texts) t.animate().alpha(0f).translationX(-a.p(10)).setDuration(450).setInterpolator(outIp).start();
         final boolean ctaOn=a.heroBtn!=null && a.heroBtn.isFocused();
         if (ctaOn){ a.heroBtn.animate().cancel(); a.heroBtn.animate().alpha(0f).setStartDelay(0).setDuration(450).setInterpolator(outIp).start(); }
+        // dots hop now, before the caller restarts progress (scheduleRotate), so the hand-off has no reset frame
+        if (a.heroDots!=null && a.heroDots.getVisibility()==View.VISIBLE){ int n; synchronized(a.heroLock){ n=a.heroItems.size(); } a.heroDots.bind(n, a.heroIdx, true); }
         a.h.postDelayed(()->{
             bindHeroCopy(o);
             try { Drawable bd = a.pm.getApplicationBanner((String)o[0]); if (bd==null) bd = a.pm.getApplicationIcon((String)o[0]); a.heroBadge.setImageBitmap(glyph((String)o[0], bd));} catch(Exception e){}
             fitHeroMeta();
-            if (a.heroDots!=null && a.heroDots.getVisibility()==View.VISIBLE){ int n; synchronized(a.heroLock){ n=a.heroItems.size(); } a.heroDots.bind(n, a.heroIdx, true); }
             int d=200; for (View t: texts){ t.setTranslationX(a.p(16)); t.animate().alpha(t==a.heroBadge?0.7f:1f).translationX(0).setStartDelay(d).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); d+=90; }
             if (ctaOn && a.heroBtn!=null && a.heroBtn.isFocused()){ a.heroBtn.animate().cancel(); a.heroBtn.setAlpha(0f); a.heroBtn.animate().alpha(1f).setStartDelay(200).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); }
         }, 480);
