@@ -267,7 +267,7 @@ class AppGridController {
         if (this.a.drawerOpen){ if (this.a.gear!=null) this.a.gear.setFocusable(false); if (this.a.searchV!=null) this.a.searchV.setFocusable(false); if (this.a.speakV!=null){ this.a.speakV.setFocusable(false); this.a.typeV.setFocusable(false); } }
         resetAllLifts(true, keep);
         if (keep!=null){
-            if (this.a.focus!=null){ this.a.focus.savedSec=4+i/6; this.a.focus.savedIdx=i%6; }
+            if (this.a.focus!=null){ this.a.focus.savedSec=4+i/6; this.a.focus.savedIdx=i%6; this.a.focus.savedKey=(String)keep.getTag(); }
             keep.requestFocus();
         }
     }

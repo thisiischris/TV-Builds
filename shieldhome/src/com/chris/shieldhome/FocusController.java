@@ -89,7 +89,7 @@ class FocusController {
             savedSec = sec; savedIdx = idx; savedKey = key;
         }
         restore();
-        return true;
+        return savedView() != null;
     }
     /** Re-derive section/index from savedKey against the current grid. */
     void resolveKey() {
