@@ -231,31 +231,39 @@ class CardsController {
     List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); Map<String,String> plutoArt = new HashMap<>(); Map<String,String> plutoLogo = new HashMap<>(); final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
     List<View> liveCache; final Set<String> liveSlugs = new LinkedHashSet<>();
     // Pluto doesn't publish programs to TvContract (0 readable rows), so read what's on now from Pluto's public guide.
+    /** Guide is reused for GUIDE_FRESH_MS; a failed fetch waits GUIDE_RETRY_MS; reads stop at GUIDE_MAX_BYTES (the full guide is ~5 MB). */
+    static final long GUIDE_FRESH_MS=10*60000L, GUIDE_RETRY_MS=60000L; static final int GUIDE_MAX_BYTES=16<<20;
+    boolean plutoBusy; long plutoTriedAt; // main thread only
     void fillPlutoNow(final List<Object[]> caps){
-        if (System.currentTimeMillis()-plutoAt < 10*60000L && !plutoNow.isEmpty()){ applyLiveNow(); return; }
-        a.pool.execute(()->{ try {
+        long t=System.currentTimeMillis();
+        if (t-plutoAt < GUIDE_FRESH_MS && !plutoNow.isEmpty()){ applyLiveNow(); return; }
+        if (plutoBusy || t-plutoTriedAt < GUIDE_RETRY_MS) return;
+        plutoBusy=true; plutoTriedAt=t;
+        a.pool.execute(()->{ java.net.HttpURLConnection c=null; try {
             SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US); f.setTimeZone(TimeZone.getTimeZone("UTC"));
             long now = System.currentTimeMillis();
-            java.net.HttpURLConnection c=(java.net.HttpURLConnection)new java.net.URL("https://api.pluto.tv/v2/channels?start="+f.format(new Date(now))+"&stop="+f.format(new Date(now+60000))).openConnection();
+            c=(java.net.HttpURLConnection)new java.net.URL("https://api.pluto.tv/v2/channels?start="+f.format(new Date(now))+"&stop="+f.format(new Date(now+60000))).openConnection();
             c.setConnectTimeout(6000); c.setReadTimeout(20000);
-            java.io.InputStream in = c.getInputStream(); java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] buf=new byte[65536]; int r; while ((r=in.read(buf))>0) bo.write(buf,0,r); in.close();
+            java.io.InputStream in = c.getInputStream(); java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] buf=new byte[65536]; int r; while ((r=in.read(buf))>0){ bo.write(buf,0,r); if (bo.size()>GUIDE_MAX_BYTES) throw new java.io.IOException("guide over "+GUIDE_MAX_BYTES+" bytes"); } in.close();
             org.json.JSONArray channels = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>(), art = new HashMap<>(), logos = new HashMap<>();
             Set<String> ban = new HashSet<>(); Map<String,Integer> shared = new HashMap<>();
-            for (int i=0;i<channels.length();i++){ org.json.JSONObject ch=channels.getJSONObject(i);
+            for (int i=0;i<channels.length();i++){ org.json.JSONObject ch=channels.optJSONObject(i); if (ch==null) continue;
                 addBan(ban, ch.optJSONObject("featuredImage")); addBan(ban, ch.optJSONObject("logo")); addBan(ban, ch.optJSONObject("thumbnail")); addBan(ban, ch.optJSONObject("tile"));
                 String logo=jsonPath(ch.optJSONObject("colorLogoPNG")); if (logo==null) logo=jsonPath(ch.optJSONObject("logo"));
                 if (logo!=null) logos.put(ch.optString("name"), logo);
                 org.json.JSONArray tl=ch.optJSONArray("timelines");
-                if (tl!=null && tl.length()>0){ String first=plutoGuideArt(tl.getJSONObject(0), ban); if (first!=null){ String b=bareUrl(first); shared.put(b, (shared.containsKey(b)?shared.get(b):0)+1); } }
+                if (tl!=null && tl.length()>0){ String first=tl.optJSONObject(0)==null?null:plutoGuideArt(tl.optJSONObject(0), ban); if (first!=null){ String b=bareUrl(first); shared.put(b, (shared.containsKey(b)?shared.get(b):0)+1); } }
             }
             for (Map.Entry<String,Integer> e: shared.entrySet()) if (e.getValue()>=4) ban.add(e.getKey());
             final List<String[]> picks=pickChannels(channels);
-            for (int i=0;i<channels.length();i++){ org.json.JSONObject ch=channels.getJSONObject(i); org.json.JSONArray tl=ch.optJSONArray("timelines");
-                if (tl!=null && tl.length()>0){ org.json.JSONObject t0=tl.getJSONObject(0); m.put(ch.optString("name"), t0.optString("title")); String img=plutoGuideArt(t0, ban); if (img!=null) art.put(ch.optString("name"), img); }
+            for (int i=0;i<channels.length();i++){ org.json.JSONObject ch=channels.optJSONObject(i); if (ch==null) continue; org.json.JSONArray tl=ch.optJSONArray("timelines");
+                org.json.JSONObject t0=tl==null?null:tl.optJSONObject(0);
+                if (t0!=null){ m.put(ch.optString("name"), t0.optString("title")); String img=plutoGuideArt(t0, ban); if (img!=null) art.put(ch.optString("name"), img); }
                 String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
             android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels art="+art.size()+" logos="+logos.size());
             a.h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoLogo.clear(); plutoLogo.putAll(logos); plutoAt=System.currentTimeMillis(); applyLiveNow(); setPicks(picks); });
-        } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); } });
+        } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); }
+        finally { if (c!=null) c.disconnect(); a.h.post(()->plutoBusy=false); } });
     }
     static String plutoGuideArt(org.json.JSONObject t0, Set<String> ban){
         org.json.JSONObject ep=t0.optJSONObject("episode"); if (ep==null) return null;
@@ -282,9 +290,9 @@ class CardsController {
         "Sci-Fi","Animals + Nature","History + Science","Entertainment","Competition Reality","Daytime + Game Shows","Westerns","Anime","Music Videos"};
     /** Shown until the first guide fetch picks the mix (slug, name). */
     static final String[][] LIVE_DEFAULTS={{"cnn-headlines","CNN Headlines"},{"nbc-news-now","NBC News NOW"},{"abc-news-live","ABC News Live"},{"cbs-news","CBS News 24/7"}};
-    /** Last picked mix, so the row comes up with the same channels before the guide answers: "slug\tname" lines. */
     /** Pluto lists internal test feeds (e.g. "... VIDAA TEST") in real categories; skip names ending in "test" or "test N". */
     static final java.util.regex.Pattern TEST_MARK=java.util.regex.Pattern.compile("\\btest\\s*\\d*$", java.util.regex.Pattern.CASE_INSENSITIVE);
+    /** Last picked mix, so the row comes up with the same channels before the guide answers: "slug\tname" lines. */
     static final String PREF_LIVE_PICKS="live_picks", PICK_ROW="\n", PICK_COL="\t";
     List<String[]> livePicks(){
         List<String[]> out=new ArrayList<>();
@@ -325,10 +333,11 @@ class CardsController {
     int loadLive(){
         if (liveCache!=null && !liveCache.isEmpty()){ showLiveCache(); fillPlutoNow(plutoCaps); return liveCache.size(); }
         liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
-        putLive(plutoAppTile(), "pluto-app");
-        if (a.installed("tv.pluto.android"))
+        if (a.installed("tv.pluto.android")){ // not installed: 0 tiles, so refreshCards falls back to the LIVE_PKGS app tiles
+            putLive(plutoAppTile(), "pluto-app");
             for (String[] p: livePicks()){ if (liveCache.size()>MAX_LIVE_CHANNELS) break; putLive(plutoTile(p[0], p[1], true), p[0]); }
-        fillPlutoNow(plutoCaps);
+            fillPlutoNow(plutoCaps);
+        }
         return liveCache.size();
     }
     View plutoAppTile(){
