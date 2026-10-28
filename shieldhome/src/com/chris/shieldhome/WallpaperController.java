@@ -166,10 +166,12 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         mp.setOnErrorListener((p,w,x)->{ android.util.Log.i("ShieldHome","wallpaper error "+w+"/"+x); next(); return true; });
         try { mp.setDataSource(a, android.net.Uri.parse(uris.get(idx%uris.size()))); mp.prepareAsync(); } catch (Exception e){ next(); }
     }
-    static Shader scrimShader(float h){
+    static Shader scrimShader(float h){ return dimShader(h*WALL_DIM_START, h*WALL_DIM_END, WALL_TOP_ALPHA, 0); }
+    /** Vertical smoothstep from alpha a0 at y0 to WALL_DIM_ALPHA at y1 (WALL_DIM_STOPS stops) in colour rgb, clamped beyond; shared with the featured card's bottom. */
+    static Shader dimShader(float y0, float y1, int a0, int rgb){
         int[] col=new int[WALL_DIM_STOPS]; float[] pos=new float[WALL_DIM_STOPS];
-        for (int i=0;i<WALL_DIM_STOPS;i++){ float t=i/(float)(WALL_DIM_STOPS-1); pos[i]=t; col[i]=Color.argb(Math.round(WALL_TOP_ALPHA+(WALL_DIM_ALPHA-WALL_TOP_ALPHA)*t*t*(3-2*t)),0,0,0); }
-        return new LinearGradient(0,h*WALL_DIM_START,0,h*WALL_DIM_END, col, pos, Shader.TileMode.CLAMP);
+        for (int i=0;i<WALL_DIM_STOPS;i++){ float t=i/(float)(WALL_DIM_STOPS-1); pos[i]=t; col[i]=(Math.round(a0+(WALL_DIM_ALPHA-a0)*t*t*(3-2*t))<<24)|rgb; }
+        return new LinearGradient(0,y0,0,y1, col, pos, Shader.TileMode.CLAMP);
     }
     /** The playing video becomes the locked one (after Left/Right, or when error/missing-URI skipping moved past the locked video). */
     void lockCurrent(){ if (!locked()) return; String u=uris.get(idx%uris.size()); if (!u.equals(a.prefs().getString(PREF_LOCK_URI, null))) a.prefs().edit().putString(PREF_LOCK_URI, u).apply(); }

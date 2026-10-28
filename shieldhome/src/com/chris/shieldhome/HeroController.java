@@ -11,7 +11,7 @@ import java.util.*;
 class HeroController {
     /** Alpha (0-255) the left scrim settles to past HERO_LEFT_FADE and holds to the artwork's right edge: a light overall dim (~18%). */
     static final int HERO_DIM_ALPHA=46;
-    /** Bottom fade: starts HERO_BOT_FADE of the art height above its bottom edge and eases (smoothstep, HERO_BOT_STOPS stops) to transparent at that edge. */
+    /** Bottom fade: starts HERO_BOT_FADE of the art height above its bottom edge and eases (smoothstep, HERO_BOT_STOPS stops) to transparent at that edge; maskHero backs it with a dark WallpaperController.dimShader so the lighter bg never shows through. */
     static final float HERO_BOT_FADE=0.55f; static final int HERO_BOT_STOPS=9;
     final MainActivity a;
     String featuredBoundSig="";
@@ -138,6 +138,12 @@ class HeroController {
         xp.setShader(bottomFade(artH, artH)); xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
         c.drawRect(0,0,tw,th,xp);
         c.restoreToCount(layer);
+        // Back the faded bottom with a dark scrim (not the lighter bg): eases in down to artB, then back out by th so there is no hard edge.
+        xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OVER));
+        xp.setShader(WallpaperController.dimShader(artH*(1-HERO_BOT_FADE), artH, 0, MainActivity.HERO_SCRIM_RGB));
+        c.drawRect(0,0,tw,artH,xp);
+        xp.setShader(WallpaperController.dimShader(th, artH, 0, MainActivity.HERO_SCRIM_RGB));
+        c.drawRect(0,artH,tw,th,xp);
         a.heroMasked.put(key, out); return out;
     }
     void fitHeroMeta(){
