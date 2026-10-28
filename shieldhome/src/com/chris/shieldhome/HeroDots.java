@@ -10,6 +10,7 @@ class HeroDots extends View {
         static final float DOT_D=6f, DOT_GAP=8f, PILL_PAD_X=24f; // v76: dots 5->6, gap 7->8
         static final float PILL_H=24f, PILL_CENTER_Y=284f; // v77: pill 28->24 tall, centre kept at 270+28/2
         static final int PILL_FILL_A=70; // v77: was 88
+        static final long DOTS_ANIM_MS=240; static final float DOTS_SLIDE_DP=8f; // show/hide: fade while sliding up from / down by DOTS_SLIDE_DP
         final MainActivity activity; int n, cur; float ax; android.animation.ValueAnimator an;
         final Paint dotsPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         HeroDots(MainActivity activity){ super(activity); this.activity=activity; setAlpha(0f); setVisibility(GONE); setFocusable(false); }

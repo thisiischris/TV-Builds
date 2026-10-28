@@ -154,12 +154,14 @@ class HeroController {
         if (a.heroDots!=null){
             int n; synchronized(a.heroLock){ n=a.heroItems.size(); }
             a.heroDots.animate().cancel();
+            android.view.animation.Interpolator dotsEase=new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
+            float slide=a.p(HeroDots.DOTS_SLIDE_DP);
             if (on && n>1){
                 a.heroDots.bind(n, a.heroIdx, false);
-                a.heroDots.setVisibility(View.VISIBLE);
-                a.heroDots.animate().alpha(1f).setDuration(160).setInterpolator(ease).start();
-            } else {
-                a.heroDots.animate().alpha(0f).setDuration(120).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{ if (a.heroDots!=null && (a.heroBtn==null||!a.heroBtn.isFocused())) a.heroDots.setVisibility(View.GONE); }).start();
+                if (a.heroDots.getVisibility()!=View.VISIBLE){ a.heroDots.setAlpha(0f); a.heroDots.setTranslationY(slide); a.heroDots.setVisibility(View.VISIBLE); }
+                a.heroDots.animate().alpha(1f).translationY(0).setDuration(HeroDots.DOTS_ANIM_MS).setInterpolator(dotsEase).start();
+            } else if (a.heroDots.getVisibility()==View.VISIBLE){
+                a.heroDots.animate().alpha(0f).translationY(slide).setDuration(HeroDots.DOTS_ANIM_MS).setInterpolator(dotsEase).withEndAction(()->{ if (a.heroDots!=null && (a.heroBtn==null||!a.heroBtn.isFocused())) a.heroDots.setVisibility(View.GONE); }).start();
             }
         }
     }

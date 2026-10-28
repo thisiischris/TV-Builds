@@ -9,7 +9,7 @@ import android.widget.*;
 class PillView extends View {
         // Search pill: Assistant icon at the left inner padding (where the magnifier began), label SEARCH_GAP after it, same padding after the label.
         static final float SEARCH_PAD=14, SEARCH_ASST=15, SEARCH_GAP=4, LABEL_SIZE=12;
-        final MainActivity activity; String label; int icon; boolean on; Drawable asst; Path track; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final MainActivity activity; String label; int icon; boolean on; Drawable asst; Path track, fill; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
         PillView(MainActivity activity, Context c, String l, int ic, boolean o){ super(c); this.activity=activity; label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
         /** The search pill wraps its content: padding, Assistant icon, gap, measured label, equal padding. */
         @Override protected void onMeasure(int ws, int hs){
@@ -27,10 +27,10 @@ class PillView extends View {
             if (!bare){
                 if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
                 else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
-                else if (icon==5) pt.setColor(fo?Color.argb(155,170,170,191):Color.argb(95,162,162,183));
+                else if (icon==5 && this!=activity.dimBar) pt.setColor(fo?Color.argb(155,170,170,191):Color.argb(95,162,162,183));
                 else pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
                 c.drawRoundRect(0,0,w,hh,r,r,pt);
-                if (icon==5 && !on){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
+                if (icon==5 && !on && this!=activity.dimBar){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
                 if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
             }
             int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
@@ -39,9 +39,11 @@ class PillView extends View {
                 float labW=pt.measureText("90%"), pad=activity.p(12), gap=activity.p(8), th=activity.p(6), tw=w-pad*2-gap-labW, ty=(hh-th)/2, rr=th/2, t=Math.max(0, Math.min(1, activity.dimFill/0.9f));
                 pt.setColor(Color.argb(50, Color.red(fg), Color.green(fg), Color.blue(fg)));
                 c.drawRoundRect(pad, ty, pad+tw, ty+th, rr, rr, pt);
-                if (t>0){ // full-height pill whose right end tracks t, clipped to the rounded track: shrinks smoothly to nothing at 0%
-                    if (track==null) track=new Path(); track.rewind(); track.addRoundRect(pad, ty, pad+tw, ty+th, rr, rr, Path.Direction.CW);
-                    c.save(); c.clipPath(track); pt.setColor(fg); c.drawRoundRect(pad+t*tw-tw, ty, pad+t*tw, ty+th, rr, rr, pt); c.restore(); }
+                if (t>0){ // full-height pill whose right end tracks t, intersected with the rounded track: shrinks smoothly to nothing at 0%
+                    if (track==null){ track=new Path(); fill=new Path(); } // intersected as geometry (not clipPath) so both ends stay anti-aliased at low fill
+                    track.rewind(); track.addRoundRect(pad, ty, pad+tw, ty+th, rr, rr, Path.Direction.CW);
+                    fill.rewind(); fill.addRoundRect(pad+t*tw-tw, ty, pad+t*tw, ty+th, rr, rr, Path.Direction.CW);
+                    fill.op(track, Path.Op.INTERSECT); pt.setColor(fg); c.drawPath(fill, pt); }
                 pt.setColor(fg); pt.setTextAlign(Paint.Align.LEFT);
                 Paint.FontMetrics fm=pt.getFontMetrics();
                 c.drawText(activity.dimPct()+"%", pad+tw+gap, hh/2f-(fm.ascent+fm.descent)/2, pt);
