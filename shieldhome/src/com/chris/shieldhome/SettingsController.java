@@ -13,6 +13,8 @@ class SettingsController {
     static final float ICON_D=28f, ICON_Y=17f, PANEL_W=240f, PANEL_PAD=8f, ROW_H=AppGridController.MENU_ROW_H, ROW_GAP=4f, PANEL_R=AppGridController.MENU_R;
     static final long OPEN_MS=480, CLOSE_MS=260, ICON_ANIM_MS=HeroDots.DOTS_ANIM_MS;
     static final float OPEN_OVERSHOOT=1.6f, ROWS_IN_AT=0.45f; // rows fade in over the last (1-ROWS_IN_AT) of the morph
+    /** Extra view bounds left/right/below the panel so the spring overshoot (~9% of the morph at OPEN_OVERSHOOT 1.6) is not clipped. */
+    static final float PANEL_BLEED=12f;
     static final Interpolator OPEN_EASE=new OvershootInterpolator(OPEN_OVERSHOOT), CLOSE_EASE=new PathInterpolator(0.4f,0f,0.2f,1f);
     final MainActivity a;
     final ViewTreeObserver.OnGlobalFocusChangeListener focusL=(o,n)->syncIcon();
@@ -32,7 +34,7 @@ class SettingsController {
         int rw=a.p(PANEL_W-2*PANEL_PAD);
         panel.addView(heroRow, a.lp(rw, a.p(ROW_H), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(PANEL_PAD), 0, 0));
         panel.addView(wallRow, a.lp(rw, a.p(ROW_H), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(PANEL_PAD+ROW_H+ROW_GAP), 0, 0));
-        a.root.addView(panel, a.lp(a.p(PANEL_W), a.p(panelH()), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(ICON_Y), 0, 0));
+        a.root.addView(panel, a.lp(a.p(PANEL_W+2*PANEL_BLEED), a.p(panelH()+PANEL_BLEED), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(ICON_Y), 0, 0));
         a.root.getViewTreeObserver().addOnGlobalFocusChangeListener(focusL);
         if (heroOn() && wallOn()) a.prefs().edit().putBoolean(PREF_WALL, false).apply(); // load: keep hero_on, drop wallpaper
         applyHero();
@@ -99,7 +101,7 @@ class SettingsController {
         boolean on=heroOn();
         a.heroG.setVisibility(on?View.VISIBLE:View.INVISIBLE);
         if (a.heroBtn!=null) a.heroBtn.setFocusable(on);
-        if (on) a.hero.scheduleRotate(); else a.hero.pauseRotate();
+        if (on){ if (a.hero.artSkipped) a.hero.showHero(); a.hero.scheduleRotate(); } else a.hero.pauseRotate();
         syncIcon();
     }
     /** Featured card and Wallpaper are exclusive: turning one on turns the other off; both off = plain background. */
@@ -118,10 +120,12 @@ class SettingsController {
             fill.setColor(Color.argb(140,60,58,75)); edge.setStyle(Paint.Style.STROKE); edge.setStrokeWidth(1); edge.setColor(Color.argb(40,255,255,255)); }
         void setT(float v){ t=v; float ra=Math.max(0f,Math.min(1f,(v-ROWS_IN_AT)/(1f-ROWS_IN_AT))); for (int i=0;i<getChildCount();i++) getChildAt(i).setAlpha(ra); setAlpha(Math.min(1f, v*4f)); invalidate(); }
         @Override protected void onDraw(Canvas c){
-            float w=getWidth(), h=getHeight(), iw=a.p(ICON_D), ix=(w-iw)/2f;
+            float bl=a.p(PANEL_BLEED), w=getWidth()-2*bl, h=getHeight()-bl, iw=a.p(ICON_D), ix=(w-iw)/2f;
+            c.save(); c.translate(bl, 0);
             float l=ix+(0-ix)*t, rr=ix+iw+(w-ix-iw)*t, b=iw+(h-iw)*t, rad=iw/2f+(a.p(PANEL_R)-iw/2f)*Math.max(0f,Math.min(1f,t));
             r.set(l, 0, rr, Math.max(1f,b));
             c.drawRoundRect(r, rad, rad, fill); r.inset(.5f,.5f); c.drawRoundRect(r, rad, rad, edge);
+            c.restore();
         }
     }
 
@@ -129,6 +133,7 @@ class SettingsController {
     class ToggleRow extends View {
         static final float SW_W=30f, SW_H=16f, LABEL=12f, PAD=14f;
         final String label, key; boolean on; final Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
+        { pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL)); }
         ToggleRow(String label, String key){ super(a); this.label=label; this.key=key; setFocusable(true); setClickable(true); setOnClickListener(v->toggle(key)); }
         void sync(){ on=a.prefs().getBoolean(key, PREF_HERO.equals(key)); invalidate(); }
         @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); invalidate(); }
@@ -136,7 +141,7 @@ class SettingsController {
             float w=getWidth(), h=getHeight(); boolean fo=isFocused();
             if (fo){ pt.setColor(Color.argb(240,255,255,255)); c.drawRoundRect(0,0,w,h,h/2,h/2,pt); }
             int fg=fo?Color.rgb(22,22,30):Color.WHITE;
-            pt.setColor(fg); pt.setTextSize(a.p(LABEL)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+            pt.setColor(fg); pt.setTextSize(a.p(LABEL));
             Paint.FontMetrics fm=pt.getFontMetrics(); c.drawText(label, a.p(PAD), h/2-(fm.ascent+fm.descent)/2, pt);
             float sw=a.p(SW_W), sh=a.p(SW_H), sx=w-a.p(PAD)-sw, sy=(h-sh)/2;
             pt.setColor(on?Color.rgb(52,199,89):(fo?Color.argb(60,22,22,30):Color.argb(70,255,255,255)));

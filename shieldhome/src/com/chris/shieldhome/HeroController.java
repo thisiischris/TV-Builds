@@ -48,6 +48,8 @@ class HeroController {
         for (Object[] o: l) b.append(o[0]).append('|').append(o[1]).append('|').append(o[3]).append(',');
         return b.toString();
     }
+    /** Set when showHero skipped the art decode because the featured card was off; applyHero re-runs showHero when it comes back on. */
+    boolean artSkipped;
     void showHero(){
         final Object[] o;
         final int n;
@@ -56,6 +58,8 @@ class HeroController {
         // dots hop synchronously, before callers restart progress (scheduleRotate); transitionHero runs later, after the image decode
         if (a.heroDots!=null && a.heroDots.getVisibility()==View.VISIBLE) a.heroDots.bind(n, a.heroIdx, true);
         if (a.heroBtn==null || !a.heroBtn.isFocused()) bindHeroAction(o);
+        if (a.settings!=null && !a.settings.heroOn()){ artSkipped=true; return; }
+        artSkipped=false;
         final String uri = (String)o[3];
         final int tw=a.heroG!=null&&a.heroG.getWidth()>0?a.heroG.getWidth():a.p(1024), th=a.heroG!=null&&a.heroG.getHeight()>0?a.heroG.getHeight():a.p(400), g=++a.heroLoadGen;
         a.pool.execute(()->{

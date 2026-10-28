@@ -14,15 +14,16 @@ import java.util.List;
  * plugin's AIDL contract over a raw Binder (getWallpapers(TimeElapsed)) and play the returned
  * video URIs muted and looping-through-the-list in a TextureView, centre-cropped.
  */
+// Projectivy plugin API: wallpaper-provider api v1 (IWallpaperProviderService getWallpapers/getPreferences/setPreferences), as exported by Aerial Views 1.8.5.
 class WallpaperController implements TextureView.SurfaceTextureListener {
     static final String AERIAL_PKG="com.neilturner.aerialviews", PLUGIN_ACTION="tv.projectivy.plugin.WALLPAPER_PROVIDER";
     static final String PLUGIN_DESC="tv.projectivy.plugin.wallpaperprovider.api.IWallpaperProviderService";
-    static final int TX_GET_WALLPAPERS=IBinder.FIRST_CALL_TRANSACTION, EVENT_TIME_ELAPSED=1, TYPE_VIDEO=4;
+    static final int TX_GET_WALLPAPERS=IBinder.FIRST_CALL_TRANSACTION, EVENT_TIME_ELAPSED=1, TYPE_VIDEO=4, MAX_ITEMS=500, MAX_REBINDS=1;
     static final long FADE_MS=800;
     /** Bottom scrim over the video: clear above WALL_DIM_START (fraction of screen height), smoothstep over WALL_DIM_STOPS stops to WALL_DIM_ALPHA black at WALL_DIM_END, solid below. */
     static final float WALL_DIM_START=0.45f, WALL_DIM_END=0.92f; static final int WALL_DIM_ALPHA=225, WALL_DIM_STOPS=24;
     final MainActivity a;
-    TextureView view; View scrim; Surface surface; MediaPlayer mp; final List<String> uris=new ArrayList<>(); int idx, fails; boolean bound, resumed;
+    TextureView view; View scrim; Surface surface; MediaPlayer mp; final List<String> uris=new ArrayList<>(); int idx, fails, resumePos, rebinds; boolean bound, resumed;
     WallpaperController(MainActivity a){ this.a=a; }
 
     void build(){
@@ -46,14 +47,18 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         if (uris.isEmpty()) fetch(); else play();
     }
     void onResume(){ resumed=true; apply(); }
-    void onPause(){ resumed=false; if (mp!=null && mp.isPlaying()) mp.pause(); }
+    /** Off-home: free the hardware decoder entirely (remember where we were); apply() on resume rebuilds the player and fades back in. */
+    void onPause(){ resumed=false; if (mp!=null){ try { resumePos=mp.getCurrentPosition(); } catch (Exception e){ resumePos=0; } } stop(); }
     void onDestroy(){ resumed=false; stop(); unbind(); }
 
     final ServiceConnection conn=new ServiceConnection(){
         @Override public void onServiceConnected(ComponentName n, IBinder b){
-            try { a.pool.execute(()->{ List<String> got=query(b); a.h.post(()->{ unbind(); uris.clear(); uris.addAll(got); android.util.Log.i("ShieldHome","wallpaper aerial items="+got.size()); if (resumed && a.settings.wallOn()) play(); }); }); } catch (java.util.concurrent.RejectedExecutionException x){ unbind(); }
+            try { a.pool.execute(()->{ List<String> got=query(b); a.h.post(()->{ unbind(); rebinds=0; uris.clear(); uris.addAll(got); android.util.Log.i("ShieldHome","wallpaper aerial items="+got.size()); if (resumed && a.settings.wallOn()) play(); }); }); } catch (java.util.concurrent.RejectedExecutionException x){ unbind(); }
         }
-        @Override public void onServiceDisconnected(ComponentName n){ bound=false; }
+        /** Provider process died; the binding stays registered and reconnects, so keep `bound` until unbind() runs. */
+        @Override public void onServiceDisconnected(ComponentName n){}
+        @Override public void onBindingDied(ComponentName n){ unbind(); if (rebinds++<MAX_REBINDS && uris.isEmpty() && resumed && a.settings.wallOn()) fetch(); }
+        @Override public void onNullBinding(ComponentName n){ unbind(); android.util.Log.i("ShieldHome","wallpaper: Aerial Views provider returned no binder"); }
     };
     void fetch(){
         if (bound) return;
@@ -72,7 +77,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
             d.writeInt(1); d.writeInt(EVENT_TIME_ELAPSED);
             b.transact(TX_GET_WALLPAPERS, d, r, 0);
             r.readException();
-            int n=r.readInt();
+            int n=Math.min(r.readInt(), MAX_ITEMS); // remaining entries are simply not read
             for (int i=0;i<n;i++){
                 if (r.readInt()==0) continue;
                 String uri=r.readString(); int type=r.readInt();
@@ -90,7 +95,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         if (mp!=null){ if (!mp.isPlaying()) mp.start(); return; }
         mp=new MediaPlayer();
         mp.setSurface(surface); mp.setVolume(0f,0f);
-        mp.setOnPreparedListener(p->{ fails=0; crop(p.getVideoWidth(), p.getVideoHeight()); if (resumed) p.start(); view.animate().alpha(1f).setDuration(FADE_MS).start(); scrim.animate().alpha(1f).setDuration(FADE_MS).start(); });
+        mp.setOnPreparedListener(p->{ fails=0; crop(p.getVideoWidth(), p.getVideoHeight()); if (resumePos>0){ p.seekTo(resumePos); resumePos=0; } if (resumed) p.start(); view.animate().alpha(1f).setDuration(FADE_MS).start(); scrim.animate().alpha(1f).setDuration(FADE_MS).start(); });
         mp.setOnCompletionListener(p->{ fails=0; next(); });
         mp.setOnErrorListener((p,w,x)->{ android.util.Log.i("ShieldHome","wallpaper error "+w+"/"+x); next(); return true; });
         try { mp.setDataSource(a, android.net.Uri.parse(uris.get(idx%uris.size()))); mp.prepareAsync(); } catch (Exception e){ next(); }
@@ -101,7 +106,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         return new LinearGradient(0,h*WALL_DIM_START,0,h*WALL_DIM_END, col, pos, Shader.TileMode.CLAMP);
     }
     /** Advance on completion/error; async, and gives up after a full pass of failures (no recursion on bad URIs). */
-    void next(){ release(); idx=(idx+1)%Math.max(1,uris.size()); if (++fails>uris.size()) return; a.h.post(()->{ if (resumed && a.settings.wallOn()) play(); }); }
+    void next(){ release(); resumePos=0; idx=(idx+1)%Math.max(1,uris.size()); if (++fails>uris.size()) return; a.h.post(()->{ if (resumed && a.settings.wallOn()) play(); }); }
     void release(){ if (mp!=null){ try { mp.reset(); mp.release(); } catch (Exception e){} mp=null; } }
     void stop(){ view.animate().cancel(); view.setAlpha(0f); scrim.animate().cancel(); scrim.setAlpha(0f); release(); }
 
