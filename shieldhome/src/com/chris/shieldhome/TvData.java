@@ -167,6 +167,22 @@ class TvData {
         android.util.Log.i("ShieldHome", "playnext other=" + shown[0] + "/" + other.size() + " ytNew=" + shown[1] + "/" + ytNew.size() + " ytResume=" + shown[2] + "/" + ytResume.size() + " wnRows=" + rows.size() + " ytTypes=" + ytTypes + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType);
         return mixOrder(pick);
     }
+    static final String PLUTO = "tv.pluto.android";
+    /** Pluto's latest unfinished watch-next row as a Play Next pick slot {pkg, caption, thumb, intent, progress}, or null if Pluto publishes none. */
+    Object[] plutoResume() {
+        try (Cursor c = a.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, null, null, null, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC")) {
+            int rows = 0;
+            while (c != null && c.moveToNext()) {
+                if (!PLUTO.equals(s(c, "package_name"))) continue; rows++;
+                int type = (int) l(c, "watch_next_type");
+                if ((type != WN_CONTINUE && type != WN_NEXT) || finished(l(c, "last_playback_position_millis"), l(c, "duration_millis"))) continue;
+                Object[] o = prog(c, true);
+                if (o != null && o[2] != null) { android.util.Log.i("ShieldHome", "pluto resume: watch-next row (" + rows + " pluto rows)"); return o; }
+            }
+            android.util.Log.i("ShieldHome", "pluto resume: none (" + rows + " pluto watch-next rows)");
+        } catch (Exception e) { android.util.Log.w("ShieldHome", "pluto resume " + e); }
+        return null;
+    }
     static final String PN_ORDER_PREF = "pn_order", PN_ID_SEP = "\n";
     /** Stable Play Next order: survivors keep their saved order, gone items drop out, only new items land at random slots. Persisted so it survives activity recreation. */
     List<Object[]> mixOrder(List<Object[]> pick) {

@@ -171,6 +171,19 @@ class CardsController {
     /** Focused card always at the first slot, including the last cards (trailing row padding makes room). */
     static int anchorX(int idx, int stride){ return Math.max(0, idx)*stride; }
 
+    /** Rounded red-on-grey progress bar used by Play Next resume tiles and live channel tiles. */
+    FrameLayout progressBar(float progress){
+        int bh=a.p(BAR_H);
+        FrameLayout bar = new FrameLayout(a); bar.setBackground(pill(Color.argb(90,255,255,255), bh));
+        View fill = new View(a); fill.setBackground(pill(Color.rgb(229,9,20), bh));
+        bar.addView(fill, new FrameLayout.LayoutParams(0, -1));
+        setProgress(bar, progress); return bar;
+    }
+    void setProgress(FrameLayout bar, float progress){
+        int bh=a.p(BAR_H); View fill=bar.getChildAt(0); ViewGroup.LayoutParams lp=fill.getLayoutParams();
+        int w=Math.max(bh, Math.round(a.p(BAR_W)*Math.max(0f, Math.min(1f, progress)))); // never narrower than its height, so both ends stay round
+        if (lp.width!=w){ lp.width=w; fill.setLayoutParams(lp); }
+    }
     GradientDrawable pill(int color, int h){ GradientDrawable g=new GradientDrawable(); g.setColor(color); g.setCornerRadius(h/2f); return g; }
     /** Video card: art + optional progress bar. pkg and title feed the focus caption, not the tile. */
     View card(Drawable art, String artUri, boolean fitArt, String pkg, String title, String sub, float progress, final Runnable click){
@@ -181,13 +194,7 @@ class CardsController {
         f.addView(iv, new FrameLayout.LayoutParams(-1,-1));
         View shade = new View(a); shade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.TRANSPARENT, Color.argb(70,0,0,0), Color.argb(160,0,0,0), Color.argb(204,0,0,0)}));
         if (progress>=0) f.addView(shade, new FrameLayout.LayoutParams(-1, a.p(56), Gravity.BOTTOM));
-        if (progress >= 0){
-            int bw=a.p(BAR_W), bh=a.p(BAR_H);
-            FrameLayout bar = new FrameLayout(a); bar.setBackground(pill(Color.argb(90,255,255,255), bh));
-            View fill = new View(a); fill.setBackground(pill(Color.rgb(229,9,20), bh));
-            bar.addView(fill, new FrameLayout.LayoutParams(Math.max(bh, Math.round(bw*progress)), -1)); // never narrower than its height, so both ends stay round
-            f.addView(bar, a.lp(bw, bh, Gravity.BOTTOM, a.p(BAR_X), 0, 0, a.p(BAR_Y)));
-        }
+        if (progress >= 0) f.addView(progressBar(progress), a.lp(a.p(BAR_W), a.p(BAR_H), Gravity.BOTTOM, a.p(BAR_X), 0, 0, a.p(BAR_Y)));
         View v=a.focusable(f, a.TILE_R, click);
         capMeta.put(v, new String[]{pkg, title, sub});
         return v;
@@ -228,11 +235,11 @@ class CardsController {
         android.util.Log.i("ShieldHome","playnext shown="+n+" subNew="+nNew+" subResume="+(n-nNew));
         return n;
     }
-    List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); Map<String,String> plutoArt = new HashMap<>(); Map<String,String> plutoLogo = new HashMap<>(); final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
+    List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); Map<String,String> plutoArt = new HashMap<>(); Map<String,String> plutoLogo = new HashMap<>(); final Map<String,long[]> plutoSpan = new HashMap<>(); volatile Object[] plutoResume; /* set on the TvData worker */ final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
     List<View> liveCache; final Set<String> liveSlugs = new LinkedHashSet<>();
     // Pluto doesn't publish programs to TvContract (0 readable rows), so read what's on now from Pluto's public guide.
-    /** Guide is reused for GUIDE_FRESH_MS; a failed fetch waits GUIDE_RETRY_MS; reads stop at GUIDE_MAX_BYTES (the full guide is ~5 MB). */
-    static final long GUIDE_FRESH_MS=10*60000L, GUIDE_RETRY_MS=60000L; static final int GUIDE_MAX_BYTES=16<<20;
+    /** Guide is reused for GUIDE_FRESH_MS; a failed fetch waits GUIDE_RETRY_MS (GUIDE_OVERSIZE_RETRY_MS after an oversize guide); reads stop at GUIDE_MAX_BYTES (the full guide is ~5 MB). */
+    static final long GUIDE_FRESH_MS=10*60000L, GUIDE_RETRY_MS=60000L, GUIDE_OVERSIZE_RETRY_MS=6*60*60000L; static final int GUIDE_MAX_BYTES=16<<20;
     boolean plutoBusy; long plutoTriedAt; // main thread only
     void fillPlutoNow(final List<Object[]> caps){
         long t=System.currentTimeMillis();
@@ -244,26 +251,37 @@ class CardsController {
             long now = System.currentTimeMillis();
             c=(java.net.HttpURLConnection)new java.net.URL("https://api.pluto.tv/v2/channels?start="+f.format(new Date(now))+"&stop="+f.format(new Date(now+60000))).openConnection();
             c.setConnectTimeout(6000); c.setReadTimeout(20000);
-            java.io.InputStream in = c.getInputStream(); java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] buf=new byte[65536]; int r; while ((r=in.read(buf))>0){ bo.write(buf,0,r); if (bo.size()>GUIDE_MAX_BYTES) throw new java.io.IOException("guide over "+GUIDE_MAX_BYTES+" bytes"); } in.close();
-            org.json.JSONArray channels = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>(), art = new HashMap<>(), logos = new HashMap<>();
+            java.io.InputStream in = c.getInputStream(); java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] buf=new byte[65536]; int r; while ((r=in.read(buf))>0){ bo.write(buf,0,r); if (bo.size()>GUIDE_MAX_BYTES){ a.h.post(()->plutoTriedAt=System.currentTimeMillis()+GUIDE_OVERSIZE_RETRY_MS-GUIDE_RETRY_MS); throw new java.io.IOException("guide over "+GUIDE_MAX_BYTES+" bytes"); } } in.close();
+            org.json.JSONArray channels = new org.json.JSONArray(bo.toString("UTF-8")); final Map<String,String> m = new HashMap<>(), art = new HashMap<>(), logos = new HashMap<>(); final Map<String,long[]> span = new HashMap<>();
             Set<String> ban = new HashSet<>(); Map<String,Integer> shared = new HashMap<>();
             for (int i=0;i<channels.length();i++){ org.json.JSONObject ch=channels.optJSONObject(i); if (ch==null) continue;
                 addBan(ban, ch.optJSONObject("featuredImage")); addBan(ban, ch.optJSONObject("logo")); addBan(ban, ch.optJSONObject("thumbnail")); addBan(ban, ch.optJSONObject("tile"));
                 String logo=jsonPath(ch.optJSONObject("colorLogoPNG")); if (logo==null) logo=jsonPath(ch.optJSONObject("logo"));
                 if (logo!=null) logos.put(ch.optString("name"), logo);
                 org.json.JSONArray tl=ch.optJSONArray("timelines");
-                if (tl!=null && tl.length()>0){ String first=tl.optJSONObject(0)==null?null:plutoGuideArt(tl.optJSONObject(0), ban); if (first!=null){ String b=bareUrl(first); shared.put(b, (shared.containsKey(b)?shared.get(b):0)+1); } }
+                org.json.JSONObject t0=tl==null?null:tl.optJSONObject(0);
+                if (t0!=null){ String first=plutoGuideArt(t0, ban); if (first!=null){ String b=bareUrl(first); shared.put(b, (shared.containsKey(b)?shared.get(b):0)+1); } }
             }
             for (Map.Entry<String,Integer> e: shared.entrySet()) if (e.getValue()>=4) ban.add(e.getKey());
             final List<String[]> picks=pickChannels(channels);
             for (int i=0;i<channels.length();i++){ org.json.JSONObject ch=channels.optJSONObject(i); if (ch==null) continue; org.json.JSONArray tl=ch.optJSONArray("timelines");
                 org.json.JSONObject t0=tl==null?null:tl.optJSONObject(0);
-                if (t0!=null){ m.put(ch.optString("name"), t0.optString("title")); String img=plutoGuideArt(t0, ban); if (img!=null) art.put(ch.optString("name"), img); }
+                if (t0!=null){ m.put(ch.optString("name"), t0.optString("title")); long[] se={guideTime(f, t0.optString("start")), guideTime(f, t0.optString("stop"))}; if (se[0]>0 && se[1]>se[0]) span.put(ch.optString("name"), se); String img=plutoGuideArt(t0, ban); if (img!=null) art.put(ch.optString("name"), img); }
                 String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
             android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels art="+art.size()+" logos="+logos.size());
-            a.h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoLogo.clear(); plutoLogo.putAll(logos); plutoAt=System.currentTimeMillis(); applyLiveNow(); setPicks(picks); });
+            a.h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoLogo.clear(); plutoLogo.putAll(logos); plutoSpan.clear(); plutoSpan.putAll(span); plutoAt=System.currentTimeMillis(); applyLiveNow(); setPicks(picks); });
         } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); }
         finally { if (c!=null) c.disconnect(); a.h.post(()->plutoBusy=false); } });
+    }
+    /** Guide timeline times are UTC ISO-8601 ("...T...Z", sometimes with millis); 0 if unparseable. */
+    static long guideTime(SimpleDateFormat f, String iso){
+        if (iso==null || iso.isEmpty()) return 0;
+        try { return f.parse(iso.replaceAll("\\.\\d+Z$", "Z")).getTime(); } catch (Exception e){ return 0; }
+    }
+    /** How far now is through the current show, 0..1, or -1 if the guide gave no times. */
+    float liveProgress(String nm){
+        long[] se=plutoSpan.get(nm); if (se==null) return -1f;
+        return Math.max(0f, Math.min(1f, (System.currentTimeMillis()-se[0])/(float)(se[1]-se[0])));
     }
     static String plutoGuideArt(org.json.JSONObject t0, Set<String> ban){
         org.json.JSONObject ep=t0.optJSONObject("episode"); if (ep==null) return null;
@@ -335,10 +353,21 @@ class CardsController {
         liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
         if (a.installed("tv.pluto.android")){ // not installed: 0 tiles, so refreshCards falls back to the LIVE_PKGS app tiles
             putLive(plutoAppTile(), "pluto-app");
-            for (String[] p: livePicks()){ if (liveCache.size()>MAX_LIVE_CHANNELS) break; putLive(plutoTile(p[0], p[1], true), p[0]); }
+            putLive(plutoResumeTile(), "pluto-resume");
+            int chans=0; for (String[] p: livePicks()){ if (chans++>=MAX_LIVE_CHANNELS) break; putLive(plutoTile(p[0], p[1], true), p[0]); }
             fillPlutoNow(plutoCaps);
         }
         return liveCache.size();
+    }
+    static final String CAP_CONTINUE="Continue watching";
+    /** Second Live TV tile: Pluto's own resume item (watch-next art, title, progress); otherwise a "Continue watching" tile with Pluto art that opens the app. */
+    View plutoResumeTile(){
+        Object[] r=plutoResume;
+        if (r!=null){ final Intent in=new Intent((Intent)r[3]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            return card(null, (String)r[2], false, TvData.PLUTO, (String)r[1], CAP_CONTINUE, (Float)r[4], ()->startSafe(in, TvData.PLUTO)); }
+        Drawable ban=null, ic=null;
+        try { ban=a.pm.getApplicationBanner(TvData.PLUTO); ic=a.pm.getApplicationIcon(TvData.PLUTO); } catch (Exception e){}
+        return card(ban!=null?ban:ic, null, ban==null, TvData.PLUTO, CAP_CONTINUE, null, -1, ()->a.launchPkg(TvData.PLUTO));
     }
     View plutoAppTile(){
         Drawable ban=null, ic=null;
@@ -359,16 +388,16 @@ class CardsController {
         ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0);
         TextView ov=chName(nm);
         ((GlowFrame)v).inner.addView(ov, a.lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0));
-        TextView cap=null;
-        for (int ci=0; ci<((GlowFrame)v).inner.getChildCount(); ci++){ View cv=((GlowFrame)v).inner.getChildAt(ci); if (cv instanceof TextView && cv!=ov) cap=(TextView)cv; }
         String art=liveArt(nm, id), logo=plutoLogo.get(nm);
         if (art!=null && loadArt) setLiveArt(big, art, true, false);
         else if (logo!=null && loadArt) setLiveArt(big, logo, true, true);
         else if (art!=null) big.setTag("pend:"+art);
         else if (logo!=null) big.setTag("pendf:"+logo);
         ov.setVisibility(art!=null||logo!=null?View.VISIBLE:View.GONE);
-        if (plutoNow.get(nm)!=null && cap!=null) cap.setText(plutoNow.get(nm));
-        plutoCaps.add(new Object[]{cap, nm, big, ov, id});
+        liveCaption(v, nm);
+        FrameLayout bar=progressBar(Math.max(0f, liveProgress(nm))); bar.setVisibility(liveProgress(nm)<0?View.GONE:View.VISIBLE);
+        ((GlowFrame)v).inner.addView(bar, a.lp(a.p(BAR_W), a.p(BAR_H), Gravity.BOTTOM, a.p(BAR_X), 0, 0, a.p(BAR_Y)));
+        plutoCaps.add(new Object[]{v, nm, big, ov, id, bar});
         return v;
     }
     TextView chName(String nm){
@@ -381,23 +410,22 @@ class CardsController {
         String art=plutoArt.get(nm); if (!genericArt(art,null)) return art;
         art=tifNowArt(id); return genericArt(art,null)?null:art;
     }
+    /** Focus caption for a channel tile: what's airing now (guide timeline title) over the channel name as the subtitle; the name alone if there is no title. */
+    void liveCaption(View v, String nm){
+        String t=plutoNow.get(nm); boolean has=t!=null && !t.trim().isEmpty();
+        String[] m=new String[]{"tv.pluto.android", has?t:nm, has?nm:null}, old=capMeta.get(v);
+        capMeta.put(v, m);
+        if (old!=null && !java.util.Arrays.equals(old, m) && v.isFocused() && a.cardScroll!=null) showCaption(v, a.cardScroll.getScrollX()); // guide refreshed under the focused tile
+    }
     void applyLiveNow(){
         for (Object[] o: plutoCaps){
-            String nm=(String)o[1]; TextView cap=(TextView)o[0]; ImageView iv=o.length>2?(ImageView)o[2]:null; TextView ov=o.length>3?(TextView)o[3]:null;
-            Long id=o.length>4?(Long)o[4]:null;
-            String t=plutoNow.get(nm), art=liveArt(nm,id), logo=plutoLogo.get(nm);
-            if (art!=null && !art.isEmpty()){
-                if (ov!=null) ov.setVisibility(View.VISIBLE);
-                if (cap!=null) cap.setText(t!=null?t:nm);
-                setLiveArt(iv, art, false, false);
-            } else if (logo!=null){
-                if (ov!=null) ov.setVisibility(View.VISIBLE);
-                if (cap!=null) cap.setText(t!=null?t:nm);
-                setLiveArt(iv, logo, false, true);
-            } else {
-                if (ov!=null) ov.setVisibility(View.GONE);
-                if (cap!=null) cap.setText(t!=null?nm+" \u00B7 "+t:nm);
-            }
+            View v=(View)o[0]; String nm=(String)o[1]; ImageView iv=(ImageView)o[2]; TextView ov=(TextView)o[3]; Long id=(Long)o[4]; FrameLayout bar=(FrameLayout)o[5];
+            float pr=liveProgress(nm); bar.setVisibility(pr<0?View.GONE:View.VISIBLE); if (pr>=0) setProgress(bar, pr); // from the clock each time the row is shown or the guide refreshes
+            String art=liveArt(nm,id), logo=plutoLogo.get(nm);
+            liveCaption(v, nm);
+            ov.setVisibility(art!=null||logo!=null?View.VISIBLE:View.GONE);
+            if (art!=null) setLiveArt(iv, art, false, false);
+            else if (logo!=null) setLiveArt(iv, logo, false, true);
         }
         if (a.tab==1) updateCardAlphas();
     }
