@@ -28,8 +28,9 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
      *  fades in with a slide/scale from LOCK_IN_DY/LOCK_IN_SCALE when focus arrives, fades back out when it leaves. */
     static final float LOCK_D=34f, LOCK_X=35f, LOCK_Y=237f, LOCK_IN_DY=8f, LOCK_IN_SCALE=0.85f;
     static final long LOCK_IN_MS=360, LOCK_OUT_MS=220;
-    /** Prev/next arrows: same circle, LOCK_GAP either side of the lock (group starts at LOCK_X); press pop = scale to ARROW_PRESS_SCALE + ARROW_NUDGE toward its side. */
-    static final float LOCK_GAP=8f, ARROW_PRESS_SCALE=0.84f, ARROW_NUDGE=3f;
+    /** Prev/next arrows: same circle at ARROW_SIZE of the lock (chevron scales with it), vertically centred on the lock, LOCK_GAP either side
+     *  (group starts at LOCK_X); press pop = scale to ARROW_PRESS_SCALE + ARROW_NUDGE toward its side. */
+    static final float ARROW_SIZE=0.6f, ARROW_D=LOCK_D*ARROW_SIZE, LOCK_GAP=6f, ARROW_PRESS_SCALE=0.84f, ARROW_NUDGE=3f;
     static final long ARROW_PRESS_MS=90, ARROW_RELEASE_MS=180;
     /** Locked = the current video loops; the locked URI is remembered so it comes back after a restart. */
     static final String PREF_LOCK="wall_locked", PREF_LOCK_URI="wall_lock_uri";
@@ -54,9 +55,12 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         lock.setOnClickListener(v->toggleLock());
         lock.setOnFocusChangeListener((v,f)->focusLock(f));
         LockButton[] row={prev, lock, nextBtn};
+        float x=LOCK_X;
         for (int i=0;i<row.length;i++){
+            float d=row[i]==lock?LOCK_D:ARROW_D;
             if (row[i]!=lock){ row[i].setVisibility(View.GONE); row[i].setAlpha(0f); }
-            a.root.addView(row[i], 2+i, a.lp(a.p(LOCK_D), a.p(LOCK_D), Gravity.TOP|Gravity.START, a.p(LOCK_X+i*(LOCK_D+LOCK_GAP)), a.p(LOCK_Y), 0, 0));
+            a.root.addView(row[i], 2+i, a.lp(a.p(d), a.p(d), Gravity.TOP|Gravity.START, a.p(x), a.p(LOCK_Y+(LOCK_D-d)/2f), 0, 0));
+            x+=d+LOCK_GAP;
         }
     }
     boolean locked(){ return a.prefs().getBoolean(PREF_LOCK, false); }

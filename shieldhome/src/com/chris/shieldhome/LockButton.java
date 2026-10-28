@@ -9,7 +9,7 @@ import android.view.animation.OvershootInterpolator;
  *  or a prev/next chevron (GLYPH_PREV/GLYPH_NEXT; not focusable, flashes a brighter fill on press). */
 class LockButton extends View {
     static final float BODY_W=12f, BODY_H=9f, BODY_R=2f, SHACKLE_W=7.5f, SHACKLE_H=6f, SHACKLE_LIFT=3.2f, STROKE=1.4f, ICON_DY=1.5f;
-    static final float CHEVRON_W=4f, CHEVRON_H=8f;
+    static final float CHEVRON_W=4f, CHEVRON_H=8f; // at lock size; drawn scaled to the arrow circle
     static final int GLYPH_LOCK=0, GLYPH_PREV=-1, GLYPH_NEXT=1;
     static final long MORPH_MS=420; static final OvershootInterpolator MORPH_EASE=new OvershootInterpolator(3f);
     static final int FILL=Color.argb(140,60,58,75), FILL_FOCUS=Color.argb(185,102,100,119), EDGE=Color.argb(40,255,255,255), FG=Color.rgb(232,232,240), FILL_PRESS=Color.argb(215,150,148,170);
@@ -34,7 +34,7 @@ class LockButton extends View {
         pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(EDGE); c.drawCircle(cx, cy, r-.5f, pt);
         pt.setColor(FG); pt.setStrokeWidth(a.p(STROKE));
         if (glyph!=GLYPH_LOCK){ // chevron pointing in the glyph direction, optically centred
-            float cw=a.p(CHEVRON_W)*glyph, ch=a.p(CHEVRON_H)/2f, x0=cx-cw/2f;
+            float s=2f*r/a.p(WallpaperController.LOCK_D), cw=a.p(CHEVRON_W)*s*glyph, ch=a.p(CHEVRON_H)*s/2f, x0=cx-cw/2f; // chevron scales with the circle
             shackle.rewind(); shackle.moveTo(x0, cy-ch); shackle.lineTo(x0+cw, cy); shackle.lineTo(x0, cy+ch); c.drawPath(shackle, pt); return;
         }
         float bw=a.p(BODY_W), bh=a.p(BODY_H), top=cy-bh/2f+a.p(ICON_DY);
