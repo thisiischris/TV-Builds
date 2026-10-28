@@ -19,7 +19,12 @@ class SettingsController {
     static final float ICON_FADE_T=0.35f, ICON_MORPH_SCALE=0.6f;
     static final Interpolator OPEN_EASE=new OvershootInterpolator(OPEN_OVERSHOOT), CLOSE_EASE=new PathInterpolator(0.4f,0f,0.2f,1f);
     final MainActivity a;
-    final ViewTreeObserver.OnGlobalFocusChangeListener focusL=(o,n)->syncIcon();
+    /** Posted, so a transient focus hop (e.g. Search handing focus to its voice half while it splits) settles before we decide. */
+    final Runnable syncR=this::syncIcon;
+    final ViewTreeObserver.OnGlobalFocusChangeListener focusL=(o,n)->postSync();
+    void postSync(){ a.h.removeCallbacks(syncR); a.h.post(syncR); }
+    /** Target visibility of the icon (not its mid-animation alpha), so a hide in flight can be reversed. */
+    boolean iconShown;
     PillView icon; Panel panel; ToggleRow heroRow, wallRow; ValueAnimator morph; boolean open;
     SettingsController(MainActivity a){ this.a=a; }
 
@@ -43,20 +48,20 @@ class SettingsController {
     }
     float panelH(){ return 2*PANEL_PAD+2*ROW_H+ROW_GAP; }
 
-    /** Icon shows while Play Now / the icon has focus, or (featured card off) while focus is in the top bar so the menu stays reachable. */
+    /** Icon shows while Play Now (featured card on), the icon, or anything in the top bar (dim pill, Search and its halves) has focus. */
     void syncIcon(){
         if (icon==null || open || (morph!=null && morph.isRunning())) return; // the morph owns the icon while the panel is open/animating
         View f=a.getCurrentFocus();
-        boolean show=open || f==icon || (heroOn() ? f==a.heroBtn : a.focus.secOf(f)==0);
+        boolean show=f==icon || (heroOn() && f==a.heroBtn) || (f!=null && a.focus.secOf(f)==0);
         icon.setFocusable(show || !heroOn());
-        boolean vis=icon.getVisibility()==View.VISIBLE && icon.getAlpha()>0f;
-        if (show==vis) return;
+        if (show==iconShown) return;
+        iconShown=show;
         float slide=a.p(HeroDots.DOTS_SLIDE_DP);
         icon.animate().cancel();
         if (show){ if (icon.getVisibility()!=View.VISIBLE){ icon.setTranslationY(-slide); icon.setVisibility(View.VISIBLE); } icon.animate().alpha(1f).translationY(0).setDuration(ICON_ANIM_MS).setInterpolator(HeroController.DOTS_EASE).start(); }
-        else icon.animate().alpha(0f).translationY(-slide).setDuration(ICON_ANIM_MS).setInterpolator(HeroController.DOTS_EASE).withEndAction(()->{ if (!open && a.getCurrentFocus()!=icon) icon.setVisibility(View.GONE); }).start();
+        else icon.animate().alpha(0f).translationY(-slide).setDuration(ICON_ANIM_MS).setInterpolator(HeroController.DOTS_EASE).withEndAction(()->{ if (!iconShown && !open) icon.setVisibility(View.GONE); }).start();
     }
-    void stop(){ if (morph!=null) morph.cancel(); if (icon!=null) icon.animate().cancel(); if (a.root!=null) a.root.getViewTreeObserver().removeOnGlobalFocusChangeListener(focusL); }
+    void stop(){ a.h.removeCallbacks(syncR); if (morph!=null) morph.cancel(); if (icon!=null) icon.animate().cancel(); if (a.root!=null) a.root.getViewTreeObserver().removeOnGlobalFocusChangeListener(focusL); }
     void focusIcon(){ icon.setVisibility(View.VISIBLE); icon.setFocusable(true); icon.requestFocus(); }
 
     /** D-pad from the icon while the featured card is on (it is not part of a FocusController section then). */

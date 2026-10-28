@@ -22,8 +22,8 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     static final long FADE_MS=800;
     /** Bottom scrim over the video: WALL_TOP_ALPHA above WALL_DIM_START (fraction of screen height), smoothstep over WALL_DIM_STOPS stops to WALL_DIM_ALPHA black at WALL_DIM_END, solid below. */
     static final float WALL_DIM_START=0.45f, WALL_DIM_END=0.92f; static final int WALL_DIM_ALPHA=225, WALL_DIM_STOPS=24;
-    /** Light dim (~10% black) over the rest of the screen: the gradient starts from this alpha and CLAMP carries it to the top edge, so there is no band. */
-    static final int WALL_TOP_ALPHA=26;
+    /** Light dim (~6% black) over the rest of the screen: the gradient starts from this alpha and CLAMP carries it to the top edge, so there is no band. */
+    static final int WALL_TOP_ALPHA=15;
     final MainActivity a;
     TextureView view; View scrim; Surface surface; MediaPlayer mp; final List<String> uris=new ArrayList<>(); int idx, fails, resumePos, rebinds; boolean bound, visible, prepared;
     WallpaperController(MainActivity a){ this.a=a; }
@@ -51,7 +51,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     void onResume(){ visible=true; apply(); }
     /** Another app in front (onStop, not onPause, so a Home press on home never touches playback): free the hardware decoder entirely
      *  (remember where we were); apply() on resume rebuilds the player and fades back in. */
-    void onStop(){ visible=false; android.util.Log.i("ShieldHome","wallpaper release (stopped)"); if (mp!=null){ try { resumePos=mp.getCurrentPosition(); } catch (Exception e){ resumePos=0; } } stop(); }
+    void onStop(){ visible=false; if (mp!=null){ try { resumePos=mp.getCurrentPosition(); } catch (Exception e){ resumePos=0; } } stop(); }
     void onDestroy(){ visible=false; stop(); unbind(); }
 
     final ServiceConnection conn=new ServiceConnection(){
@@ -96,7 +96,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     void play(){
         if (surface==null || uris.isEmpty()) return;
         if (mp!=null){ if (prepared && !mp.isPlaying()) mp.start(); return; } // still preparing: onPrepared starts it
-        mp=new MediaPlayer(); android.util.Log.i("ShieldHome","wallpaper player create");
+        mp=new MediaPlayer();
         mp.setSurface(surface); mp.setVolume(0f,0f);
         mp.setOnPreparedListener(p->{ prepared=true; fails=0; crop(p.getVideoWidth(), p.getVideoHeight()); if (resumePos>0){ p.seekTo(resumePos); resumePos=0; } if (visible) p.start(); view.animate().alpha(1f).setDuration(FADE_MS).start(); scrim.animate().alpha(1f).setDuration(FADE_MS).start(); });
         mp.setOnCompletionListener(p->{ fails=0; next(); });
