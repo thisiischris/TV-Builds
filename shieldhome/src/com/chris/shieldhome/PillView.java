@@ -38,8 +38,7 @@ class PillView extends View {
             }
             pt.setColor(fg); pt.setStrokeWidth(activity.p(1.1f)); pt.setStyle(Paint.Style.STROKE); pt.setStrokeCap(Paint.Cap.ROUND);
             float cx = icon==3 ? activity.p(19) : activity.p(icon==2?18:28) - (icon==2?activity.p(4):0), cy = hh/2;
-            if (icon==3){ // magnifier + mic
-                c.drawCircle(cx-activity.p(1),cy-activity.p(1),activity.p(4.2f),pt); c.drawLine(cx+activity.p(2),cy+activity.p(2),cx+activity.p(5),cy+activity.p(5),pt);
+            if (icon==3){ // Assistant mic
                 if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
                 int ax=(int)(cx+activity.p(8)); asst.setBounds(ax, (int)(cy-activity.p(7.5f)), ax+activity.p(15), (int)(cy+activity.p(7.5f))); asst.draw(c); }
             else if (icon==5){ float gx=w/2f, sr=activity.p(4.0f);

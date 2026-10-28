@@ -27,7 +27,7 @@ class CardsController {
     // Card row frame (mockup px) as placed by HomeLayout.
     static final float WRAP_X=15, WRAP_Y=320, WRAP_W=994, WRAP_H=160;
     // Caption: the text block height comes from measured font metrics; the badge matches it. CAP_EDGE = right screen margin the title may run to; CAP_TITLE_LINES = title wrap limit.
-    static final float CAP_GAP=14, CAP_TITLE=13, CAP_SUB=10.5f, CAP_LINE_GAP=3, CAP_TEXT_GAP=8, CAP_EDGE=35, CAP_GRID_CLEAR=6, ROW_LIFT=35;
+    static final float CAP_GAP=14, CAP_TITLE=13, CAP_SUB=10.5f, CAP_LINE_GAP=0, CAP_TEXT_GAP=8, CAP_EDGE=35, CAP_GRID_CLEAR=6, ROW_LIFT=35;
     static final int CAP_TITLE_LINES=2;
     // Platform badge (the pre-v80 tile badge, 36x20 aspect) sized to the caption's two-line height.
     static final float BADGE_ASPECT=36f/20f, BADGE_R=4;
@@ -69,7 +69,7 @@ class CardsController {
         return x;
     }
     TextView capLabel(float size, int color, String font){
-        TextView t=a.text("", size, color, font); t.setSingleLine(); t.setEllipsize(android.text.TextUtils.TruncateAt.END); t.setIncludeFontPadding(true); return t;
+        TextView t=a.text("", size, color, font); t.setSingleLine(); t.setEllipsize(android.text.TextUtils.TruncateAt.END); t.setIncludeFontPadding(false); return t;
     }
     // ---------- Focus caption: app icon + title under the focused card; row and tabs lift to make room ----------
     void showCaption(View card, int scrollX){
@@ -129,8 +129,8 @@ class CardsController {
     }
     /** Caption top inside cardWrap: CAP_GAP below the focused card's scaled bottom edge. */
     static float capTop(){ return ROW_PAD+CARD_H*(1+MainActivity.FOCUS_SCALE)/2+CAP_GAP; }
-    /** Full line height incl. descenders for a caption label. */
-    static int lineH(TextView t){ Paint.FontMetricsInt fm=t.getPaint().getFontMetricsInt(); return fm.bottom-fm.top; }
+    /** Line height of a caption label without font padding (ascent to descent), so stacked lines touch and the badge spans exactly the text. */
+    static int lineH(TextView t){ Paint.FontMetricsInt fm=t.getPaint().getFontMetricsInt(); return fm.descent-fm.ascent; }
     /** ROW_LIFT, or more if the measured caption would otherwise come within CAP_GRID_CLEAR of the app grid. */
     int liftPx(){
         int capBottom=a.p(WRAP_Y+capTop())+capBlockH, limit=a.p(a.APP_GRID_Y-CAP_GRID_CLEAR);
