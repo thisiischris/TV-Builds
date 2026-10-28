@@ -23,6 +23,8 @@ class HeroDots extends View {
         /** Width of dot i: the stretch moves from prev to cur as mix goes 0..1, so the row width stays constant. */
         float dotW(int i){ float d=activity.p(DOT_D), x=activity.p(ACTIVE_W)-d; return d+x*(i==cur?mix:0)+x*(i==prev&&prev!=cur?1-mix:0); }
         void startProgress(){ progStart=android.os.SystemClock.uptimeMillis(); pausedAt=-1f; invalidate(); }
+        /** Un-freezes the fill from pausedAt; returns ms left until the fill completes. */
+        long resumeProgress(){ float f=pausedAt>=0?pausedAt:progress(); progStart=android.os.SystemClock.uptimeMillis()-(long)(f*MainActivity.HERO_ROTATE_MS); pausedAt=-1f; invalidate(); return Math.max(0L,(long)((1f-f)*MainActivity.HERO_ROTATE_MS)); }
         void pauseProgress(){ if (pausedAt<0) pausedAt=progress(); invalidate(); }
         float progress(){ return pausedAt>=0?pausedAt:Math.min(1f,(android.os.SystemClock.uptimeMillis()-progStart)/(float)MainActivity.HERO_ROTATE_MS); }
         void stop(){ animate().cancel(); if (an!=null) an.cancel(); }

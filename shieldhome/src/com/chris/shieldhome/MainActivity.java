@@ -87,6 +87,7 @@ public class MainActivity extends Activity {
         focus.prepare();
         if (appsCache==null){ if (dataFut==null) kickData(false); awaitData(); }
         bindFromCache();
+        hero.resumeRotate();
         if (!editMode) grid.resetAllLifts(false, null);
         kickData(true);
         tick(); showWeather(); weatherTick(); applyDim();
