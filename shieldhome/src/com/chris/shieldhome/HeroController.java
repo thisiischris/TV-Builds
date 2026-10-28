@@ -17,7 +17,12 @@ class HeroController {
     String featuredBoundSig="";
     boolean heroFront=true;
     HeroController(MainActivity a) { this.a=a; }
-    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(a.heroLock){ if (a.heroItems.size()>1) a.heroIdx=(a.heroIdx+1)%a.heroItems.size(); else { a.h.postDelayed(this, a.HERO_ROTATE_MS); return; } } showHero(); a.h.postDelayed(this, a.HERO_ROTATE_MS); } };
+    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(a.heroLock){ if (a.heroItems.size()>1) a.heroIdx=(a.heroIdx+1)%a.heroItems.size(); else { scheduleRotate(); return; } } showHero(); scheduleRotate(); } };
+    /** (Re)starts the auto-advance timer; the dots' progress fill runs on the same clock. */
+    void scheduleRotate(){ a.h.removeCallbacks(heroRotate); a.h.postDelayed(heroRotate, a.HERO_ROTATE_MS); if (a.heroDots!=null) a.heroDots.startProgress(); }
+    /** Stops auto-advance; the progress fill freezes where it is. */
+    void pauseRotate(){ a.h.removeCallbacks(heroRotate); if (a.heroDots!=null) a.heroDots.pauseProgress(); }
+    static final android.view.animation.Interpolator DOTS_EASE=new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
     void applyFeaturedCache(){
         List<Object[]> feat=a.featuredCache;
         if (feat==null) return;
@@ -25,8 +30,7 @@ class HeroController {
         if (fs.equals(featuredBoundSig)) return;
         featuredBoundSig=fs;
         synchronized(a.heroLock){ a.heroItems.clear(); a.heroItems.addAll(feat); a.heroIdx=0; }
-        a.h.removeCallbacks(heroRotate);
-        if (!a.heroItems.isEmpty()){ showHero(); a.h.postDelayed(heroRotate, a.HERO_ROTATE_MS); }
+        if (a.heroItems.isEmpty()) pauseRotate(); else { showHero(); scheduleRotate(); }
         a.net.loadWhatsNew();
     }
     static String heroSig(List<Object[]> l){
@@ -154,14 +158,13 @@ class HeroController {
         if (a.heroDots!=null){
             int n; synchronized(a.heroLock){ n=a.heroItems.size(); }
             a.heroDots.animate().cancel();
-            android.view.animation.Interpolator dotsEase=new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
             float slide=a.p(HeroDots.DOTS_SLIDE_DP);
             if (on && n>1){
                 a.heroDots.bind(n, a.heroIdx, false);
                 if (a.heroDots.getVisibility()!=View.VISIBLE){ a.heroDots.setAlpha(0f); a.heroDots.setTranslationY(slide); a.heroDots.setVisibility(View.VISIBLE); }
-                a.heroDots.animate().alpha(1f).translationY(0).setDuration(HeroDots.DOTS_ANIM_MS).setInterpolator(dotsEase).start();
+                a.heroDots.animate().alpha(1f).translationY(0).setDuration(HeroDots.DOTS_ANIM_MS).setInterpolator(DOTS_EASE).start();
             } else if (a.heroDots.getVisibility()==View.VISIBLE){
-                a.heroDots.animate().alpha(0f).translationY(slide).setDuration(HeroDots.DOTS_ANIM_MS).setInterpolator(dotsEase).withEndAction(()->{ if (a.heroDots!=null && (a.heroBtn==null||!a.heroBtn.isFocused())) a.heroDots.setVisibility(View.GONE); }).start();
+                a.heroDots.animate().alpha(0f).translationY(slide).setDuration(HeroDots.DOTS_ANIM_MS).setInterpolator(DOTS_EASE).withEndAction(()->{ if (a.heroDots!=null && (a.heroBtn==null||!a.heroBtn.isFocused())) a.heroDots.setVisibility(View.GONE); }).start();
             }
         }
     }
@@ -203,9 +206,8 @@ class HeroController {
             if (n<=1) return;
             a.heroIdx = (a.heroIdx + (next?1:-1) + n) % n;
         }
-        a.h.removeCallbacks(heroRotate);
         showHero();
-        a.h.postDelayed(heroRotate, a.HERO_ROTATE_MS);
+        scheduleRotate();
     }
     void useWhatsNew(String js){
         List<Object[]> nl = new ArrayList<>();
@@ -232,8 +234,8 @@ class HeroController {
         android.util.Log.i("ShieldHome","hero mix featured="+nf+" new="+(mix.size()-nf));
         if (mix.size()!=nf){
             Collections.shuffle(mix);
-            synchronized(this.a.heroLock){ this.a.h.removeCallbacks(heroRotate); this.a.heroItems.clear(); this.a.heroItems.addAll(mix); this.a.heroIdx=0; }
-            showHero(); this.a.h.postDelayed(heroRotate, this.a.HERO_ROTATE_MS);
+            synchronized(this.a.heroLock){ this.a.heroItems.clear(); this.a.heroItems.addAll(mix); this.a.heroIdx=0; }
+            showHero(); scheduleRotate();
         }
     }
 }

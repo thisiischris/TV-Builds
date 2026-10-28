@@ -78,6 +78,7 @@ public class MainActivity extends Activity {
         try { unregisterReceiver(pkgRx); } catch (Exception e){}
         pool.shutdownNow();
         if (searchDim!=null) searchDim.stopDimCallbacks();
+        if (heroDots!=null) heroDots.stop();
         super.onDestroy();
     }
     void DisplayMetricsHolder(){ android.util.DisplayMetrics m = new android.util.DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(m); u = m.widthPixels/1024f; }
@@ -90,7 +91,7 @@ public class MainActivity extends Activity {
         kickData(true);
         tick(); showWeather(); weatherTick(); applyDim();
     }
-    @Override protected void onPause(){ if (editMode) grid.exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(hero.heroRotate); h.removeCallbacks(wxRun); }
+    @Override protected void onPause(){ if (editMode) grid.exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); hero.pauseRotate(); h.removeCallbacks(wxRun); }
     boolean heroShown(){ return heroG!=null && heroG.getVisibility()==View.VISIBLE; }
     @Override protected void onNewIntent(Intent i){ super.onNewIntent(i); focus.restoreNow(); }
     boolean editLp=false;

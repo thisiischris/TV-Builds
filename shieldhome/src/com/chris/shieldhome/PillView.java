@@ -20,7 +20,7 @@ class PillView extends View {
         void labelPaint(){ pt.setTextSize(activity.p(this==activity.heroBtn?14:icon==2?12.5f:LABEL_SIZE)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL)); }
         @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==activity.heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(activity.focusInterpolator).start(); setElevation(f?activity.p(4):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
-            float w=getWidth(), hh=getHeight(), r=this==activity.heroBtn?activity.p(14):hh/2;
+            float w=getWidth(), hh=getHeight(), r=hh/2;
             pt.setStyle(Paint.Style.FILL);
             boolean fo = isFocused();
             boolean bare = this==activity.gear && !fo;

@@ -19,6 +19,8 @@ import android.widget.TextView;
 import java.util.*;
 
 class AppGridController {
+    /** Long-press quick menu: container corner radius and row height (focused row highlight is a full pill, radius MENU_ROW_H/2). */
+    static final float MENU_R=18, MENU_ROW_H=36;
     final MainActivity a;
     AppGridController(MainActivity a) { this.a = a; }
 
@@ -342,7 +344,7 @@ class AppGridController {
         this.a.menuOwner=anchor;
         pressPop(anchor);
         LinearLayout p=new LinearLayout(this.a); p.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,28,28,32)); bg.setCornerRadius(this.a.p(14)); bg.setStroke(Math.max(1,this.a.p(1)), Color.argb(51,255,255,255));
+        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,28,28,32)); bg.setCornerRadius(this.a.p(MENU_R)); bg.setStroke(Math.max(1,this.a.p(1)), Color.argb(51,255,255,255));
         p.setBackground(bg); p.setPadding(this.a.p(8),this.a.p(8),this.a.p(8),this.a.p(8)); p.setElevation(this.a.p(18));
         String[] labs={"Edit Home Screen","Force Stop","App Info","Uninstall"};
         boolean sys=systemApp(app[0]);
@@ -361,7 +363,7 @@ class AppGridController {
             LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(-2,-2); tp.leftMargin=this.a.p(10);
             row.addView(t, tp);
             row.setOnFocusChangeListener((v,f)->{
-                GradientDrawable pill=new GradientDrawable(); pill.setCornerRadius(this.a.p(8));
+                GradientDrawable pill=new GradientDrawable(); pill.setCornerRadius(this.a.p(MENU_ROW_H)/2f);
                 pill.setColor(f?Color.argb(240,255,255,255):Color.TRANSPARENT);
                 row.setBackground(pill);
                 int fg=off?Color.argb(80,255,255,255):(f?Color.rgb(22,22,30):(id==3?Color.rgb(224,112,112):Color.WHITE));
@@ -369,7 +371,7 @@ class AppGridController {
             });
             if (!off) row.setOnClickListener(v->menuAct(id, app, idx));
             row.setOnKeyListener((v,k,e)->{ if (k==KeyEvent.KEYCODE_BACK && e.getAction()==KeyEvent.ACTION_DOWN){ closeMenu(); return true; } return false; });
-            p.addView(row, new LinearLayout.LayoutParams(this.a.p(200), this.a.p(36)));
+            p.addView(row, new LinearLayout.LayoutParams(this.a.p(200), this.a.p(MENU_ROW_H)));
             if (!off){ row.setId(View.generateViewId()); rows.add(row); if (first==null) first=row; }
         }
         for (int i=0;i<rows.size();i++){
