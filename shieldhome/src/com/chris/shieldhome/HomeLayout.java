@@ -31,7 +31,7 @@ class HomeLayout {
         place(a.gear, 35, 17, 28, 28);
         PillView search = a.searchV = new PillView(a, a, "Search", 3, false);
         search.setOnFocusChangeListener((v,f)->{ if (f && !a.dimSlide) a.expandSearch(); });
-        place(search, 71, 17, 104, 28);
+        place(search, 71, 17, -2, 28); // width wraps the Assistant icon + label (PillView.onMeasure)
         a.searchSplit = new LinearLayout(a); a.searchSplit.setOrientation(LinearLayout.HORIZONTAL); a.searchSplit.setGravity(Gravity.CENTER_VERTICAL);
         a.searchSplit.setVisibility(View.GONE);
         a.speakV = new PillView(a, a, "", 6, false); a.typeV = new PillView(a, a, "", 7, false);
@@ -138,11 +138,11 @@ class HomeLayout {
         a.cardRow = new LinearLayout(a); a.cardRow.setClipChildren(false); a.cardRow.setClipToPadding(false);
         a.cardScroll.addView(a.cardRow, new ViewGroup.LayoutParams(-2,-1));
         a.cardWrap.addView(a.cardScroll, new FrameLayout.LayoutParams(-1,-1));
-        place(a.cardWrap, 15, 320, 994, 160);
+        place(a.cardWrap, CardsController.WRAP_X, CardsController.WRAP_Y, CardsController.WRAP_W, CardsController.WRAP_H);
         a.cardScroll.getViewTreeObserver().addOnScrollChangedListener(a::updateCardAlphas);
 
         a.homeGrid = new GridLayout(a); a.homeGrid.setColumnCount(6); a.homeGrid.setClipChildren(false); a.homeGrid.setClipToPadding(false);
-        place(a.homeGrid, 35, MainActivity.APP_GRID_Y, 954, MainActivity.APP_H+MainActivity.APP_VG);
+        place(a.homeGrid, 35, MainActivity.APP_GRID_Y, 954, MainActivity.APP_H+MainActivity.APP_ROW_GAP);
         a.grid.ensureDim();
         a.grid.buildHomeGrid();
 

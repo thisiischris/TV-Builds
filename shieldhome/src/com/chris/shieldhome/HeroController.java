@@ -9,11 +9,29 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 class HeroController {
+    /** Alpha (0-255) the left scrim settles to past HERO_LEFT_FADE and holds to the artwork's right edge: a light overall dim (~18%). */
+    static final int HERO_DIM_ALPHA=46;
+    /** Bottom fade: starts HERO_BOT_FADE of the art height above its bottom edge and eases (smoothstep, HERO_BOT_STOPS stops) to transparent at that edge. */
+    static final float HERO_BOT_FADE=0.55f; static final int HERO_BOT_STOPS=9;
     final MainActivity a;
     String featuredBoundSig="";
     boolean heroFront=true;
     HeroController(MainActivity a) { this.a=a; }
-    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(a.heroLock){ if (a.heroItems.size()>1) a.heroIdx=(a.heroIdx+1)%a.heroItems.size(); else { a.h.postDelayed(this, a.HERO_ROTATE_MS); return; } } showHero(); a.h.postDelayed(this, a.HERO_ROTATE_MS); } };
+    final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(a.heroLock){ if (a.heroItems.size()>1) a.heroIdx=(a.heroIdx+1)%a.heroItems.size(); else { scheduleRotate(); return; } } android.util.Log.i("ShieldHome","hero advance "+a.heroIdx); showHero(); scheduleRotate(); } };
+    /** (Re)starts the auto-advance timer; the dots' progress fill runs on the same clock. */
+    void scheduleRotate(){ a.h.removeCallbacks(heroRotate); a.h.postDelayed(heroRotate, a.HERO_ROTATE_MS); if (a.heroDots!=null) a.heroDots.startProgress(); }
+    /** onResume: continue the fill and timer from where onPause froze them; always leaves exactly one pending heroRotate. */
+    void resumeRotate(){
+        a.h.removeCallbacks(heroRotate);
+        int n; synchronized(a.heroLock){ n=a.heroItems.size(); }
+        if (n<2 || a.heroDots==null){ if (n>0) scheduleRotate(); return; }
+        long left=a.heroDots.resumeProgress();
+        a.h.postDelayed(heroRotate, left);
+        android.util.Log.i("ShieldHome","hero resume in "+left+"ms");
+    }
+    /** Stops auto-advance; the progress fill freezes where it is. */
+    void pauseRotate(){ a.h.removeCallbacks(heroRotate); if (a.heroDots!=null) a.heroDots.pauseProgress(); }
+    static final android.view.animation.Interpolator DOTS_EASE=new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f);
     void applyFeaturedCache(){
         List<Object[]> feat=a.featuredCache;
         if (feat==null) return;
@@ -21,8 +39,7 @@ class HeroController {
         if (fs.equals(featuredBoundSig)) return;
         featuredBoundSig=fs;
         synchronized(a.heroLock){ a.heroItems.clear(); a.heroItems.addAll(feat); a.heroIdx=0; }
-        a.h.removeCallbacks(heroRotate);
-        if (!a.heroItems.isEmpty()){ showHero(); a.h.postDelayed(heroRotate, a.HERO_ROTATE_MS); }
+        if (a.heroItems.isEmpty()) pauseRotate(); else { showHero(); scheduleRotate(); }
         a.net.loadWhatsNew();
     }
     static String heroSig(List<Object[]> l){
@@ -32,8 +49,11 @@ class HeroController {
     }
     void showHero(){
         final Object[] o;
-        synchronized(a.heroLock){ if (a.heroItems.isEmpty()) return; o=a.heroItems.get(Math.min(a.heroIdx, a.heroItems.size()-1)); }
+        final int n;
+        synchronized(a.heroLock){ if (a.heroItems.isEmpty()) return; n=a.heroItems.size(); o=a.heroItems.get(Math.min(a.heroIdx, n-1)); }
         a.heroGate=android.os.SystemClock.uptimeMillis()+650;
+        // dots hop synchronously, before callers restart progress (scheduleRotate); transitionHero runs later, after the image decode
+        if (a.heroDots!=null && a.heroDots.getVisibility()==View.VISIBLE) a.heroDots.bind(n, a.heroIdx, true);
         if (a.heroBtn==null || !a.heroBtn.isFocused()) bindHeroAction(o);
         final String uri = (String)o[3];
         final int tw=a.heroG!=null&&a.heroG.getWidth()>0?a.heroG.getWidth():a.p(1024), th=a.heroG!=null&&a.heroG.getHeight()>0?a.heroG.getHeight():a.p(400), g=++a.heroLoadGen;
@@ -62,7 +82,6 @@ class HeroController {
             bindHeroCopy(o);
             try { Drawable bd = a.pm.getApplicationBanner((String)o[0]); if (bd==null) bd = a.pm.getApplicationIcon((String)o[0]); a.heroBadge.setImageBitmap(glyph((String)o[0], bd));} catch(Exception e){}
             fitHeroMeta();
-            if (a.heroDots!=null && a.heroDots.getVisibility()==View.VISIBLE){ int n; synchronized(a.heroLock){ n=a.heroItems.size(); } a.heroDots.bind(n, a.heroIdx, true); }
             int d=200; for (View t: texts){ t.setTranslationX(a.p(16)); t.animate().alpha(t==a.heroBadge?0.7f:1f).translationX(0).setStartDelay(d).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); d+=90; }
             if (ctaOn && a.heroBtn!=null && a.heroBtn.isFocused()){ a.heroBtn.animate().cancel(); a.heroBtn.setAlpha(0f); a.heroBtn.animate().alpha(1f).setStartDelay(200).setDuration(900).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start(); }
         }, 480);
@@ -74,10 +93,10 @@ class HeroController {
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        float artW=Math.min(w,a.p(758)), artH=Math.min(h,a.p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*MainActivity.HERO_LEFT_FADE, botEnd=artB-artH*0.40f, botRange=h-botEnd;
+        float artW=Math.min(w,a.p(758)), artH=Math.min(h,a.p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*MainActivity.HERO_LEFT_FADE;
         p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,h,0,botEnd, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, botRange<=0?0:(h-artB)/botRange, 1}, Shader.TileMode.CLAMP));
+        p.setShader(bottomFade(artB, artH));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,0,0,h*0.064f, Color.argb(240,255,255,255), Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
@@ -85,6 +104,12 @@ class HeroController {
         p.setShader(new RadialGradient(artL, artB, rad, new int[]{Color.TRANSPARENT, Color.argb(50,255,255,255), Color.WHITE}, new float[]{0, 0.5f, 1}, Shader.TileMode.CLAMP));
         c.drawRect(artL, artB-rad, Math.min(w, artL+rad), artB, p);
         a.vigMask=bm; return bm;
+    }
+    /** White above the fade, eased to transparent at artB and below; used as a DST_IN shader. */
+    static Shader bottomFade(float artB, float artH){
+        int[] col=new int[HERO_BOT_STOPS]; float[] pos=new float[HERO_BOT_STOPS];
+        for (int i=0;i<HERO_BOT_STOPS;i++){ float t=i/(float)(HERO_BOT_STOPS-1); pos[i]=t; col[i]=Color.argb(Math.round(255*(1-t*t*(3-2*t))),255,255,255); }
+        return new LinearGradient(0,artB-artH*HERO_BOT_FADE,0,artB, col, pos, Shader.TileMode.CLAMP);
     }
     Bitmap maskHero(String key, Bitmap src, int tw, int th){
         if (tw<=0||th<=0||src==null) return src;
@@ -101,8 +126,13 @@ class HeroController {
         c.drawBitmap(alphaMask(tw,th),0,0,xp);
         float leftEnd=artL+artW*MainActivity.HERO_LEFT_FADE;
         xp.setXfermode(null);
-        xp.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{0xE6000000|MainActivity.HERO_SCRIM_RGB,0xC2000000|MainActivity.HERO_SCRIM_RGB,MainActivity.HERO_SCRIM_RGB}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,leftEnd,th,xp);
+        int dim=(HERO_DIM_ALPHA<<24)|MainActivity.HERO_SCRIM_RGB;
+        xp.setShader(new LinearGradient(0,0,tw,0, new int[]{0xE6000000|MainActivity.HERO_SCRIM_RGB,0xC2000000|MainActivity.HERO_SCRIM_RGB,dim,dim}, new float[]{0, artL/tw, leftEnd/tw, 1}, Shader.TileMode.CLAMP));
+        int layer=c.saveLayer(0,0,tw,th,null); // scrim fades out with the art's bottom edge instead of stopping at th
+        c.drawRect(0,0,tw,th,xp);
+        xp.setShader(bottomFade(artH, artH)); xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+        c.drawRect(0,0,tw,th,xp);
+        c.restoreToCount(layer);
         a.heroMasked.put(key, out); return out;
     }
     void fitHeroMeta(){
@@ -139,12 +169,13 @@ class HeroController {
         if (a.heroDots!=null){
             int n; synchronized(a.heroLock){ n=a.heroItems.size(); }
             a.heroDots.animate().cancel();
+            float slide=a.p(HeroDots.DOTS_SLIDE_DP);
             if (on && n>1){
                 a.heroDots.bind(n, a.heroIdx, false);
-                a.heroDots.setVisibility(View.VISIBLE);
-                a.heroDots.animate().alpha(1f).setDuration(160).setInterpolator(ease).start();
-            } else {
-                a.heroDots.animate().alpha(0f).setDuration(120).setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{ if (a.heroDots!=null && (a.heroBtn==null||!a.heroBtn.isFocused())) a.heroDots.setVisibility(View.GONE); }).start();
+                if (a.heroDots.getVisibility()!=View.VISIBLE){ a.heroDots.setAlpha(0f); a.heroDots.setTranslationY(slide); a.heroDots.setVisibility(View.VISIBLE); }
+                a.heroDots.animate().alpha(1f).translationY(0).setDuration(HeroDots.DOTS_ANIM_MS).setInterpolator(DOTS_EASE).start();
+            } else if (a.heroDots.getVisibility()==View.VISIBLE){
+                a.heroDots.animate().alpha(0f).translationY(slide).setDuration(HeroDots.DOTS_ANIM_MS).setInterpolator(DOTS_EASE).withEndAction(()->{ if (a.heroDots!=null && (a.heroBtn==null||!a.heroBtn.isFocused())) a.heroDots.setVisibility(View.GONE); }).start();
             }
         }
     }
@@ -186,9 +217,8 @@ class HeroController {
             if (n<=1) return;
             a.heroIdx = (a.heroIdx + (next?1:-1) + n) % n;
         }
-        a.h.removeCallbacks(heroRotate);
         showHero();
-        a.h.postDelayed(heroRotate, a.HERO_ROTATE_MS);
+        scheduleRotate();
     }
     void useWhatsNew(String js){
         List<Object[]> nl = new ArrayList<>();
@@ -215,8 +245,8 @@ class HeroController {
         android.util.Log.i("ShieldHome","hero mix featured="+nf+" new="+(mix.size()-nf));
         if (mix.size()!=nf){
             Collections.shuffle(mix);
-            synchronized(this.a.heroLock){ this.a.h.removeCallbacks(heroRotate); this.a.heroItems.clear(); this.a.heroItems.addAll(mix); this.a.heroIdx=0; }
-            showHero(); this.a.h.postDelayed(heroRotate, this.a.HERO_ROTATE_MS);
+            synchronized(this.a.heroLock){ this.a.heroItems.clear(); this.a.heroItems.addAll(mix); this.a.heroIdx=0; }
+            showHero(); scheduleRotate();
         }
     }
 }

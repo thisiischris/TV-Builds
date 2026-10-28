@@ -8,6 +8,20 @@ import android.widget.FrameLayout;
 class SearchDimController {
     final MainActivity a;
     SearchDimController(MainActivity a) { this.a=a; }
+    /** Dim slider: fill eases toward its target each frame (fraction of the remaining distance per 16 ms frame), snapping within DIM_FILL_EPS.
+     *  The service/overlay apply is throttled to one per DIM_APPLY_MS so fast key repeats coalesce. */
+    static final float DIM_FILL_RATE=0.22f, DIM_FILL_EPS=0.0015f, FRAME_MS=16.67f; static final long DIM_APPLY_MS=60;
+    float dimTarget; long lastFrameNs; boolean fillRunning, applyPending;
+    final Runnable fillFrame=new Runnable(){ public void run(){
+        long now=System.nanoTime(); float dt=lastFrameNs==0?1f:Math.min(4f,(now-lastFrameNs)/1e6f/FRAME_MS); lastFrameNs=now;
+        float d=dimTarget-a.dimFill;
+        a.dimFill = Math.abs(d)<DIM_FILL_EPS ? dimTarget : a.dimFill+d*(1f-(float)Math.pow(1f-DIM_FILL_RATE, dt));
+        if (a.gear!=null) a.gear.invalidate(); if (a.dimBar!=null) a.dimBar.invalidate();
+        if (a.dimFill!=dimTarget) a.root.postOnAnimation(this); else fillRunning=false;
+    }};
+    final Runnable applyNow=new Runnable(){ public void run(){ applyPending=false; a.applyDim(); }};
+    /** Drops pending frame and apply callbacks (activity teardown). */
+    void stopDimCallbacks(){ if (a.root!=null) a.root.removeCallbacks(fillFrame); a.h.removeCallbacks(applyNow); fillRunning=false; applyPending=false; }
     void openAssistant(){
         Intent[] tries = {
             new Intent(Intent.ACTION_ASSIST).setPackage("com.google.android.katniss"),
@@ -95,14 +109,16 @@ class SearchDimController {
         }).start();
     }
     int dimPct(){ return Math.max(0, Math.min(90, a.prefs().getInt("dim_pct",0))); }
-    void setDimPct(int pct){ a.prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply(); a.applyDim(); }
-    void syncDimFill(boolean anim){
-        float to=a.dimPct()/100f;
-        if (!anim){ a.dimFill=to; if (a.gear!=null) a.gear.invalidate(); if (a.dimBar!=null) a.dimBar.invalidate(); return; }
-        if (a.dimFillAnim!=null) a.dimFillAnim.cancel();
-        a.dimFillAnim=android.animation.ValueAnimator.ofFloat(a.dimFill, to); a.dimFillAnim.setDuration(200);
-        a.dimFillAnim.addUpdateListener(animator->{ this.a.dimFill=(Float)animator.getAnimatedValue(); if (a.gear!=null) a.gear.invalidate(); if (a.dimBar!=null) a.dimBar.invalidate(); });
-        a.dimFillAnim.start();
+    void setDimPct(int pct){
+        a.prefs().edit().putInt("dim_pct", Math.max(0, Math.min(90, pct))).apply();
+        a.syncDimFill(); if (a.dimBar!=null) a.dimBar.invalidate(); // label updates now
+        if (!applyPending){ applyPending=true; a.h.postDelayed(applyNow, DIM_APPLY_MS); }
+    }
+    /** Retargets the running per-frame ease; never restarts, so fast repeats stay continuous. */
+    void syncDimFill(){
+        dimTarget=a.dimPct()/100f;
+        if (fillRunning || a.root==null) return;
+        fillRunning=true; lastFrameNs=0; a.root.postOnAnimation(fillFrame);
     }
     void dimSlideBy(int dir){ a.setDimPct(a.dimPct()+dir*5); }
     void hideSearch(boolean hide){
@@ -148,7 +164,7 @@ class SearchDimController {
         a.hideSearch(false);
     }
     void applyDim(){
-        int pct = a.dimPct(); a.syncDimFill(true);
+        int pct = a.dimPct(); a.syncDimFill();
         boolean overlay = android.provider.Settings.canDrawOverlays(a);
         Intent si = new Intent(a, DimService.class).putExtra("pct", pct);
         try { if (overlay){ if (pct>0) a.startForegroundService(si); else a.stopService(si); } } catch (Exception e){ android.util.Log.w("ShieldHome","dimsvc "+e); overlay=false; }

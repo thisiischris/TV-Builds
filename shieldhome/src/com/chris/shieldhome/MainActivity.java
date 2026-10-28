@@ -26,6 +26,8 @@ public class MainActivity extends Activity {
     static final long HERO_ROTATE_MS = 16000;
     final android.view.animation.DecelerateInterpolator focusInterpolator = new android.view.animation.DecelerateInterpolator();
     static final float APP_FOCUS=1.20f, APP_HOLD=1.23f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f, APP_GRID_Y=467.5f;
+    /** v82: extra breathing room between app rows (half above, half below each row); APP_GRID_Y fixed so row 1 still peeks. */
+    static final float APP_ROW_PAD=4f, APP_ROW_GAP=APP_VG+APP_ROW_PAD;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
 
     FrameLayout.LayoutParams lp(int w,int h,int g,int l,int t,int r,int b){ FrameLayout.LayoutParams x=new FrameLayout.LayoutParams(w,h,g); x.setMargins(l,t,r,b); return x; }
@@ -77,6 +79,8 @@ public class MainActivity extends Activity {
         dataGen++; heroLoadGen++;
         try { unregisterReceiver(pkgRx); } catch (Exception e){}
         pool.shutdownNow();
+        if (searchDim!=null) searchDim.stopDimCallbacks();
+        if (heroDots!=null) heroDots.stop();
         super.onDestroy();
     }
     void DisplayMetricsHolder(){ android.util.DisplayMetrics m = new android.util.DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(m); u = m.widthPixels/1024f; }
@@ -85,11 +89,12 @@ public class MainActivity extends Activity {
         focus.prepare();
         if (appsCache==null){ if (dataFut==null) kickData(false); awaitData(); }
         bindFromCache();
+        hero.resumeRotate();
         if (!editMode) grid.resetAllLifts(false, null);
         kickData(true);
         tick(); showWeather(); weatherTick(); applyDim();
     }
-    @Override protected void onPause(){ if (editMode) grid.exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); h.removeCallbacks(hero.heroRotate); h.removeCallbacks(wxRun); }
+    @Override protected void onPause(){ if (editMode) grid.exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); hero.pauseRotate(); h.removeCallbacks(wxRun); }
     boolean heroShown(){ return heroG!=null && heroG.getVisibility()==View.VISIBLE; }
     @Override protected void onNewIntent(Intent i){ super.onNewIntent(i); focus.restoreNow(); }
     boolean editLp=false;
@@ -152,7 +157,8 @@ public class MainActivity extends Activity {
 
     // ---------- Focus helper: soft blue glow drawn outside the tile + scale ----------
 
-    View focusable(final FrameLayout v, float radius, final Runnable click){ return focusable(v, radius, 1.13f, click); }
+    static final float FOCUS_SCALE=1.13f; // default focus growth (video cards, chrome)
+    View focusable(final FrameLayout v, float radius, final Runnable click){ return focusable(v, radius, FOCUS_SCALE, click); }
     View focusable(final FrameLayout v, float radius, final float sc, final Runnable click){
         final GlowFrame g = new GlowFrame(this, this, v, p(radius));
         g.setFocusable(true); g.setClickable(true);
@@ -281,11 +287,12 @@ public class MainActivity extends Activity {
     }
     void bindFromCache(){
         if (cardRow==null) return;
+        if (focus!=null) focus.remember(); // identity of whatever is focused now, before views are rebuilt
         grid.buildHomeGrid();
         applyTabs();
         refreshCards();
         hero.applyFeaturedCache();
-        if (focus!=null) focus.afterData();
+        if (focus!=null) focus.afterBind();
     }
     boolean playNextOn(){ return wnPickCache!=null && !wnPickCache.isEmpty(); }
     void applyTabs(){
@@ -308,10 +315,10 @@ public class MainActivity extends Activity {
     // ---------- v6: quick settings, featured toggle, dimmer, weather ----------
     PillView searchV, speakV, typeV; LinearLayout searchSplit; EditText searchField; TextView heroLabel;
     PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false, heroCtaOn; View heroG, heroFocus, inAppDim; HeroDots heroDots;
-    float dimFill; android.animation.ValueAnimator dimFillAnim;
+    float dimFill;
     int dimPct(){ return searchDim.dimPct(); }
     void setDimPct(int pct){ searchDim.setDimPct(pct); }
-    void syncDimFill(boolean anim){ searchDim.syncDimFill(anim); }
+    void syncDimFill(){ searchDim.syncDimFill(); }
     void dimSlideBy(int dir){ searchDim.dimSlideBy(dir); }
     void hideSearch(boolean hide){ searchDim.hideSearch(hide); }
     void popDimBar(boolean on){ searchDim.popDimBar(on); }

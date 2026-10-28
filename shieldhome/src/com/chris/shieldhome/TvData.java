@@ -165,18 +165,41 @@ class TvData {
             pick.addAll(l.subList(0, shown[g]));
         }
         android.util.Log.i("ShieldHome", "playnext other=" + shown[0] + "/" + other.size() + " ytNew=" + shown[1] + "/" + ytNew.size() + " ytResume=" + shown[2] + "/" + ytResume.size() + " wnRows=" + rows.size() + " ytTypes=" + ytTypes + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType);
-        return mixOrder(pick, a.wnPickCache);
+        return mixOrder(pick);
     }
-    /** Random order, but keeps the previous order when the same items (by intent) are picked again, so tiles don't jump on reloads. */
-    static List<Object[]> mixOrder(List<Object[]> pick, List<Object[]> prev) {
-        Map<String, Integer> at = new HashMap<>();
-        if (prev != null) for (Object[] o : prev) at.put(uriOf(o[3]), at.size());
-        boolean same = prev != null && prev.size() == pick.size() && at.size() == pick.size();
-        for (Object[] o : pick) same &= at.containsKey(uriOf(o[3]));
-        if (same) Collections.sort(pick, (x, y) -> at.get(uriOf(x[3])) - at.get(uriOf(y[3])));
-        else Collections.shuffle(pick);
-        android.util.Log.i("ShieldHome", "playnext order=" + (same ? "kept" : "shuffled"));
-        return pick;
+    static final String PN_ORDER_PREF = "pn_order", PN_ID_SEP = "\n";
+    /** Stable Play Next order: survivors keep their saved order, gone items drop out, only new items land at random slots. Persisted so it survives activity recreation. */
+    List<Object[]> mixOrder(List<Object[]> pick) {
+        Map<String, Object[]> byId = new LinkedHashMap<>();
+        for (Object[] o : pick) { String id = stableId(o); for (int n = 2; byId.containsKey(id); n++) id = stableId(o) + "#" + n; byId.put(id, o); }
+        List<Object[]> out = new ArrayList<>(); List<String> ids = new ArrayList<>();
+        for (String id : a.prefs().getString(PN_ORDER_PREF, "").split(PN_ID_SEP)) {
+            Object[] o = byId.remove(id);
+            if (o != null) { out.add(o); ids.add(id); }
+        }
+        int kept = out.size();
+        Random r = new Random();
+        for (Map.Entry<String, Object[]> e : byId.entrySet()) {
+            int at = r.nextInt(out.size() + 1);
+            out.add(at, e.getValue()); ids.add(at, e.getKey());
+        }
+        a.prefs().edit().putString(PN_ORDER_PREF, String.join(PN_ID_SEP, ids)).apply();
+        android.util.Log.i("ShieldHome", "playnext order kept=" + kept + " new=" + byId.size());
+        return out;
+    }
+    /** Query params that carry playback state, not identity; dropped from the stable id. */
+    static final Set<String> VOLATILE_PARAMS = new HashSet<>(Arrays.asList("t", "time", "start", "position", "pos", "offset", "resume", "resume_position"));
+    /** Package + content uri. Opaque uris (vnd.youtube:ID) keep their scheme-specific part; hierarchical ones keep
+     *  authority, path and every query param except VOLATILE_PARAMS, sorted, so ids in any param stay distinct. */
+    static String stableId(Object[] o) {
+        Intent in = (Intent) o[3];
+        android.net.Uri d = in.getData();
+        if (d == null) return o[0] + "|" + in.getComponent();
+        if (d.isOpaque()) return o[0] + "|" + d.getScheme() + ":" + d.getSchemeSpecificPart();
+        StringBuilder id = new StringBuilder().append(o[0]).append('|').append(d.getScheme()).append("://").append(d.getAuthority()).append(d.getPath());
+        for (String k : new TreeSet<>(d.getQueryParameterNames()))
+            if (!VOLATILE_PARAMS.contains(k)) id.append(id.indexOf("?") < 0 ? '?' : '&').append(k).append('=').append(d.getQueryParameter(k));
+        return id.toString();
     }
     /** True (and marks seen) when pkg|title and intent uri are not in the featured card or already in Play Next. */
     static boolean fresh(String pkg, String title, String uri, Set<String> feat, Set<String> seen) {

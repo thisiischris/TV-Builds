@@ -19,6 +19,8 @@ import android.widget.TextView;
 import java.util.*;
 
 class AppGridController {
+    /** Long-press quick menu: container corner radius and row height (focused row highlight is a full pill, radius MENU_ROW_H/2). */
+    static final float MENU_R=18, MENU_ROW_H=36;
     final MainActivity a;
     AppGridController(MainActivity a) { this.a = a; }
 
@@ -58,7 +60,7 @@ class AppGridController {
         int r=0; View f=this.a.getCurrentFocus();
         if (f!=null && this.a.homeGrid!=null && f.getParent()==this.a.homeGrid) r=Math.max(0, (this.a.editMode?this.tileIx(f):this.a.homeGrid.indexOfChild(f))/6);
         final boolean open=this.a.drawerOpen;
-        float y = open ? -(this.a.p(this.a.APP_GRID_Y-17)+Math.max(0, r-4)*this.rowH()) : 0;
+        float y = open ? -(this.a.p(this.a.APP_GRID_Y-DRAWER_TOP_Y)+Math.max(0, r-4)*this.rowH()) : 0;
         this.fadeChrome(open);
         if (open){
             for (View v: new View[]{this.a.tabBar, this.a.cardWrap, this.a.homeGrid}) if (v!=null) v.bringToFront();
@@ -124,8 +126,10 @@ class AppGridController {
         return out;
     }
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] app: l){ if (app==null) continue; if (sb.length()>0) sb.append(','); sb.append(app[0]).append('/').append(app[1]); } this.a.prefs().edit().putString("order", sb.toString()).commit(); }
-    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=this.a.p(this.a.APP_W); gl.height=this.a.p(this.a.APP_H); gl.rightMargin = (i%6==5)?0:this.a.p(this.a.APP_HG); gl.bottomMargin = this.a.p(this.a.APP_VG); return gl; }
-    int rowH(){ return this.a.p(this.a.APP_H+this.a.APP_VG); }
+    GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=this.a.p(this.a.APP_W); gl.height=this.a.p(this.a.APP_H); gl.rightMargin = (i%6==5)?0:this.a.p(this.a.APP_HG); gl.bottomMargin = this.a.p(this.a.APP_ROW_GAP); return gl; }
+    /** v82: drawer-open top of row 0 (was 17); 40 balances top vs the space under the last visible row (row 4 ends at ~532.5 of 576). */
+    static final float DRAWER_TOP_Y=40f;
+    int rowH(){ return this.a.p(this.a.APP_H+this.a.APP_ROW_GAP); }
     void buildHomeGrid(){ buildHomeGrid(-1); }
     void buildHomeGrid(int focusIdx){
         if (this.a.editMode) return;
@@ -267,7 +271,7 @@ class AppGridController {
         if (this.a.drawerOpen){ if (this.a.gear!=null) this.a.gear.setFocusable(false); if (this.a.searchV!=null) this.a.searchV.setFocusable(false); if (this.a.speakV!=null){ this.a.speakV.setFocusable(false); this.a.typeV.setFocusable(false); } }
         resetAllLifts(true, keep);
         if (keep!=null){
-            if (this.a.focus!=null){ this.a.focus.savedSec=4+i/6; this.a.focus.savedIdx=i%6; }
+            if (this.a.focus!=null){ this.a.focus.savedSec=4+i/6; this.a.focus.savedIdx=i%6; this.a.focus.savedKey=(String)keep.getTag(); }
             keep.requestFocus();
         }
     }
@@ -342,7 +346,7 @@ class AppGridController {
         this.a.menuOwner=anchor;
         pressPop(anchor);
         LinearLayout p=new LinearLayout(this.a); p.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,28,28,32)); bg.setCornerRadius(this.a.p(14)); bg.setStroke(Math.max(1,this.a.p(1)), Color.argb(51,255,255,255));
+        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.argb(235,28,28,32)); bg.setCornerRadius(this.a.p(MENU_R)); bg.setStroke(Math.max(1,this.a.p(1)), Color.argb(51,255,255,255));
         p.setBackground(bg); p.setPadding(this.a.p(8),this.a.p(8),this.a.p(8),this.a.p(8)); p.setElevation(this.a.p(18));
         String[] labs={"Edit Home Screen","Force Stop","App Info","Uninstall"};
         boolean sys=systemApp(app[0]);
@@ -361,7 +365,7 @@ class AppGridController {
             LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(-2,-2); tp.leftMargin=this.a.p(10);
             row.addView(t, tp);
             row.setOnFocusChangeListener((v,f)->{
-                GradientDrawable pill=new GradientDrawable(); pill.setCornerRadius(this.a.p(8));
+                GradientDrawable pill=new GradientDrawable(); pill.setCornerRadius(this.a.p(MENU_ROW_H)/2f);
                 pill.setColor(f?Color.argb(240,255,255,255):Color.TRANSPARENT);
                 row.setBackground(pill);
                 int fg=off?Color.argb(80,255,255,255):(f?Color.rgb(22,22,30):(id==3?Color.rgb(224,112,112):Color.WHITE));
@@ -369,7 +373,7 @@ class AppGridController {
             });
             if (!off) row.setOnClickListener(v->menuAct(id, app, idx));
             row.setOnKeyListener((v,k,e)->{ if (k==KeyEvent.KEYCODE_BACK && e.getAction()==KeyEvent.ACTION_DOWN){ closeMenu(); return true; } return false; });
-            p.addView(row, new LinearLayout.LayoutParams(this.a.p(200), this.a.p(36)));
+            p.addView(row, new LinearLayout.LayoutParams(this.a.p(200), this.a.p(MENU_ROW_H)));
             if (!off){ row.setId(View.generateViewId()); rows.add(row); if (first==null) first=row; }
         }
         for (int i=0;i<rows.size();i++){
