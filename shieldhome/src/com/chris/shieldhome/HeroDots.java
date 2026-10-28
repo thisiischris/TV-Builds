@@ -15,7 +15,7 @@ class HeroDots extends View {
         static final float ACTIVE_W=22f; static final long MOVE_MS=400; static final int DOT_IDLE_A=89;
         static final long OUT_FADE_MS=450; // outgoing pill: solid fill crossfades white -> idle while it shrinks
         static final android.view.animation.Interpolator MOVE_EASE=new android.view.animation.PathInterpolator(0.2f,0f,0f,1f); // soft decelerate; shrink+grow share this curve and the one animator clock
-        final MainActivity activity; int n, cur, prev; float mix=1f, prevFill; long hopAt; android.animation.ValueAnimator an; // per-pill fill: prevFill = outgoing pill's own fill, frozen at the hop
+        final MainActivity activity; int n, cur, prev; float mix=1f; float[] outFill=new float[0]; long[] outAt=new long[0]; android.animation.ValueAnimator an; // per-pill fade: each outgoing pill's own fill + hop time, so quick steps never cut a fade short
         long progStart; float pausedAt=-1f; // pausedAt>=0: fill frozen at that fraction
         final Paint dotsPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         HeroDots(MainActivity activity){ super(activity); this.activity=activity; setAlpha(0f); setVisibility(GONE); setFocusable(false); }
@@ -28,7 +28,8 @@ class HeroDots extends View {
         long resumeProgress(){ float f=pausedAt>=0?pausedAt:progress(); progStart=android.os.SystemClock.uptimeMillis()-(long)(f*MainActivity.HERO_ROTATE_MS); pausedAt=-1f; invalidate(); return Math.max(0L,(long)((1f-f)*MainActivity.HERO_ROTATE_MS)); }
         void pauseProgress(){ if (pausedAt<0) pausedAt=progress(); invalidate(); }
         float progress(){ return pausedAt>=0?pausedAt:Math.min(1f,(android.os.SystemClock.uptimeMillis()-progStart)/(float)MainActivity.HERO_ROTATE_MS); }
-        float outFade(){ return hopAt==0?1f:MOVE_EASE.getInterpolation(Math.min(1f,(android.os.SystemClock.uptimeMillis()-hopAt)/(float)OUT_FADE_MS)); }
+        float outFade(int i){ return i>=outAt.length||outAt[i]==0?1f:MOVE_EASE.getInterpolation(Math.min(1f,(android.os.SystemClock.uptimeMillis()-outAt[i])/(float)OUT_FADE_MS)); }
+        boolean fading(){ for (int i=0;i<outAt.length;i++) if (outFade(i)<1f) return true; return false; }
         void stop(){ animate().cancel(); if (an!=null) an.cancel(); }
         @Override protected void onMeasure(int wms, int hms){
             int h=MeasureSpec.getMode(hms)==MeasureSpec.EXACTLY?MeasureSpec.getSize(hms):activity.p(PILL_H);
@@ -38,10 +39,10 @@ class HeroDots extends View {
             int nn2=Math.max(0,nn); i=nn2==0?0:Math.max(0, Math.min(i,nn2-1));
             if (nn2!=n) requestLayout();
             n=nn2;
+            if (outAt.length!=n){ outFill=new float[n]; outAt=new long[n]; }
             if (an!=null) an.cancel();
-            if (!anim || getAlpha()<0.05f || n<=1 || i==cur){ hopAt=0; prev=cur=i; mix=1f; invalidate(); return; }
-            prevFill=progress(); hopAt=android.os.SystemClock.uptimeMillis(); prev=cur; cur=i; mix=0f;
-            android.util.Log.i("ShieldHome","dots hop "+prev+"->"+cur+" outFill="+prevFill);
+            if (!anim || getAlpha()<0.05f || n<=1 || i==cur){ if (i!=cur || !anim) java.util.Arrays.fill(outAt,0L); prev=cur=i; mix=1f; invalidate(); return; }
+            if (cur<n){ outFill[cur]=progress(); outAt[cur]=android.os.SystemClock.uptimeMillis(); } outAt[i]=0; prev=cur; cur=i; mix=0f;
             an=android.animation.ValueAnimator.ofFloat(0,1); an.setDuration(MOVE_MS); an.setInterpolator(MOVE_EASE);
             an.addUpdateListener(a->{ mix=(Float)a.getAnimatedValue(); invalidate(); });
             an.start();
@@ -52,13 +53,13 @@ class HeroDots extends View {
             Paint pt=dotsPaint;
             pt.setColor(Color.argb(PILL_FILL_A,60,58,75));
             c.drawRoundRect(0,0,getWidth(),hh,rr,rr,pt);
-            final float of=outFade();
             for (int i=0;i<n;i++){
                 float w=dotW(i);
                 pt.setColor(Color.argb(DOT_IDLE_A,255,255,255));
                 c.drawRoundRect(x, cy-r, x+w, cy+r, r, r, pt);
-                if (i==prev && prev!=cur && of<1f){ // outgoing pill keeps its own fill while shrinking; colour crossfades white -> idle
-                    pt.setColor(Color.argb(Math.round(255+(DOT_IDLE_A-255)*of),255,255,255)); c.drawRoundRect(x, cy-r, x+d+(w-d)*prevFill, cy+r, r, r, pt);
+                float of=outFade(i);
+                if (i!=cur && of<1f){ // outgoing pill keeps its own fill while shrinking; colour crossfades white -> idle
+                    pt.setColor(Color.argb(Math.round(255+(DOT_IDLE_A-255)*of),255,255,255)); c.drawRoundRect(x, cy-r, x+d+(w-d)*outFill[i], cy+r, r, r, pt);
                 }
                 if (i==cur){ // progress fill: white from the left, at least a dot wide so it reads as the active dot
                     float fw=d+(w-d)*progress();
@@ -66,6 +67,6 @@ class HeroDots extends View {
                 }
                 x+=w+gap;
             }
-            if (getVisibility()==VISIBLE && ((pausedAt<0 && progress()<1f) || outFade()<1f)) postInvalidateOnAnimation();
+            if (getVisibility()==VISIBLE && ((pausedAt<0 && progress()<1f) || fading())) postInvalidateOnAnimation();
         }
     }
