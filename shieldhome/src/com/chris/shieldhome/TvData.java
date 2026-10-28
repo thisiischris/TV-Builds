@@ -110,6 +110,7 @@ class TvData {
     static final int WN_CONTINUE = 0, WN_NEXT = 1, WN_NEW = 2; // TvContract watch_next_type
     /** Play Next pick slots: {pkg, caption, thumb, intent, progress (-1 = none), isNew}. Progress alone can't tell NEW: NEXT-type rows at position 0 have -1 too. */
     static final int PICK_IS_NEW = 5;
+    static final int PICK_ENGAGEMENT = 6, PICK_PLAYBACK = 7;
 
     /** Play Next (video apps, ≤MAX_ITEMS), each group by engagement: other apps' resume/NEXT rows, then YouTube NEW, then YouTube resume. No recs. */
     List<Object[]> collectWatchNext() {
@@ -155,9 +156,15 @@ class TvData {
             if (type != WN_CONTINUE && type != WN_NEXT && !ytNewRow) { dropType++; continue; }
             if (type == WN_CONTINUE && pos <= 0) { dropZero++; continue; }
             if (!fresh(pkg, (String) r[5], (String) r[7], feat, seen)) continue;
-            Object[] p = Arrays.copyOf(o, PICK_IS_NEW + 1); p[PICK_IS_NEW] = ytNewRow;
+            Object[] p = Arrays.copyOf(o, PICK_PLAYBACK + 1); p[PICK_IS_NEW] = ytNewRow;
+            p[PICK_ENGAGEMENT] = r[1]; p[PICK_PLAYBACK] = r[2];
             (ytNewRow ? ytNew : YT.equals(pkg) ? ytResume : other).add(p);
         }
+        Collections.sort(ytResume, (x, y) -> {
+            long engagementX = (Long) x[PICK_ENGAGEMENT], engagementY = (Long) y[PICK_ENGAGEMENT];
+            if (engagementX != engagementY) return Long.compare(engagementY, engagementX);
+            return Long.compare((Long) y[PICK_PLAYBACK], (Long) x[PICK_PLAYBACK]);
+        });
         int[] shown = new int[3]; List<List<Object[]>> groups = Arrays.asList(other, ytNew, ytResume);
         for (int g = 0; g < groups.size(); g++) {
             List<Object[]> l = groups.get(g);
@@ -166,6 +173,22 @@ class TvData {
         }
         android.util.Log.i("ShieldHome", "playnext other=" + shown[0] + "/" + other.size() + " ytNew=" + shown[1] + "/" + ytNew.size() + " ytResume=" + shown[2] + "/" + ytResume.size() + " wnRows=" + rows.size() + " ytTypes=" + ytTypes + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType);
         return mixOrder(pick);
+    }
+    static final String PLUTO = "tv.pluto.android";
+    /** Pluto's latest unfinished watch-next row as a Play Next pick slot {pkg, caption, thumb, intent, progress}, or null if Pluto publishes none. */
+    Object[] plutoResume() {
+        try (Cursor c = a.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, null, null, null, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC")) {
+            int rows = 0;
+            while (c != null && c.moveToNext()) {
+                if (!PLUTO.equals(s(c, "package_name"))) continue; rows++;
+                int type = (int) l(c, "watch_next_type");
+                if ((type != WN_CONTINUE && type != WN_NEXT) || finished(l(c, "last_playback_position_millis"), l(c, "duration_millis"))) continue;
+                Object[] o = prog(c, true);
+                if (o != null && o[2] != null) { android.util.Log.i("ShieldHome", "pluto resume: watch-next row (" + rows + " pluto rows)"); return o; }
+            }
+            android.util.Log.i("ShieldHome", "pluto resume: none (" + rows + " pluto watch-next rows)");
+        } catch (Exception e) { android.util.Log.w("ShieldHome", "pluto resume " + e); }
+        return null;
     }
     static final String PN_ORDER_PREF = "pn_order", PN_ID_SEP = "\n";
     /** Stable Play Next order: survivors keep their saved order, gone items drop out, only new items land at random slots. Persisted so it survives activity recreation. */
