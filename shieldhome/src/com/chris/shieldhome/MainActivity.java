@@ -57,12 +57,16 @@ public class MainActivity extends Activity {
         hero = new HeroController(this);
         searchDim = new SearchDimController(this);
         grid = new AppGridController(this);
+        settings = new SettingsController(this);
+        wallpaper = new WallpaperController(this);
         layout = new HomeLayout(this);
         prefs().edit().remove("heromode").remove("featured").apply(); // v9: card mode removed
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         DisplayMetricsHolder();
         kickData(false);
         layout.build();
+        wallpaper.build();
+        settings.build();
         IntentFilter pf = new IntentFilter(); pf.addAction(Intent.ACTION_PACKAGE_REMOVED); pf.addAction(Intent.ACTION_PACKAGE_ADDED); pf.addAction(Intent.ACTION_PACKAGE_CHANGED); pf.addDataScheme("package");
         registerReceiver(pkgRx, pf);
     }
@@ -78,6 +82,8 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy(){
         dataGen++; heroLoadGen++;
         try { unregisterReceiver(pkgRx); } catch (Exception e){}
+        if (settings!=null) settings.stop();
+        if (wallpaper!=null) wallpaper.onDestroy();
         pool.shutdownNow();
         if (searchDim!=null) searchDim.stopDimCallbacks();
         if (heroDots!=null) heroDots.stop();
@@ -90,16 +96,18 @@ public class MainActivity extends Activity {
         if (appsCache==null){ if (dataFut==null) kickData(false); awaitData(); }
         bindFromCache();
         hero.resumeRotate();
+        wallpaper.onResume();
         if (!editMode) grid.resetAllLifts(false, null);
         kickData(true);
         tick(); showWeather(); weatherTick(); applyDim();
     }
-    @Override protected void onPause(){ if (editMode) grid.exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); hero.pauseRotate(); h.removeCallbacks(wxRun); }
+    @Override protected void onPause(){ if (editMode) grid.exitEdit(); super.onPause(); focus.save(); h.removeCallbacks(this::tick); hero.pauseRotate(); wallpaper.onPause(); h.removeCallbacks(wxRun); }
     boolean heroShown(){ return heroG!=null && heroG.getVisibility()==View.VISIBLE; }
     @Override protected void onNewIntent(Intent i){ super.onNewIntent(i); focus.restoreNow(); }
     boolean editLp=false;
     @Override public void onWindowFocusChanged(boolean has){ super.onWindowFocusChanged(has); if (!has && dimSlide) closeDimSlide(); }
     @Override public boolean dispatchKeyEvent(KeyEvent e){
+        if (settings.open) return settings.key(e);
         if (dimSlide) return grid.dimSlideKey(e);
         if (appMenu!=null) return grid.menuKey(e);
         // v17: in edit mode a long-press on a home row tile does nothing (no drag, no click on release)
@@ -314,6 +322,7 @@ public class MainActivity extends Activity {
 
     // ---------- v6: quick settings, featured toggle, dimmer, weather ----------
     PillView searchV, speakV, typeV; LinearLayout searchSplit; EditText searchField; TextView heroLabel;
+    SettingsController settings; WallpaperController wallpaper;
     PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false, heroCtaOn; View heroG, heroFocus, inAppDim; HeroDots heroDots;
     float dimFill;
     int dimPct(){ return searchDim.dimPct(); }

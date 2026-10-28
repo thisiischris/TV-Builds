@@ -19,10 +19,11 @@ class HeroController {
     HeroController(MainActivity a) { this.a=a; }
     final Runnable heroRotate = new Runnable(){ public void run(){ synchronized(a.heroLock){ if (a.heroItems.size()>1) a.heroIdx=(a.heroIdx+1)%a.heroItems.size(); else { scheduleRotate(); return; } } android.util.Log.i("ShieldHome","hero advance "+a.heroIdx); showHero(); scheduleRotate(); } };
     /** (Re)starts the auto-advance timer; the dots' progress fill runs on the same clock. */
-    void scheduleRotate(){ a.h.removeCallbacks(heroRotate); a.h.postDelayed(heroRotate, a.HERO_ROTATE_MS); if (a.heroDots!=null) a.heroDots.startProgress(); }
+    void scheduleRotate(){ a.h.removeCallbacks(heroRotate); if (a.settings!=null && !a.settings.heroOn()) return; a.h.postDelayed(heroRotate, a.HERO_ROTATE_MS); if (a.heroDots!=null) a.heroDots.startProgress(); }
     /** onResume: continue the fill and timer from where onPause froze them; always leaves exactly one pending heroRotate. */
     void resumeRotate(){
         a.h.removeCallbacks(heroRotate);
+        if (!a.settings.heroOn()) return;
         int n; synchronized(a.heroLock){ n=a.heroItems.size(); }
         if (n<2 || a.heroDots==null){ if (n>0) scheduleRotate(); return; }
         long left=a.heroDots.resumeProgress();

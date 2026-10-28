@@ -60,6 +60,11 @@ class PillView extends View {
                 pt.setStrokeWidth(activity.p(1.3f));
                 for (int i=0;i<8;i++){ double a=Math.toRadians(i*45); float s=sr+activity.p(1.5f), e=sr+activity.p(3.3f); c.drawLine(gx+(float)Math.cos(a)*s, cy+(float)Math.sin(a)*s, gx+(float)Math.cos(a)*e, cy+(float)Math.sin(a)*e, pt); }
                 if (activity.dimFill>0.01f){ c.save(); c.clipRect(gx+sr-2*sr*activity.dimFill, cy-sr-1, gx+sr+1, cy+sr+1); pt.setStyle(Paint.Style.FILL); c.drawCircle(gx, cy, sr-activity.p(0.3f), pt); pt.setStyle(Paint.Style.STROKE); c.restore(); } }
+            else if (icon==8){ // v83 settings: two slider tracks with offset knobs
+                float gx=w/2f, hw=activity.p(6.5f), dy=activity.p(3.2f), kr=activity.p(2.2f);
+                pt.setStrokeWidth(activity.p(1.3f));
+                c.drawLine(gx-hw, cy-dy, gx+hw, cy-dy, pt); c.drawLine(gx-hw, cy+dy, gx+hw, cy+dy, pt);
+                pt.setStyle(Paint.Style.FILL); c.drawCircle(gx+activity.p(2.5f), cy-dy, kr, pt); c.drawCircle(gx-activity.p(2.5f), cy+dy, kr, pt); pt.setStyle(Paint.Style.STROKE); }
             else if (icon==6){
                 if (asst==null) asst = getContext().getDrawable(R.drawable.assistant);
                 int ax=(int)(w/2f-activity.p(7.5f)); asst.setBounds(ax, (int)(cy-activity.p(7.5f)), ax+activity.p(15), (int)(cy+activity.p(7.5f))); asst.draw(c); }
