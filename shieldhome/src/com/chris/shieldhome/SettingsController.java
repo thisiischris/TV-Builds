@@ -37,7 +37,7 @@ class SettingsController {
         icon.setOnClickListener(v->openPanel());
         a.root.addView(icon, a.lp(a.p(ICON_D), a.p(ICON_D), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(ICON_Y), 0, 0));
         panel=new Panel(); panel.setVisibility(View.GONE);
-        heroRow=new ToggleRow("Featured card", PREF_HERO); wallRow=new ToggleRow("Wallpaper", PREF_WALL);
+        heroRow=new ToggleRow("Featured", PREF_HERO); wallRow=new ToggleRow("Wallpaper", PREF_WALL);
         int rw=a.p(PANEL_W-2*PANEL_PAD);
         panel.addView(heroRow, a.lp(rw, a.p(ROW_H), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(PANEL_PAD), 0, 0));
         panel.addView(wallRow, a.lp(rw, a.p(ROW_H), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(PANEL_PAD+ROW_H+ROW_GAP), 0, 0));
