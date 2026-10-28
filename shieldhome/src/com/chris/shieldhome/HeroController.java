@@ -11,6 +11,8 @@ import java.util.*;
 class HeroController {
     /** Alpha (0-255) the left scrim settles to past HERO_LEFT_FADE and holds to the artwork's right edge: a light overall dim (~18%). */
     static final int HERO_DIM_ALPHA=46;
+    /** Bottom fade: starts HERO_BOT_FADE of the art height above its bottom edge and eases (smoothstep, HERO_BOT_STOPS stops) to transparent at that edge. */
+    static final float HERO_BOT_FADE=0.55f; static final int HERO_BOT_STOPS=9;
     final MainActivity a;
     String featuredBoundSig="";
     boolean heroFront=true;
@@ -76,10 +78,10 @@ class HeroController {
         c.drawColor(Color.WHITE);
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.DITHER_FLAG); p.setDither(true);
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        float artW=Math.min(w,a.p(758)), artH=Math.min(h,a.p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*MainActivity.HERO_LEFT_FADE, botEnd=artB-artH*0.40f, botRange=h-botEnd;
+        float artW=Math.min(w,a.p(758)), artH=Math.min(h,a.p(360)), artL=Math.max(0,w-artW), artB=artH, leftEnd=artL+artW*MainActivity.HERO_LEFT_FADE;
         p.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
-        p.setShader(new LinearGradient(0,h,0,botEnd, new int[]{Color.TRANSPARENT,Color.TRANSPARENT,Color.WHITE}, new float[]{0, botRange<=0?0:(h-artB)/botRange, 1}, Shader.TileMode.CLAMP));
+        p.setShader(bottomFade(artB, artH));
         c.drawRect(0,0,w,h,p);
         p.setShader(new LinearGradient(0,0,0,h*0.064f, Color.argb(240,255,255,255), Color.WHITE, Shader.TileMode.CLAMP));
         c.drawRect(0,0,w,h,p);
@@ -87,6 +89,12 @@ class HeroController {
         p.setShader(new RadialGradient(artL, artB, rad, new int[]{Color.TRANSPARENT, Color.argb(50,255,255,255), Color.WHITE}, new float[]{0, 0.5f, 1}, Shader.TileMode.CLAMP));
         c.drawRect(artL, artB-rad, Math.min(w, artL+rad), artB, p);
         a.vigMask=bm; return bm;
+    }
+    /** White above the fade, eased to transparent at artB and below; used as a DST_IN shader. */
+    static Shader bottomFade(float artB, float artH){
+        int[] col=new int[HERO_BOT_STOPS]; float[] pos=new float[HERO_BOT_STOPS];
+        for (int i=0;i<HERO_BOT_STOPS;i++){ float t=i/(float)(HERO_BOT_STOPS-1); pos[i]=t; col[i]=Color.argb(Math.round(255*(1-t*t*(3-2*t))),255,255,255); }
+        return new LinearGradient(0,artB-artH*HERO_BOT_FADE,0,artB, col, pos, Shader.TileMode.CLAMP);
     }
     Bitmap maskHero(String key, Bitmap src, int tw, int th){
         if (tw<=0||th<=0||src==null) return src;
@@ -105,7 +113,11 @@ class HeroController {
         xp.setXfermode(null);
         int dim=(HERO_DIM_ALPHA<<24)|MainActivity.HERO_SCRIM_RGB;
         xp.setShader(new LinearGradient(0,0,tw,0, new int[]{0xE6000000|MainActivity.HERO_SCRIM_RGB,0xC2000000|MainActivity.HERO_SCRIM_RGB,dim,dim}, new float[]{0, artL/tw, leftEnd/tw, 1}, Shader.TileMode.CLAMP));
+        int layer=c.saveLayer(0,0,tw,th,null); // scrim fades out with the art's bottom edge instead of stopping at th
         c.drawRect(0,0,tw,th,xp);
+        xp.setShader(bottomFade(artH, artH)); xp.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+        c.drawRect(0,0,tw,th,xp);
+        c.restoreToCount(layer);
         a.heroMasked.put(key, out); return out;
     }
     void fitHeroMeta(){
