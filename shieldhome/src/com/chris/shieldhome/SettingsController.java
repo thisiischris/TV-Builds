@@ -34,6 +34,7 @@ class SettingsController {
         panel.addView(wallRow, a.lp(rw, a.p(ROW_H), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(PANEL_PAD+ROW_H+ROW_GAP), 0, 0));
         a.root.addView(panel, a.lp(a.p(PANEL_W), a.p(panelH()), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(ICON_Y), 0, 0));
         a.root.getViewTreeObserver().addOnGlobalFocusChangeListener(focusL);
+        if (heroOn() && wallOn()) a.prefs().edit().putBoolean(PREF_WALL, false).apply(); // load: keep hero_on, drop wallpaper
         applyHero();
     }
     float panelH(){ return 2*PANEL_PAD+2*ROW_H+ROW_GAP; }
@@ -101,9 +102,13 @@ class SettingsController {
         if (on) a.hero.scheduleRotate(); else a.hero.pauseRotate();
         syncIcon();
     }
+    /** Featured card and Wallpaper are exclusive: turning one on turns the other off; both off = plain background. */
     void toggle(String key){
-        a.prefs().edit().putBoolean(key, !a.prefs().getBoolean(key, PREF_HERO.equals(key))).apply();
-        if (PREF_HERO.equals(key)) applyHero(); else a.wallpaper.apply();
+        boolean on=!a.prefs().getBoolean(key, PREF_HERO.equals(key));
+        android.content.SharedPreferences.Editor e=a.prefs().edit().putBoolean(key, on);
+        if (on) e.putBoolean(PREF_HERO.equals(key)?PREF_WALL:PREF_HERO, false);
+        e.apply();
+        applyHero(); a.wallpaper.apply(); heroRow.sync(); wallRow.sync();
     }
 
     /** Morphing container: rounded rect interpolates from the icon bounds (t=0) to the panel bounds (t=1); overshoot gives the bounce. */
@@ -124,7 +129,7 @@ class SettingsController {
     class ToggleRow extends View {
         static final float SW_W=30f, SW_H=16f, LABEL=12f, PAD=14f;
         final String label, key; boolean on; final Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG);
-        ToggleRow(String label, String key){ super(a); this.label=label; this.key=key; setFocusable(true); setClickable(true); setOnClickListener(v->{ toggle(key); sync(); }); }
+        ToggleRow(String label, String key){ super(a); this.label=label; this.key=key; setFocusable(true); setClickable(true); setOnClickListener(v->toggle(key)); }
         void sync(){ on=a.prefs().getBoolean(key, PREF_HERO.equals(key)); invalidate(); }
         @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); invalidate(); }
         @Override protected void onDraw(Canvas c){
