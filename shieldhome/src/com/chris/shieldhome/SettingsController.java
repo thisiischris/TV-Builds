@@ -15,6 +15,8 @@ class SettingsController {
     static final float OPEN_OVERSHOOT=1.6f, ROWS_IN_AT=0.45f; // rows fade in over the last (1-ROWS_IN_AT) of the morph
     /** Extra view bounds left/right/below the panel so the spring overshoot (~9% of the morph at OPEN_OVERSHOOT 1.6) is not clipped. */
     static final float PANEL_BLEED=12f;
+    /** Menu icon hands off to the morph: fades out over the first ICON_FADE_T of the panel's t while growing by ICON_MORPH_SCALE; driven by t so it rides the spring both ways. */
+    static final float ICON_FADE_T=0.35f, ICON_MORPH_SCALE=0.6f;
     static final Interpolator OPEN_EASE=new OvershootInterpolator(OPEN_OVERSHOOT), CLOSE_EASE=new PathInterpolator(0.4f,0f,0.2f,1f);
     final MainActivity a;
     final ViewTreeObserver.OnGlobalFocusChangeListener focusL=(o,n)->syncIcon();
@@ -43,7 +45,7 @@ class SettingsController {
 
     /** Icon shows while Play Now / the icon has focus, or (featured card off) while focus is in the top bar so the menu stays reachable. */
     void syncIcon(){
-        if (icon==null) return;
+        if (icon==null || open || (morph!=null && morph.isRunning())) return; // the morph owns the icon while the panel is open/animating
         View f=a.getCurrentFocus();
         boolean show=open || f==icon || (heroOn() ? f==a.heroBtn : a.focus.secOf(f)==0);
         icon.setFocusable(show || !heroOn());
@@ -65,7 +67,7 @@ class SettingsController {
 
     void openPanel(){
         if (open) return;
-        open=true; heroRow.sync(); wallRow.sync();
+        open=true; heroRow.sync(); wallRow.sync(); icon.animate().cancel(); icon.setTranslationY(0);
         panel.setVisibility(View.VISIBLE); panel.bringToFront(); icon.bringToFront();
         runMorph(1f, OPEN_MS, OPEN_EASE, null);
         heroRow.requestFocus();
@@ -76,10 +78,14 @@ class SettingsController {
         focusIcon();
         runMorph(0f, CLOSE_MS, CLOSE_EASE, ()->panel.setVisibility(View.GONE));
     }
+    void iconMorph(float t){
+        float h=Math.max(0f, Math.min(1f, t/ICON_FADE_T));
+        icon.setAlpha(1f-h); icon.setScaleX(1f+ICON_MORPH_SCALE*h); icon.setScaleY(1f+ICON_MORPH_SCALE*h);
+    }
     void runMorph(float to, long ms, Interpolator ip, Runnable end){
         if (morph!=null) morph.cancel();
         morph=ValueAnimator.ofFloat(panel.t, to); morph.setDuration(ms); morph.setInterpolator(ip);
-        morph.addUpdateListener(v->panel.setT((Float)v.getAnimatedValue()));
+        morph.addUpdateListener(v->{ float t=(Float)v.getAnimatedValue(); panel.setT(t); iconMorph(t); });
         if (end!=null) morph.addListener(new android.animation.AnimatorListenerAdapter(){ boolean cancelled; @Override public void onAnimationCancel(android.animation.Animator x){ cancelled=true; } @Override public void onAnimationEnd(android.animation.Animator x){ if (!cancelled) end.run(); } });
         morph.start();
     }

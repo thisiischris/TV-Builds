@@ -20,8 +20,10 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     static final String PLUGIN_DESC="tv.projectivy.plugin.wallpaperprovider.api.IWallpaperProviderService";
     static final int TX_GET_WALLPAPERS=IBinder.FIRST_CALL_TRANSACTION, EVENT_TIME_ELAPSED=1, TYPE_VIDEO=4, MAX_ITEMS=500, MAX_REBINDS=1;
     static final long FADE_MS=800;
-    /** Bottom scrim over the video: clear above WALL_DIM_START (fraction of screen height), smoothstep over WALL_DIM_STOPS stops to WALL_DIM_ALPHA black at WALL_DIM_END, solid below. */
+    /** Bottom scrim over the video: WALL_TOP_ALPHA above WALL_DIM_START (fraction of screen height), smoothstep over WALL_DIM_STOPS stops to WALL_DIM_ALPHA black at WALL_DIM_END, solid below. */
     static final float WALL_DIM_START=0.45f, WALL_DIM_END=0.92f; static final int WALL_DIM_ALPHA=225, WALL_DIM_STOPS=24;
+    /** Light dim (~10% black) over the rest of the screen: the gradient starts from this alpha and CLAMP carries it to the top edge, so there is no band. */
+    static final int WALL_TOP_ALPHA=26;
     final MainActivity a;
     TextureView view; View scrim; Surface surface; MediaPlayer mp; final List<String> uris=new ArrayList<>(); int idx, fails, resumePos, rebinds; boolean bound, resumed;
     WallpaperController(MainActivity a){ this.a=a; }
@@ -102,7 +104,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     }
     static Shader scrimShader(float h){
         int[] col=new int[WALL_DIM_STOPS]; float[] pos=new float[WALL_DIM_STOPS];
-        for (int i=0;i<WALL_DIM_STOPS;i++){ float t=i/(float)(WALL_DIM_STOPS-1); pos[i]=t; col[i]=Color.argb(Math.round(WALL_DIM_ALPHA*t*t*(3-2*t)),0,0,0); }
+        for (int i=0;i<WALL_DIM_STOPS;i++){ float t=i/(float)(WALL_DIM_STOPS-1); pos[i]=t; col[i]=Color.argb(Math.round(WALL_TOP_ALPHA+(WALL_DIM_ALPHA-WALL_TOP_ALPHA)*t*t*(3-2*t)),0,0,0); }
         return new LinearGradient(0,h*WALL_DIM_START,0,h*WALL_DIM_END, col, pos, Shader.TileMode.CLAMP);
     }
     /** Advance on completion/error; async, and gives up after a full pass of failures (no recursion on bad URIs). */
