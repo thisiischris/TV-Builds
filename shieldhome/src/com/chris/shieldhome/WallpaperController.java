@@ -24,7 +24,13 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     static final float WALL_DIM_START=0.45f, WALL_DIM_END=0.92f; static final int WALL_DIM_ALPHA=225, WALL_DIM_STOPS=24;
     /** Light dim (~6% black) over the rest of the screen: the gradient starts from this alpha and CLAMP carries it to the top edge, so there is no band. */
     static final int WALL_TOP_ALPHA=15;
+    /** v84 lock button: Play Now's slot (same x/y/height as the featured card CTA), fade + slide/scale in, focus scale like the pills. */
+    static final float LOCK_D=34f, LOCK_X=35f, LOCK_Y=237f, LOCK_IN_DY=8f, LOCK_IN_SCALE=0.85f, LOCK_FOCUS_SCALE=1.1f;
+    static final long LOCK_IN_MS=360, LOCK_FOCUS_MS=200;
+    /** Locked = the current video loops; the locked URI is remembered so it comes back after a restart. */
+    static final String PREF_LOCK="wall_locked", PREF_LOCK_URI="wall_lock_uri";
     final MainActivity a;
+    LockButton lock;
     TextureView view; View scrim; Surface surface; MediaPlayer mp; final List<String> uris=new ArrayList<>(); int idx, fails, resumePos, rebinds; boolean bound, visible, prepared;
     WallpaperController(MainActivity a){ this.a=a; }
 
@@ -39,10 +45,39 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         };
         scrim.setFocusable(false); scrim.setAlpha(0f);
         a.root.addView(scrim, 1, new android.widget.FrameLayout.LayoutParams(-1,-1));
+        lock=new LockButton(a); lock.setVisibility(View.GONE); lock.setFocusable(false); lock.setLocked(locked(), false);
+        lock.setOnClickListener(v->toggleLock());
+        lock.setOnFocusChangeListener((v,f)->{ float s=f?LOCK_FOCUS_SCALE:1f; v.animate().scaleX(s).scaleY(s).setDuration(LOCK_FOCUS_MS).setInterpolator(a.focusInterpolator).start(); v.invalidate(); });
+        a.root.addView(lock, 2, a.lp(a.p(LOCK_D), a.p(LOCK_D), Gravity.TOP|Gravity.START, a.p(LOCK_X), a.p(LOCK_Y), 0, 0));
+    }
+    boolean locked(){ return a.prefs().getBoolean(PREF_LOCK, false); }
+    boolean lockShown(){ return lock!=null && lock.getVisibility()==View.VISIBLE; }
+    /** Lock button exists only while the wallpaper is on (featured card off); fades/slides in when it appears. */
+    void syncLock(boolean on){
+        if (on==lockShown()) return;
+        lock.animate().cancel(); lock.setFocusable(on);
+        if (!on){ if (lock.isFocused()) a.focus.tabV().requestFocus(); lock.setVisibility(View.GONE); return; }
+        lock.setAlpha(0f); lock.setTranslationY(a.p(LOCK_IN_DY)); lock.setScaleX(LOCK_IN_SCALE); lock.setScaleY(LOCK_IN_SCALE); lock.setVisibility(View.VISIBLE);
+        lock.animate().alpha(1f).translationY(0).scaleX(1f).scaleY(1f).setDuration(LOCK_IN_MS).setInterpolator(HeroController.DOTS_EASE).start();
+    }
+    void toggleLock(){
+        boolean on=!locked();
+        android.content.SharedPreferences.Editor e=a.prefs().edit().putBoolean(PREF_LOCK, on);
+        if (on && !uris.isEmpty()) e.putString(PREF_LOCK_URI, uris.get(idx%uris.size()));
+        e.apply();
+        if (mp!=null) mp.setLooping(on);
+        lock.setLocked(on, true);
+    }
+    /** Left/Right on the lock: previous/next wallpaper, also while locked (the new one becomes the looped one). */
+    void step(int dir){
+        if (uris.isEmpty()) return;
+        idx=((idx+dir)%uris.size()+uris.size())%uris.size(); fails=0; resumePos=0;
+        release(); play();
     }
 
     /** Pref changed or home became visible: show + play when on, stop + release when off. */
     void apply(){
+        syncLock(a.settings.wallOn());
         boolean on=a.settings.wallOn() && visible;
         if (!on){ stop(); return; }
         fails=0;
@@ -56,7 +91,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
 
     final ServiceConnection conn=new ServiceConnection(){
         @Override public void onServiceConnected(ComponentName n, IBinder b){
-            try { a.pool.execute(()->{ List<String> got=query(b); a.h.post(()->{ unbind(); rebinds=0; uris.clear(); uris.addAll(got); android.util.Log.i("ShieldHome","wallpaper aerial items="+got.size()); if (visible && a.settings.wallOn()) play(); }); }); } catch (java.util.concurrent.RejectedExecutionException x){ unbind(); }
+            try { a.pool.execute(()->{ List<String> got=query(b); a.h.post(()->{ unbind(); rebinds=0; uris.clear(); uris.addAll(got); int li=uris.indexOf(a.prefs().getString(PREF_LOCK_URI, null)); if (locked() && li>=0) idx=li; android.util.Log.i("ShieldHome","wallpaper aerial items="+got.size()); if (visible && a.settings.wallOn()) play(); }); }); } catch (java.util.concurrent.RejectedExecutionException x){ unbind(); }
         }
         /** Provider process died; the binding stays registered and reconnects, so keep `bound` until unbind() runs. */
         @Override public void onServiceDisconnected(ComponentName n){}
@@ -97,8 +132,8 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         if (surface==null || uris.isEmpty()) return;
         if (mp!=null){ if (prepared && !mp.isPlaying()) mp.start(); return; } // still preparing: onPrepared starts it
         mp=new MediaPlayer();
-        mp.setSurface(surface); mp.setVolume(0f,0f);
-        mp.setOnPreparedListener(p->{ prepared=true; fails=0; crop(p.getVideoWidth(), p.getVideoHeight()); if (resumePos>0){ p.seekTo(resumePos); resumePos=0; } if (visible) p.start(); view.animate().alpha(1f).setDuration(FADE_MS).start(); scrim.animate().alpha(1f).setDuration(FADE_MS).start(); });
+        mp.setSurface(surface); mp.setVolume(0f,0f); mp.setLooping(locked());
+        mp.setOnPreparedListener(p->{ prepared=true; fails=0; if (locked()) a.prefs().edit().putString(PREF_LOCK_URI, uris.get(idx%uris.size())).apply(); crop(p.getVideoWidth(), p.getVideoHeight()); if (resumePos>0){ p.seekTo(resumePos); resumePos=0; } if (visible) p.start(); view.animate().alpha(1f).setDuration(FADE_MS).start(); scrim.animate().alpha(1f).setDuration(FADE_MS).start(); });
         mp.setOnCompletionListener(p->{ fails=0; next(); });
         mp.setOnErrorListener((p,w,x)->{ android.util.Log.i("ShieldHome","wallpaper error "+w+"/"+x); next(); return true; });
         try { mp.setDataSource(a, android.net.Uri.parse(uris.get(idx%uris.size()))); mp.prepareAsync(); } catch (Exception e){ next(); }

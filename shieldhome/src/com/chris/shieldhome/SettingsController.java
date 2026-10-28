@@ -48,11 +48,11 @@ class SettingsController {
     }
     float panelH(){ return 2*PANEL_PAD+2*ROW_H+ROW_GAP; }
 
-    /** Icon shows while Play Now (featured card on), the icon, or anything in the top bar (dim pill, Search and its halves) has focus. */
+    /** Icon shows while Play Now (featured card on), the wallpaper lock, the icon, or anything in the top bar (dim pill, Search and its halves) has focus. */
     void syncIcon(){
         if (icon==null || open || (morph!=null && morph.isRunning())) return; // the morph owns the icon while the panel is open/animating
         View f=a.getCurrentFocus();
-        boolean show=f==icon || (heroOn() && f==a.heroBtn) || (f!=null && a.focus.secOf(f)==0);
+        boolean show=f==icon || (heroOn() && f==a.heroBtn) || f==a.wallpaper.lock || (f!=null && a.focus.secOf(f)==0);
         icon.setFocusable(show || !heroOn());
         if (show==iconShown) return;
         iconShown=show;
