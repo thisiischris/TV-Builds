@@ -288,7 +288,7 @@ class FocusController {
         for (int s2 = sec + (up ? -1 : 1); s2 >= 0 && s2 < nSecs(); s2 += up ? -1 : 1) {
             List<View> it = secItems(s2);
             if (it.isEmpty()) continue;
-            if (s2 == 0) return (sec == 1) ? a.gear : (!a.settings.heroOn() && !a.searchOpen && !a.searchTyping && a.settings.icon != null) ? a.settings.icon : topTarget(); // featured card off: Up from content lands on the settings menu
+            if (s2 == 0) return (a.searchOpen || a.searchTyping) ? topTarget() : a.gear; // Up into the top bar lands on the dim pill first (search keeps focus while it is open)
             if (s2 == 2) return tabV();
             int ti = s2 == 3 ? lastIdx[3] : (s2 == 4 && sec == 3) ? 0 : (multi ? ix : (s2 < lastIdx.length ? lastIdx[s2] : 0));
             View dest = it.get(Math.max(0, Math.min(ti, it.size() - 1)));

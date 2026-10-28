@@ -62,6 +62,7 @@ class SettingsController {
     /** D-pad from the icon while the featured card is on (it is not part of a FocusController section then). */
     boolean iconKey(int k){
         if (k==KeyEvent.KEYCODE_DPAD_DOWN && a.heroShown() && a.heroBtn!=null){ a.heroBtn.setFocusable(true); a.heroBtn.requestFocus(); }
+        else if (k==KeyEvent.KEYCODE_DPAD_UP && a.gear!=null) a.gear.requestFocus(); // Play Now -> menu -> dim pill
         return true;
     }
 
