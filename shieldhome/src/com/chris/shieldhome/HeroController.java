@@ -9,6 +9,8 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 class HeroController {
+    /** Light uniform dim on the hero artwork only (0-255 black over the image pixels; text, buttons, dots and fades are separate views). */
+    static final int HERO_DIM_ALPHA=46; // ~18%
     final MainActivity a;
     String featuredBoundSig="";
     boolean heroFront=true;
