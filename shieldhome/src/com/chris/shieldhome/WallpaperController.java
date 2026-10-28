@@ -25,7 +25,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     /** Light dim (~10% black) over the rest of the screen: the gradient starts from this alpha and CLAMP carries it to the top edge, so there is no band. */
     static final int WALL_TOP_ALPHA=26;
     final MainActivity a;
-    TextureView view; View scrim; Surface surface; MediaPlayer mp; final List<String> uris=new ArrayList<>(); int idx, fails, resumePos, rebinds; boolean bound, resumed;
+    TextureView view; View scrim; Surface surface; MediaPlayer mp; final List<String> uris=new ArrayList<>(); int idx, fails, resumePos, rebinds; boolean bound, visible, prepared;
     WallpaperController(MainActivity a){ this.a=a; }
 
     void build(){
@@ -41,25 +41,26 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         a.root.addView(scrim, 1, new android.widget.FrameLayout.LayoutParams(-1,-1));
     }
 
-    /** Pref changed or resumed: show + play when on, stop + release when off. */
+    /** Pref changed or home became visible: show + play when on, stop + release when off. */
     void apply(){
-        boolean on=a.settings.wallOn() && resumed;
+        boolean on=a.settings.wallOn() && visible;
         if (!on){ stop(); return; }
         fails=0;
         if (uris.isEmpty()) fetch(); else play();
     }
-    void onResume(){ resumed=true; apply(); }
-    /** Off-home: free the hardware decoder entirely (remember where we were); apply() on resume rebuilds the player and fades back in. */
-    void onPause(){ resumed=false; if (mp!=null){ try { resumePos=mp.getCurrentPosition(); } catch (Exception e){ resumePos=0; } } stop(); }
-    void onDestroy(){ resumed=false; stop(); unbind(); }
+    void onResume(){ visible=true; apply(); }
+    /** Another app in front (onStop, not onPause, so a Home press on home never touches playback): free the hardware decoder entirely
+     *  (remember where we were); apply() on resume rebuilds the player and fades back in. */
+    void onStop(){ visible=false; android.util.Log.i("ShieldHome","wallpaper release (stopped)"); if (mp!=null){ try { resumePos=mp.getCurrentPosition(); } catch (Exception e){ resumePos=0; } } stop(); }
+    void onDestroy(){ visible=false; stop(); unbind(); }
 
     final ServiceConnection conn=new ServiceConnection(){
         @Override public void onServiceConnected(ComponentName n, IBinder b){
-            try { a.pool.execute(()->{ List<String> got=query(b); a.h.post(()->{ unbind(); rebinds=0; uris.clear(); uris.addAll(got); android.util.Log.i("ShieldHome","wallpaper aerial items="+got.size()); if (resumed && a.settings.wallOn()) play(); }); }); } catch (java.util.concurrent.RejectedExecutionException x){ unbind(); }
+            try { a.pool.execute(()->{ List<String> got=query(b); a.h.post(()->{ unbind(); rebinds=0; uris.clear(); uris.addAll(got); android.util.Log.i("ShieldHome","wallpaper aerial items="+got.size()); if (visible && a.settings.wallOn()) play(); }); }); } catch (java.util.concurrent.RejectedExecutionException x){ unbind(); }
         }
         /** Provider process died; the binding stays registered and reconnects, so keep `bound` until unbind() runs. */
         @Override public void onServiceDisconnected(ComponentName n){}
-        @Override public void onBindingDied(ComponentName n){ unbind(); if (rebinds++<MAX_REBINDS && uris.isEmpty() && resumed && a.settings.wallOn()) fetch(); }
+        @Override public void onBindingDied(ComponentName n){ unbind(); if (rebinds++<MAX_REBINDS && uris.isEmpty() && visible && a.settings.wallOn()) fetch(); }
         @Override public void onNullBinding(ComponentName n){ unbind(); android.util.Log.i("ShieldHome","wallpaper: Aerial Views provider returned no binder"); }
     };
     void fetch(){
@@ -94,10 +95,10 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
 
     void play(){
         if (surface==null || uris.isEmpty()) return;
-        if (mp!=null){ if (!mp.isPlaying()) mp.start(); return; }
-        mp=new MediaPlayer();
+        if (mp!=null){ if (prepared && !mp.isPlaying()) mp.start(); return; } // still preparing: onPrepared starts it
+        mp=new MediaPlayer(); android.util.Log.i("ShieldHome","wallpaper player create");
         mp.setSurface(surface); mp.setVolume(0f,0f);
-        mp.setOnPreparedListener(p->{ fails=0; crop(p.getVideoWidth(), p.getVideoHeight()); if (resumePos>0){ p.seekTo(resumePos); resumePos=0; } if (resumed) p.start(); view.animate().alpha(1f).setDuration(FADE_MS).start(); scrim.animate().alpha(1f).setDuration(FADE_MS).start(); });
+        mp.setOnPreparedListener(p->{ prepared=true; fails=0; crop(p.getVideoWidth(), p.getVideoHeight()); if (resumePos>0){ p.seekTo(resumePos); resumePos=0; } if (visible) p.start(); view.animate().alpha(1f).setDuration(FADE_MS).start(); scrim.animate().alpha(1f).setDuration(FADE_MS).start(); });
         mp.setOnCompletionListener(p->{ fails=0; next(); });
         mp.setOnErrorListener((p,w,x)->{ android.util.Log.i("ShieldHome","wallpaper error "+w+"/"+x); next(); return true; });
         try { mp.setDataSource(a, android.net.Uri.parse(uris.get(idx%uris.size()))); mp.prepareAsync(); } catch (Exception e){ next(); }
@@ -108,8 +109,8 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         return new LinearGradient(0,h*WALL_DIM_START,0,h*WALL_DIM_END, col, pos, Shader.TileMode.CLAMP);
     }
     /** Advance on completion/error; async, and gives up after a full pass of failures (no recursion on bad URIs). */
-    void next(){ release(); resumePos=0; idx=(idx+1)%Math.max(1,uris.size()); if (++fails>uris.size()) return; a.h.post(()->{ if (resumed && a.settings.wallOn()) play(); }); }
-    void release(){ if (mp!=null){ try { mp.reset(); mp.release(); } catch (Exception e){} mp=null; } }
+    void next(){ release(); resumePos=0; idx=(idx+1)%Math.max(1,uris.size()); if (++fails>uris.size()) return; a.h.post(()->{ if (visible && a.settings.wallOn()) play(); }); }
+    void release(){ prepared=false; if (mp!=null){ try { mp.reset(); mp.release(); } catch (Exception e){} mp=null; } }
     void stop(){ view.animate().cancel(); view.setAlpha(0f); scrim.animate().cancel(); scrim.setAlpha(0f); release(); }
 
     /** Centre-crop the video to fill the view. */
@@ -118,7 +119,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         float s=Math.max(w/vw, h/vh); Matrix m=new Matrix(); m.setScale(vw*s/w, vh*s/h, w/2f, h/2f); view.setTransform(m);
     }
 
-    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h){ surface=new Surface(st); if (resumed && a.settings.wallOn()) play(); }
+    @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h){ surface=new Surface(st); if (visible && a.settings.wallOn()) play(); }
     @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h){ if (mp!=null) crop(mp.getVideoWidth(), mp.getVideoHeight()); }
     @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture st){ release(); if (surface!=null) surface.release(); surface=null; return true; }
     @Override public void onSurfaceTextureUpdated(SurfaceTexture st){}
