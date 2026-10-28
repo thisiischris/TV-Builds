@@ -24,9 +24,10 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     static final float WALL_DIM_START=0.45f, WALL_DIM_END=0.92f; static final int WALL_DIM_ALPHA=225, WALL_DIM_STOPS=24;
     /** Light dim (~6% black) over the rest of the screen: the gradient starts from this alpha and CLAMP carries it to the top edge, so there is no band. */
     static final int WALL_TOP_ALPHA=15;
-    /** v84 lock button: Play Now's slot (same x/y/height as the featured card CTA), fade + slide/scale in, focus scale like the pills. */
-    static final float LOCK_D=34f, LOCK_X=35f, LOCK_Y=237f, LOCK_IN_DY=8f, LOCK_IN_SCALE=0.85f, LOCK_FOCUS_SCALE=1.1f;
-    static final long LOCK_IN_MS=360, LOCK_FOCUS_MS=200;
+    /** v84 lock button: Play Now's slot (same x/y/height as the featured card CTA). Invisible (alpha 0, still focusable) unless focused;
+     *  fades in with a slide/scale from LOCK_IN_DY/LOCK_IN_SCALE when focus arrives, fades back out when it leaves. */
+    static final float LOCK_D=34f, LOCK_X=35f, LOCK_Y=237f, LOCK_IN_DY=8f, LOCK_IN_SCALE=0.85f;
+    static final long LOCK_IN_MS=360, LOCK_OUT_MS=220;
     /** Locked = the current video loops; the locked URI is remembered so it comes back after a restart. */
     static final String PREF_LOCK="wall_locked", PREF_LOCK_URI="wall_lock_uri";
     final MainActivity a;
@@ -47,18 +48,24 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         a.root.addView(scrim, 1, new android.widget.FrameLayout.LayoutParams(-1,-1));
         lock=new LockButton(a); lock.setVisibility(View.GONE); lock.setFocusable(false); lock.setLocked(locked(), false);
         lock.setOnClickListener(v->toggleLock());
-        lock.setOnFocusChangeListener((v,f)->{ float s=f?LOCK_FOCUS_SCALE:1f; v.animate().scaleX(s).scaleY(s).setDuration(LOCK_FOCUS_MS).setInterpolator(a.focusInterpolator).start(); v.invalidate(); });
+        lock.setOnFocusChangeListener((v,f)->focusLock(f));
         a.root.addView(lock, 2, a.lp(a.p(LOCK_D), a.p(LOCK_D), Gravity.TOP|Gravity.START, a.p(LOCK_X), a.p(LOCK_Y), 0, 0));
     }
     boolean locked(){ return a.prefs().getBoolean(PREF_LOCK, false); }
     boolean lockShown(){ return lock!=null && lock.getVisibility()==View.VISIBLE; }
-    /** Lock button exists only while the wallpaper is on (featured card off); fades/slides in when it appears. */
+    /** Lock button exists (focusable, transparent until focused) only while the wallpaper is on (featured card off). */
     void syncLock(boolean on){
         if (on==lockShown()) return;
         lock.animate().cancel(); lock.setFocusable(on);
-        if (!on){ if (lock.isFocused()) a.focus.tabV().requestFocus(); lock.setVisibility(View.GONE); return; }
-        lock.setAlpha(0f); lock.setTranslationY(a.p(LOCK_IN_DY)); lock.setScaleX(LOCK_IN_SCALE); lock.setScaleY(LOCK_IN_SCALE); lock.setVisibility(View.VISIBLE);
-        lock.animate().alpha(1f).translationY(0).scaleX(1f).scaleY(1f).setDuration(LOCK_IN_MS).setInterpolator(HeroController.DOTS_EASE).start();
+        if (!on && lock.isFocused()) a.focus.tabV().requestFocus();
+        lock.setAlpha(0f); lock.setVisibility(on?View.VISIBLE:View.GONE);
+    }
+    void focusLock(boolean f){
+        lock.animate().cancel();
+        if (f){ lock.setTranslationY(a.p(LOCK_IN_DY)); lock.setScaleX(LOCK_IN_SCALE); lock.setScaleY(LOCK_IN_SCALE);
+            lock.animate().alpha(1f).translationY(0).scaleX(1f).scaleY(1f).setDuration(LOCK_IN_MS).setInterpolator(HeroController.DOTS_EASE).start(); }
+        else lock.animate().alpha(0f).translationY(a.p(LOCK_IN_DY)).scaleX(LOCK_IN_SCALE).scaleY(LOCK_IN_SCALE).setDuration(LOCK_OUT_MS).setInterpolator(HeroController.DOTS_EASE).start();
+        lock.invalidate();
     }
     void toggleLock(){
         boolean on=!locked();
