@@ -11,7 +11,7 @@ class LockButton extends View {
     static final float BODY_W=12f, BODY_H=9f, BODY_R=2f, SHACKLE_W=7.5f, SHACKLE_H=6f, SHACKLE_LIFT=3.2f, STROKE=1.4f, ICON_DY=1.5f;
     static final float CHEVRON_W=4f, CHEVRON_H=8f; // at lock size; drawn scaled to the arrow circle
     static final int GLYPH_LOCK=0, GLYPH_PREV=-1, GLYPH_NEXT=1;
-    static final long MORPH_MS=420; static final OvershootInterpolator MORPH_EASE=new OvershootInterpolator(3f);
+    static final long MORPH_MS=420; static final float MORPH_OVERSHOOT=3f; static final OvershootInterpolator MORPH_EASE=new OvershootInterpolator(MORPH_OVERSHOOT);
     static final int FILL=Color.argb(140,60,58,75), FILL_FOCUS=Color.argb(185,102,100,119), EDGE=Color.argb(40,255,255,255), FG=Color.rgb(232,232,240), FILL_PRESS=Color.argb(215,150,148,170);
     final MainActivity a; final Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG); final Path shackle=new Path(); final RectF rf=new RectF(); final int glyph; boolean flash;
     /** 0 = open (shackle raised), 1 = closed; overshoots past the ends during the morph. */

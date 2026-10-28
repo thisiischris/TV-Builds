@@ -35,7 +35,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     /** Locked = the current video loops; the locked URI is remembered so it comes back after a restart. */
     static final String PREF_LOCK="wall_locked", PREF_LOCK_URI="wall_lock_uri";
     final MainActivity a;
-    LockButton lock, prev, nextBtn;
+    LockButton lock, prev, nextBtn; LockButton[] row;
     TextureView view; View scrim; Surface surface; MediaPlayer mp; final List<String> uris=new ArrayList<>(); int idx, fails, resumePos, rebinds; boolean bound, visible, prepared;
     WallpaperController(MainActivity a){ this.a=a; }
 
@@ -54,7 +54,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         lock=new LockButton(a, LockButton.GLYPH_LOCK); lock.setVisibility(View.GONE); lock.setFocusable(false); lock.setLocked(locked(), false);
         lock.setOnClickListener(v->toggleLock());
         lock.setOnFocusChangeListener((v,f)->focusLock(f));
-        LockButton[] row={prev, lock, nextBtn};
+        row=new LockButton[]{prev, lock, nextBtn}; // [prev][lock][next], shared by layout, syncLock and focusLock
         float x=LOCK_X;
         for (int i=0;i<row.length;i++){
             float d=row[i]==lock?LOCK_D:ARROW_D;
@@ -70,11 +70,11 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         if (on==lockShown()) return;
         lock.animate().cancel(); lock.setFocusable(on);
         if (!on && lock.isFocused()) a.focus.tabV().requestFocus();
-        for (View v: new View[]{prev, lock, nextBtn}){ v.animate().cancel(); v.setAlpha(0f); v.setVisibility(on?View.VISIBLE:View.GONE); }
+        for (LockButton v: row){ v.animate().cancel(); v.setAlpha(0f); v.setVisibility(on?View.VISIBLE:View.GONE); }
     }
     /** The lock and its arrows fade/slide in together when the lock gets focus and out when it loses it. */
     void focusLock(boolean f){
-        for (LockButton v: new LockButton[]{prev, lock, nextBtn}){
+        for (LockButton v: row){
             v.animate().cancel(); v.setFlash(false); v.setTranslationX(0);
             if (f){ v.setTranslationY(a.p(LOCK_IN_DY)); v.setScaleX(LOCK_IN_SCALE); v.setScaleY(LOCK_IN_SCALE);
                 v.animate().alpha(1f).translationY(0).scaleX(1f).scaleY(1f).setDuration(LOCK_IN_MS).setInterpolator(HeroController.DOTS_EASE).start(); }

@@ -64,10 +64,9 @@ class SettingsController {
     void stop(){ a.h.removeCallbacks(syncR); if (morph!=null) morph.cancel(); if (icon!=null) icon.animate().cancel(); if (a.root!=null) a.root.getViewTreeObserver().removeOnGlobalFocusChangeListener(focusL); }
     void focusIcon(){ icon.setVisibility(View.VISIBLE); icon.setFocusable(true); icon.requestFocus(); }
 
-    /** D-pad from the icon while the featured card is on (it is not part of a FocusController section then). */
-    boolean iconKey(int k){
-        if (k==KeyEvent.KEYCODE_DPAD_DOWN && a.heroShown() && a.heroBtn!=null){ a.heroBtn.setFocusable(true); a.heroBtn.requestFocus(); }
-        else if (k==KeyEvent.KEYCODE_DPAD_UP && a.gear!=null) a.gear.requestFocus(); // Play Now -> menu -> dim pill
+    /** Up from the menu icon (top-bar row end) goes to the dim pill; other keys use the normal top-bar navigation. */
+    boolean iconKey(){
+        if (a.gear!=null) a.gear.requestFocus();
         return true;
     }
 
