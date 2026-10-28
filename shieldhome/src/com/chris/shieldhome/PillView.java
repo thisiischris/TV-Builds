@@ -7,10 +7,17 @@ import android.view.*;
 import android.widget.*;
 
 class PillView extends View {
-        // Search pill: Assistant icon at the left inner padding (where the magnifier began), label SEARCH_GAP after it.
-        static final float SEARCH_PAD=14, SEARCH_ASST=15, SEARCH_GAP=4;
+        // Search pill: Assistant icon at the left inner padding (where the magnifier began), label SEARCH_GAP after it, same padding after the label.
+        static final float SEARCH_PAD=14, SEARCH_ASST=15, SEARCH_GAP=4, LABEL_SIZE=12;
         final MainActivity activity; String label; int icon; boolean on; Drawable asst; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
         PillView(MainActivity activity, Context c, String l, int ic, boolean o){ super(c); this.activity=activity; label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
+        /** The search pill wraps its content: padding, Assistant icon, gap, measured label, equal padding. */
+        @Override protected void onMeasure(int ws, int hs){
+            if (icon!=3 || getLayoutParams()==null || getLayoutParams().width!=ViewGroup.LayoutParams.WRAP_CONTENT){ super.onMeasure(ws, hs); return; }
+            labelPaint(); int w=Math.round(activity.p(SEARCH_PAD+SEARCH_ASST+SEARCH_GAP)+pt.measureText(label)+activity.p(SEARCH_PAD));
+            setMeasuredDimension(w, getDefaultSize(getSuggestedMinimumHeight(), hs));
+        }
+        void labelPaint(){ pt.setTextSize(activity.p(this==activity.heroBtn?14:icon==2?12.5f:LABEL_SIZE)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL)); }
         @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==activity.heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(activity.focusInterpolator).start(); setElevation(f?activity.p(4):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
             float w=getWidth(), hh=getHeight(), r=this==activity.heroBtn?activity.p(14):hh/2;
@@ -64,7 +71,7 @@ class PillView extends View {
                 c.drawRoundRect(kl+gapx, by-sh/2, kr-gapx, by+sh/2, activity.p(0.6f), activity.p(0.6f), pt);
             }
             else if (icon!=4) { pt.setStyle(Paint.Style.FILL); Path tr=new Path(); tr.moveTo(cx-activity.p(3),cy-activity.p(5)); tr.lineTo(cx+activity.p(5),cy); tr.lineTo(cx-activity.p(3),cy+activity.p(5)); tr.close(); c.drawPath(tr,pt); }
-            pt.setStyle(Paint.Style.FILL); pt.setTextSize(activity.p(this==activity.heroBtn?14:icon==2?12.5f:12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+            pt.setStyle(Paint.Style.FILL); labelPaint();
             Paint.FontMetrics fm = pt.getFontMetrics();
             if (this==activity.heroBtn && ("Play Now".equals(label) || "More Info".equals(label))){
                 float tw=pt.measureText(label), cap=-fm.ascent, th=cap, twt=cap*0.78f, gap=activity.p(10), x0=(w-twt-gap-tw)/2;

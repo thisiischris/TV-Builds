@@ -31,7 +31,7 @@ class HomeLayout {
         place(a.gear, 35, 17, 28, 28);
         PillView search = a.searchV = new PillView(a, a, "Search", 3, false);
         search.setOnFocusChangeListener((v,f)->{ if (f && !a.dimSlide) a.expandSearch(); });
-        place(search, 71, 17, 104, 28);
+        place(search, 71, 17, -2, 28); // width wraps the Assistant icon + label (PillView.onMeasure)
         a.searchSplit = new LinearLayout(a); a.searchSplit.setOrientation(LinearLayout.HORIZONTAL); a.searchSplit.setGravity(Gravity.CENTER_VERTICAL);
         a.searchSplit.setVisibility(View.GONE);
         a.speakV = new PillView(a, a, "", 6, false); a.typeV = new PillView(a, a, "", 7, false);
