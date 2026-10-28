@@ -187,13 +187,19 @@ class TvData {
         android.util.Log.i("ShieldHome", "playnext order kept=" + kept + " new=" + byId.size());
         return out;
     }
-    /** Package + content uri without volatile query params (resume position etc.); YouTube keeps only its video id. */
+    /** Query params that carry playback state, not identity; dropped from the stable id. */
+    static final Set<String> VOLATILE_PARAMS = new HashSet<>(Arrays.asList("t", "time", "start", "position", "pos", "offset", "resume", "resume_position"));
+    /** Package + content uri. Opaque uris (vnd.youtube:ID) keep their scheme-specific part; hierarchical ones keep
+     *  authority, path and every query param except VOLATILE_PARAMS, sorted, so ids in any param stay distinct. */
     static String stableId(Object[] o) {
         Intent in = (Intent) o[3];
         android.net.Uri d = in.getData();
         if (d == null) return o[0] + "|" + in.getComponent();
-        String v = d.isHierarchical() ? d.getQueryParameter("v") : null;
-        return o[0] + "|" + d.getScheme() + "://" + d.getAuthority() + d.getPath() + (v != null ? "?v=" + v : "");
+        if (d.isOpaque()) return o[0] + "|" + d.getScheme() + ":" + d.getSchemeSpecificPart();
+        StringBuilder id = new StringBuilder().append(o[0]).append('|').append(d.getScheme()).append("://").append(d.getAuthority()).append(d.getPath());
+        for (String k : new TreeSet<>(d.getQueryParameterNames()))
+            if (!VOLATILE_PARAMS.contains(k)) id.append(id.indexOf("?") < 0 ? '?' : '&').append(k).append('=').append(d.getQueryParameter(k));
+        return id.toString();
     }
     /** True (and marks seen) when pkg|title and intent uri are not in the featured card or already in Play Next. */
     static boolean fresh(String pkg, String title, String uri, Set<String> feat, Set<String> seen) {

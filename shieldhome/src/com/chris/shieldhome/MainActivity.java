@@ -152,7 +152,8 @@ public class MainActivity extends Activity {
 
     // ---------- Focus helper: soft blue glow drawn outside the tile + scale ----------
 
-    View focusable(final FrameLayout v, float radius, final Runnable click){ return focusable(v, radius, 1.13f, click); }
+    static final float FOCUS_SCALE=1.13f; // default focus growth (video cards, chrome)
+    View focusable(final FrameLayout v, float radius, final Runnable click){ return focusable(v, radius, FOCUS_SCALE, click); }
     View focusable(final FrameLayout v, float radius, final float sc, final Runnable click){
         final GlowFrame g = new GlowFrame(this, this, v, p(radius));
         g.setFocusable(true); g.setClickable(true);

@@ -85,7 +85,8 @@ class CardsController {
             col.addView(capText);
             LinearLayout.LayoutParams sl=new LinearLayout.LayoutParams(-2,-2); sl.topMargin=a.p(CAP_LINE_GAP); col.addView(capSub, sl);
             LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(-2,-2); tl.leftMargin=a.p(CAP_TEXT_GAP); capLine.addView(col, tl);
-            a.cardWrap.addView(capLine, a.lp(-2, -2, Gravity.TOP|Gravity.START, 0, a.p(ROW_PAD+CARD_H+CAP_GAP), 0, 0));
+            // Exact height: cardWrap is shorter than the caption's top+height, and a WRAP_CONTENT child would be squeezed to the leftover space.
+            a.cardWrap.addView(capLine, a.lp(-2, capBlockH, Gravity.TOP|Gravity.START, 0, a.p(capTop()), 0, 0));
         }
         Drawable ic=null; try { if (m[0]!=null){ ic=a.pm.getApplicationBanner(m[0]); if (ic==null) ic=a.pm.getApplicationIcon(m[0]); } } catch (Exception e){}
         capIcon.setImageDrawable(ic); capIcon.setVisibility(ic==null?View.GONE:View.VISIBLE);
@@ -112,11 +113,13 @@ class CardsController {
         float y=up?-liftPx():0;
         for (View v: new View[]{a.tabBar, a.cardWrap}) if (v!=null) v.animate().translationY(y).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start();
     }
+    /** Caption top inside cardWrap: CAP_GAP below the focused card's scaled bottom edge. */
+    static float capTop(){ return ROW_PAD+CARD_H*(1+MainActivity.FOCUS_SCALE)/2+CAP_GAP; }
     /** Full line height incl. descenders for a caption label. */
     static int lineH(TextView t){ Paint.FontMetricsInt fm=t.getPaint().getFontMetricsInt(); return fm.bottom-fm.top; }
     /** ROW_LIFT, or more if the measured caption would otherwise come within CAP_GRID_CLEAR of the app grid. */
     int liftPx(){
-        int capBottom=a.p(WRAP_Y+ROW_PAD+CARD_H+CAP_GAP)+capBlockH, limit=a.p(a.APP_GRID_Y-CAP_GRID_CLEAR);
+        int capBottom=a.p(WRAP_Y+capTop())+capBlockH, limit=a.p(a.APP_GRID_Y-CAP_GRID_CLEAR);
         return Math.max(a.p(ROW_LIFT), capBottom-limit);
     }
     void resetCardRow(){
