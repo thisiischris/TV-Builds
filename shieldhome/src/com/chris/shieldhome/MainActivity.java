@@ -77,6 +77,7 @@ public class MainActivity extends Activity {
         dataGen++; heroLoadGen++;
         try { unregisterReceiver(pkgRx); } catch (Exception e){}
         pool.shutdownNow();
+        if (searchDim!=null) searchDim.stopDimCallbacks();
         super.onDestroy();
     }
     void DisplayMetricsHolder(){ android.util.DisplayMetrics m = new android.util.DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(m); u = m.widthPixels/1024f; }
@@ -310,10 +311,10 @@ public class MainActivity extends Activity {
     // ---------- v6: quick settings, featured toggle, dimmer, weather ----------
     PillView searchV, speakV, typeV; LinearLayout searchSplit; EditText searchField; TextView heroLabel;
     PillView gear, dimBar, heroBtn, wxPill, timePill; boolean dimSlide=false, dimSlideIgnore=false, heroCtaOn; View heroG, heroFocus, inAppDim; HeroDots heroDots;
-    float dimFill; android.animation.ValueAnimator dimFillAnim;
+    float dimFill;
     int dimPct(){ return searchDim.dimPct(); }
     void setDimPct(int pct){ searchDim.setDimPct(pct); }
-    void syncDimFill(boolean anim){ searchDim.syncDimFill(anim); }
+    void syncDimFill(){ searchDim.syncDimFill(); }
     void dimSlideBy(int dir){ searchDim.dimSlideBy(dir); }
     void hideSearch(boolean hide){ searchDim.hideSearch(hide); }
     void popDimBar(boolean on){ searchDim.popDimBar(on); }
