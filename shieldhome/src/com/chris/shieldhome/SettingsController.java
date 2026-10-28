@@ -37,7 +37,7 @@ class SettingsController {
         icon.setOnClickListener(v->openPanel());
         a.root.addView(icon, a.lp(a.p(ICON_D), a.p(ICON_D), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(ICON_Y), 0, 0));
         panel=new Panel(); panel.setVisibility(View.GONE);
-        heroRow=new ToggleRow("Featured card", PREF_HERO); wallRow=new ToggleRow("Wallpaper", PREF_WALL);
+        heroRow=new ToggleRow("Featured", PREF_HERO); wallRow=new ToggleRow("Wallpaper", PREF_WALL);
         int rw=a.p(PANEL_W-2*PANEL_PAD);
         panel.addView(heroRow, a.lp(rw, a.p(ROW_H), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(PANEL_PAD), 0, 0));
         panel.addView(wallRow, a.lp(rw, a.p(ROW_H), Gravity.TOP|Gravity.CENTER_HORIZONTAL, 0, a.p(PANEL_PAD+ROW_H+ROW_GAP), 0, 0));
@@ -48,11 +48,11 @@ class SettingsController {
     }
     float panelH(){ return 2*PANEL_PAD+2*ROW_H+ROW_GAP; }
 
-    /** Icon shows while Play Now (featured card on), the icon, or anything in the top bar (dim pill, Search and its halves) has focus. */
+    /** Icon shows while Play Now (featured card on; kept on purpose so the menu is visible with the featured card selected), the wallpaper lock, the icon, or anything in the top bar (dim pill, Search and its halves) has focus. It is reached by pressing Right from Search. */
     void syncIcon(){
         if (icon==null || open || (morph!=null && morph.isRunning())) return; // the morph owns the icon while the panel is open/animating
         View f=a.getCurrentFocus();
-        boolean show=f==icon || (heroOn() && f==a.heroBtn) || (f!=null && a.focus.secOf(f)==0);
+        boolean show=f==icon || (heroOn() && f==a.heroBtn) || f==a.wallpaper.lock || (f!=null && a.focus.secOf(f)==0);
         icon.setFocusable(show || !heroOn());
         if (show==iconShown) return;
         iconShown=show;
@@ -64,10 +64,9 @@ class SettingsController {
     void stop(){ a.h.removeCallbacks(syncR); if (morph!=null) morph.cancel(); if (icon!=null) icon.animate().cancel(); if (a.root!=null) a.root.getViewTreeObserver().removeOnGlobalFocusChangeListener(focusL); }
     void focusIcon(){ icon.setVisibility(View.VISIBLE); icon.setFocusable(true); icon.requestFocus(); }
 
-    /** D-pad from the icon while the featured card is on (it is not part of a FocusController section then). */
-    boolean iconKey(int k){
-        if (k==KeyEvent.KEYCODE_DPAD_DOWN && a.heroShown() && a.heroBtn!=null){ a.heroBtn.setFocusable(true); a.heroBtn.requestFocus(); }
-        else if (k==KeyEvent.KEYCODE_DPAD_UP && a.gear!=null) a.gear.requestFocus(); // Play Now -> menu -> dim pill
+    /** Up from the menu icon (top-bar row end) goes to the dim pill; other keys use the normal top-bar navigation. */
+    boolean iconKey(){
+        if (a.gear!=null) a.gear.requestFocus();
         return true;
     }
 

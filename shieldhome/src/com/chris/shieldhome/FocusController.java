@@ -107,13 +107,12 @@ class FocusController {
         if (a.searchTyping && hz) return false;
         View f = a.getCurrentFocus();
         if (f == null) return e.getAction() == KeyEvent.ACTION_DOWN && restoreNow(); // focus lost to a rebuild: recover instead of a dead d-pad
-        if (f == a.settings.icon && a.settings.heroOn() && (v || hz))
-            return e.getAction() != KeyEvent.ACTION_DOWN || a.settings.iconKey(k); // icon sits above Play Now, outside the sections
+        if (f == a.settings.icon && k == KeyEvent.KEYCODE_DPAD_UP)
+            return e.getAction() != KeyEvent.ACTION_DOWN || a.settings.iconKey(); // Up from the menu goes to the dim pill
         int sec = secOf(f);
         if (sec < 0) return false;
         if (e.getAction() != KeyEvent.ACTION_DOWN) return false; // ponytail: let ACTION_UP through
-        if (f == a.heroBtn && k == KeyEvent.KEYCODE_DPAD_UP) { a.settings.focusIcon(); return true; }
-        if (sec == 1 && hz) { a.hero.heroStep(k == KeyEvent.KEYCODE_DPAD_RIGHT); return true; }
+        if (sec == 1 && hz) { if (f == a.wallpaper.lock) a.wallpaper.step(k == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1); else a.hero.heroStep(k == KeyEvent.KEYCODE_DPAD_RIGHT); return true; }
         if (k == KeyEvent.KEYCODE_DPAD_DOWN && sec >= 4 && sec == nSecs() - 1)
             return true;
         View t;
@@ -210,8 +209,8 @@ class FocusController {
             if (a.searchOpen){ if (a.speakV!=null) o.add(a.speakV); if (a.typeV!=null) o.add(a.typeV); }
             else if (a.searchTyping && a.searchField!=null) o.add(a.searchField);
             else if (a.searchV != null && a.searchV.getVisibility() == View.VISIBLE) o.add(a.searchV);
-            if (!a.settings.heroOn() && a.settings.icon != null) o.add(a.settings.icon); // featured card off: menu stays reachable from the top bar
-        } else if (sec == 1) { if (a.heroShown() && a.heroBtn != null) o.add(a.heroBtn); }
+            if (a.settings.icon != null) o.add(a.settings.icon); // menu sits at the end of the top-bar row (Right from Search)
+        } else if (sec == 1) { if (a.heroShown() && a.heroBtn != null) o.add(a.heroBtn); else if (a.wallpaper.lockShown()) o.add(a.wallpaper.lock); }
         else if (sec == 2) { if (a.tabPlay.getVisibility()==View.VISIBLE) o.add(a.tabPlay); o.add(a.tabLive); }
         else if (sec == 3) {
             for (int i = 0; i < a.cardRow.getChildCount(); i++) {
@@ -248,8 +247,8 @@ class FocusController {
         if (a.homeGrid == null || a.cardRow == null) return -1;
         for (View x = f; x != null; x = x.getParent() instanceof View ? (View) x.getParent() : null) {
             if (x == a.gear || x == a.searchV || x == a.speakV || x == a.typeV || x == a.searchField) return 0;
-            if (x == a.settings.icon) return a.settings.heroOn() ? -1 : 0;
-            if (x == a.heroG) return 1;
+            if (x == a.settings.icon) return 0;
+            if (x == a.heroG || x == a.wallpaper.lock) return 1;
             if (x == a.tabPlay || x == a.tabLive) return 2;
             if (x.getParent() == a.cardRow) return 3;
             if (x.getParent() == a.homeGrid) return 4 + a.homeGrid.indexOfChild(x) / 6;
