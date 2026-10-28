@@ -48,7 +48,7 @@ class SettingsController {
     }
     float panelH(){ return 2*PANEL_PAD+2*ROW_H+ROW_GAP; }
 
-    /** Icon shows while Play Now (featured card on), the wallpaper lock, the icon, or anything in the top bar (dim pill, Search and its halves) has focus. */
+    /** Icon shows while Play Now (featured card on; kept on purpose so the menu is visible with the featured card selected), the wallpaper lock, the icon, or anything in the top bar (dim pill, Search and its halves) has focus. It is reached by pressing Right from Search. */
     void syncIcon(){
         if (icon==null || open || (morph!=null && morph.isRunning())) return; // the morph owns the icon while the panel is open/animating
         View f=a.getCurrentFocus();
