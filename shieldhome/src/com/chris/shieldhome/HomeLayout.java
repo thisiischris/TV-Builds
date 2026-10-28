@@ -84,7 +84,6 @@ class HomeLayout {
         FrameLayout artHost = new FrameLayout(a); artHost.setClipChildren(true);
         ImageView art = new ImageView(a); art.setImageResource(R.drawable.hero); art.setScaleType(ImageView.ScaleType.FIT_XY);
         a.heroArt2 = new ImageView(a); a.heroArt2.setScaleType(ImageView.ScaleType.FIT_XY); a.heroArt2.setAlpha(0f);
-        for (ImageView v: new ImageView[]{art, a.heroArt2}) v.setColorFilter(Color.argb(HeroController.HERO_DIM_ALPHA,0,0,0), PorterDuff.Mode.SRC_ATOP); // both crossfade layers, so pages swap with no flash
         artHost.addView(art, new FrameLayout.LayoutParams(-1,-1));
         artHost.addView(a.heroArt2, new FrameLayout.LayoutParams(-1,-1));
         hero.addView(artHost, a.lp(-1, a.p(400), Gravity.TOP, 0,0,0,0));

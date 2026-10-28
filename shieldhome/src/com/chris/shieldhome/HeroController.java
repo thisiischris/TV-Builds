@@ -9,8 +9,8 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 class HeroController {
-    /** Light uniform dim on the hero artwork only (0-255 black over the image pixels; text, buttons, dots and fades are separate views). */
-    static final int HERO_DIM_ALPHA=46; // ~18%
+    /** Alpha (0-255) the left scrim settles to past HERO_LEFT_FADE and holds to the artwork's right edge: a light overall dim (~18%). */
+    static final int HERO_DIM_ALPHA=46;
     final MainActivity a;
     String featuredBoundSig="";
     boolean heroFront=true;
@@ -103,8 +103,9 @@ class HeroController {
         c.drawBitmap(alphaMask(tw,th),0,0,xp);
         float leftEnd=artL+artW*MainActivity.HERO_LEFT_FADE;
         xp.setXfermode(null);
-        xp.setShader(new LinearGradient(0,0,leftEnd,0, new int[]{0xE6000000|MainActivity.HERO_SCRIM_RGB,0xC2000000|MainActivity.HERO_SCRIM_RGB,MainActivity.HERO_SCRIM_RGB}, new float[]{0, leftEnd<=0?0:artL/leftEnd, 1}, Shader.TileMode.CLAMP));
-        c.drawRect(0,0,leftEnd,th,xp);
+        int dim=(HERO_DIM_ALPHA<<24)|MainActivity.HERO_SCRIM_RGB;
+        xp.setShader(new LinearGradient(0,0,tw,0, new int[]{0xE6000000|MainActivity.HERO_SCRIM_RGB,0xC2000000|MainActivity.HERO_SCRIM_RGB,dim,dim}, new float[]{0, artL/tw, leftEnd/tw, 1}, Shader.TileMode.CLAMP));
+        c.drawRect(0,0,tw,th,xp);
         a.heroMasked.put(key, out); return out;
     }
     void fitHeroMeta(){
