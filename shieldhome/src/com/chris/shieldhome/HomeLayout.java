@@ -138,7 +138,7 @@ class HomeLayout {
         a.cardRow = new LinearLayout(a); a.cardRow.setClipChildren(false); a.cardRow.setClipToPadding(false);
         a.cardScroll.addView(a.cardRow, new ViewGroup.LayoutParams(-2,-1));
         a.cardWrap.addView(a.cardScroll, new FrameLayout.LayoutParams(-1,-1));
-        place(a.cardWrap, 15, 320, 994, 160);
+        place(a.cardWrap, CardsController.WRAP_X, CardsController.WRAP_Y, CardsController.WRAP_W, CardsController.WRAP_H);
         a.cardScroll.getViewTreeObserver().addOnScrollChangedListener(a::updateCardAlphas);
 
         a.homeGrid = new GridLayout(a); a.homeGrid.setColumnCount(6); a.homeGrid.setClipChildren(false); a.homeGrid.setClipToPadding(false);

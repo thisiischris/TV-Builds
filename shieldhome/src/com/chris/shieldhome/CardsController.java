@@ -3,6 +3,7 @@ package com.chris.shieldhome;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.tv.TvContract;
@@ -23,14 +24,17 @@ class CardsController {
     final MainActivity a;
     // Card row geometry (mockup px) and the focus caption shown under the focused card.
     static final float CARD_W=184.4f, CARD_H=112, CARD_GAP=8, ROW_PAD=20;
-    static final float CAP_GAP=10, CAP_H=31, CAP_TITLE=13, CAP_SUB=10.5f, CAP_LINE_GAP=3, CAP_TEXT_GAP=8, CAP_MAX_W=600, ROW_LIFT=35;
+    // Card row frame (mockup px) as placed by HomeLayout.
+    static final float WRAP_X=15, WRAP_Y=320, WRAP_W=994, WRAP_H=160;
+    // Caption: the text block height comes from measured font metrics; the badge matches it. CAP_EDGE = right screen margin the title may run to.
+    static final float CAP_GAP=10, CAP_TITLE=13, CAP_SUB=10.5f, CAP_LINE_GAP=3, CAP_TEXT_GAP=8, CAP_EDGE=35, CAP_GRID_CLEAR=6, ROW_LIFT=35;
     // Platform badge (the pre-v80 tile badge, 36x20 aspect) sized to the caption's two-line height.
     static final float BADGE_ASPECT=36f/20f, BADGE_R=4;
     static final float BAR_W=166, BAR_H=2.5f, BAR_X=9, BAR_Y=8;
     static final String SUB_RESUME="Resume watching", SUB_NEW="New";
     static final int FOCUS_MS=220, VISIBLE_CARDS=5;
     final Map<View,String[]> capMeta = new WeakHashMap<>();
-    LinearLayout capLine; ImageView capIcon; TextView capText, capSub; boolean rowLifted;
+    LinearLayout capLine; ImageView capIcon; TextView capText, capSub; int capBlockH; boolean rowLifted;
     static final String[] LIVE_PKGS = {"tv.pluto.android","com.cnbc.client","com.haystack.android","com.plexapp.android"};
     String cardsBindSig="";
     Map<String,Long> plutoIdsCache=new HashMap<>();
@@ -64,7 +68,7 @@ class CardsController {
         return x;
     }
     TextView capLabel(float size, int color, String font){
-        TextView t=a.text("", size, color, font); t.setSingleLine(); t.setEllipsize(android.text.TextUtils.TruncateAt.END); t.setMaxWidth(a.p(CAP_MAX_W)); return t;
+        TextView t=a.text("", size, color, font); t.setSingleLine(); t.setEllipsize(android.text.TextUtils.TruncateAt.END); t.setIncludeFontPadding(true); return t;
     }
     // ---------- Focus caption: app icon + title under the focused card; row and tabs lift to make room ----------
     void showCaption(View card, int scrollX){
@@ -73,19 +77,23 @@ class CardsController {
             capLine=new LinearLayout(a); capLine.setOrientation(LinearLayout.HORIZONTAL); capLine.setGravity(Gravity.CENTER_VERTICAL); capLine.setAlpha(0f);
             capIcon=new ImageView(a); capIcon.setScaleType(ImageView.ScaleType.CENTER_CROP); capIcon.setClipToOutline(true);
             GradientDrawable bb=new GradientDrawable(); bb.setCornerRadius(a.p(BADGE_R)); bb.setColor(Color.BLACK); capIcon.setBackground(bb);
-            capLine.addView(capIcon, new LinearLayout.LayoutParams(a.p(CAP_H*BADGE_ASPECT), a.p(CAP_H)));
-            LinearLayout col=new LinearLayout(a); col.setOrientation(LinearLayout.VERTICAL); col.setGravity(Gravity.CENTER_VERTICAL);
-            capText=capLabel(CAP_TITLE, Color.WHITE, "sans-serif-medium"); col.addView(capText);
+            capText=capLabel(CAP_TITLE, Color.WHITE, "sans-serif-medium");
             capSub=capLabel(CAP_SUB, Color.argb(170,255,255,255), "sans-serif");
+            capBlockH=lineH(capText)+a.p(CAP_LINE_GAP)+lineH(capSub);
+            capLine.addView(capIcon, new LinearLayout.LayoutParams(Math.round(capBlockH*BADGE_ASPECT), capBlockH));
+            LinearLayout col=new LinearLayout(a); col.setOrientation(LinearLayout.VERTICAL); col.setGravity(Gravity.CENTER_VERTICAL); col.setMinimumHeight(capBlockH);
+            col.addView(capText);
             LinearLayout.LayoutParams sl=new LinearLayout.LayoutParams(-2,-2); sl.topMargin=a.p(CAP_LINE_GAP); col.addView(capSub, sl);
-            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(-2, a.p(CAP_H)); tl.leftMargin=a.p(CAP_TEXT_GAP); capLine.addView(col, tl);
-            a.cardWrap.addView(capLine, a.lp(-2, a.p(CAP_H), Gravity.TOP|Gravity.START, 0, a.p(ROW_PAD+CARD_H+CAP_GAP), 0, 0));
+            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(-2,-2); tl.leftMargin=a.p(CAP_TEXT_GAP); capLine.addView(col, tl);
+            a.cardWrap.addView(capLine, a.lp(-2, -2, Gravity.TOP|Gravity.START, 0, a.p(ROW_PAD+CARD_H+CAP_GAP), 0, 0));
         }
         Drawable ic=null; try { if (m[0]!=null){ ic=a.pm.getApplicationBanner(m[0]); if (ic==null) ic=a.pm.getApplicationIcon(m[0]); } } catch (Exception e){}
         capIcon.setImageDrawable(ic); capIcon.setVisibility(ic==null?View.GONE:View.VISIBLE);
         capText.setText(m[1]!=null?m[1]:m[0]!=null?a.tv.appName(m[0]):"");
         capSub.setText(m[2]); capSub.setVisibility(m[2]==null?View.GONE:View.VISIBLE);
         float x=card.getLeft()-scrollX+a.p(ROW_PAD);
+        int textMax=Math.max(0, a.root.getWidth()-a.p(WRAP_X)-Math.round(x)-a.p(CAP_EDGE)-capIcon.getLayoutParams().width-a.p(CAP_TEXT_GAP));
+        capText.setMaxWidth(textMax); capSub.setMaxWidth(textMax); // run to the right screen margin; only longer titles ellipsize
         if (capLine.getAlpha()<0.05f) capLine.setTranslationX(x);
         capLine.animate().cancel();
         capLine.animate().alpha(1f).translationX(x).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start();
@@ -101,8 +109,15 @@ class CardsController {
     void liftRow(boolean up){
         if (up==rowLifted) return;
         rowLifted=up;
-        float y=up?-a.p(ROW_LIFT):0;
+        float y=up?-liftPx():0;
         for (View v: new View[]{a.tabBar, a.cardWrap}) if (v!=null) v.animate().translationY(y).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start();
+    }
+    /** Full line height incl. descenders for a caption label. */
+    static int lineH(TextView t){ Paint.FontMetricsInt fm=t.getPaint().getFontMetricsInt(); return fm.bottom-fm.top; }
+    /** ROW_LIFT, or more if the measured caption would otherwise come within CAP_GRID_CLEAR of the app grid. */
+    int liftPx(){
+        int capBottom=a.p(WRAP_Y+ROW_PAD+CARD_H+CAP_GAP)+capBlockH, limit=a.p(a.APP_GRID_Y-CAP_GRID_CLEAR);
+        return Math.max(a.p(ROW_LIFT), capBottom-limit);
     }
     void resetCardRow(){
         if (a.focus!=null){ a.focus.lastIdx[3]=0; a.focus.lastCardX=0; }
