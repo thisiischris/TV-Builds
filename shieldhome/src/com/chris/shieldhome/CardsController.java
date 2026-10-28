@@ -26,8 +26,9 @@ class CardsController {
     static final float CARD_W=184.4f, CARD_H=112, CARD_GAP=8, ROW_PAD=20;
     // Card row frame (mockup px) as placed by HomeLayout.
     static final float WRAP_X=15, WRAP_Y=320, WRAP_W=994, WRAP_H=160;
-    // Caption: the text block height comes from measured font metrics; the badge matches it. CAP_EDGE = right screen margin the title may run to.
-    static final float CAP_GAP=10, CAP_TITLE=13, CAP_SUB=10.5f, CAP_LINE_GAP=3, CAP_TEXT_GAP=8, CAP_EDGE=35, CAP_GRID_CLEAR=6, ROW_LIFT=35;
+    // Caption: the text block height comes from measured font metrics; the badge matches it. CAP_EDGE = right screen margin the title may run to; CAP_TITLE_LINES = title wrap limit.
+    static final float CAP_GAP=14, CAP_TITLE=13, CAP_SUB=10.5f, CAP_LINE_GAP=3, CAP_TEXT_GAP=8, CAP_EDGE=35, CAP_GRID_CLEAR=6, ROW_LIFT=35;
+    static final int CAP_TITLE_LINES=2;
     // Platform badge (the pre-v80 tile badge, 36x20 aspect) sized to the caption's two-line height.
     static final float BADGE_ASPECT=36f/20f, BADGE_R=4;
     static final float BAR_W=166, BAR_H=2.5f, BAR_X=9, BAR_Y=8;
@@ -79,22 +80,21 @@ class CardsController {
             GradientDrawable bb=new GradientDrawable(); bb.setCornerRadius(a.p(BADGE_R)); bb.setColor(Color.BLACK); capIcon.setBackground(bb);
             capText=capLabel(CAP_TITLE, Color.WHITE, "sans-serif-medium");
             capSub=capLabel(CAP_SUB, Color.argb(170,255,255,255), "sans-serif");
-            capBlockH=lineH(capText)+a.p(CAP_LINE_GAP)+lineH(capSub);
-            capLine.addView(capIcon, new LinearLayout.LayoutParams(Math.round(capBlockH*BADGE_ASPECT), capBlockH));
-            LinearLayout col=new LinearLayout(a); col.setOrientation(LinearLayout.VERTICAL); col.setGravity(Gravity.CENTER_VERTICAL); col.setMinimumHeight(capBlockH);
-            col.addView(capText);
-            LinearLayout.LayoutParams sl=new LinearLayout.LayoutParams(-2,-2); sl.topMargin=a.p(CAP_LINE_GAP); col.addView(capSub, sl);
-            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(-2,-2); tl.leftMargin=a.p(CAP_TEXT_GAP); capLine.addView(col, tl);
-            // Exact height: cardWrap is shorter than the caption's top+height, and a WRAP_CONTENT child would be squeezed to the leftover space.
-            a.cardWrap.addView(capLine, a.lp(-2, capBlockH, Gravity.TOP|Gravity.START, 0, a.p(capTop()), 0, 0));
+            capText.setSingleLine(false); capText.setMaxLines(CAP_TITLE_LINES);
+            capLine.addView(capIcon, new LinearLayout.LayoutParams(0, 0));
+            LinearLayout col=new LinearLayout(a); col.setOrientation(LinearLayout.VERTICAL); col.setGravity(Gravity.CENTER_VERTICAL);
+            col.addView(capText, new LinearLayout.LayoutParams(-1,-2));
+            LinearLayout.LayoutParams sl=new LinearLayout.LayoutParams(-1,-2); sl.topMargin=a.p(CAP_LINE_GAP); col.addView(capSub, sl);
+            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-1,1f); tl.leftMargin=a.p(CAP_TEXT_GAP); capLine.addView(col, tl);
+            // Explicit width and height, set per focus in sizeCaption(): cardWrap is shorter than the caption, and a WRAP_CONTENT child would be squeezed.
+            a.cardWrap.addView(capLine, a.lp(0, 0, Gravity.TOP|Gravity.START, 0, a.p(capTop()), 0, 0));
         }
         Drawable ic=null; try { if (m[0]!=null){ ic=a.pm.getApplicationBanner(m[0]); if (ic==null) ic=a.pm.getApplicationIcon(m[0]); } } catch (Exception e){}
         capIcon.setImageDrawable(ic); capIcon.setVisibility(ic==null?View.GONE:View.VISIBLE);
         capText.setText(m[1]!=null?m[1]:m[0]!=null?a.tv.appName(m[0]):"");
         capSub.setText(m[2]); capSub.setVisibility(m[2]==null?View.GONE:View.VISIBLE);
         float x=card.getLeft()-scrollX+a.p(ROW_PAD);
-        int textMax=Math.max(0, a.root.getWidth()-a.p(WRAP_X)-Math.round(x)-a.p(CAP_EDGE)-capIcon.getLayoutParams().width-a.p(CAP_TEXT_GAP));
-        capText.setMaxWidth(textMax); capSub.setMaxWidth(textMax); // run to the right screen margin; only longer titles ellipsize
+        sizeCaption(x);
         if (capLine.getAlpha()<0.05f) capLine.setTranslationX(x);
         capLine.animate().cancel();
         capLine.animate().alpha(1f).translationX(x).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start();
@@ -108,10 +108,24 @@ class CardsController {
     }
     /** Moves the tab bar and card row up together (never the app grid). */
     void liftRow(boolean up){
-        if (up==rowLifted) return;
+        if (up==rowLifted && !up) return;
         rowLifted=up;
         float y=up?-liftPx():0;
         for (View v: new View[]{a.tabBar, a.cardWrap}) if (v!=null) v.animate().translationY(y).setDuration(FOCUS_MS).setInterpolator(a.focusInterpolator).start();
+    }
+    /** Sizes the caption to run from x to CAP_EDGE: the title gets the full width (wrapping to CAP_TITLE_LINES) and the badge matches the text block height. */
+    void sizeCaption(float x){
+        int w=Math.max(0, a.root.getWidth()-a.p(WRAP_X)-Math.round(x)-a.p(CAP_EDGE));
+        int titleLines=1;
+        for (int pass=0; pass<2; pass++){
+            capBlockH=titleLines*lineH(capText)+(capSub.getVisibility()==View.VISIBLE?a.p(CAP_LINE_GAP)+lineH(capSub):0);
+            int iconW=capIcon.getVisibility()==View.VISIBLE?Math.round(capBlockH*BADGE_ASPECT)+a.p(CAP_TEXT_GAP):0;
+            int textW=Math.max(0, w-iconW);
+            titleLines=capText.getPaint().measureText(capText.getText().toString())>textW?CAP_TITLE_LINES:1;
+        }
+        ViewGroup.LayoutParams il=capIcon.getLayoutParams(); il.width=Math.round(capBlockH*BADGE_ASPECT); il.height=capBlockH; capIcon.setLayoutParams(il);
+        ViewGroup.LayoutParams ll=capLine.getLayoutParams(); ll.width=w; ll.height=capBlockH; capLine.setLayoutParams(ll);
+        capLine.requestLayout();
     }
     /** Caption top inside cardWrap: CAP_GAP below the focused card's scaled bottom edge. */
     static float capTop(){ return ROW_PAD+CARD_H*(1+MainActivity.FOCUS_SCALE)/2+CAP_GAP; }
