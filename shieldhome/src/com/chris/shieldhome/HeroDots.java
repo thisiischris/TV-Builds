@@ -12,9 +12,9 @@ class HeroDots extends View {
         static final int PILL_FILL_A=70; // v77: was 88
         static final long DOTS_ANIM_MS=240; static final float DOTS_SLIDE_DP=8f; // show/hide: fade while sliding up from / down by DOTS_SLIDE_DP
         /** Active dot stretches to ACTIVE_W and fills left-to-right over HERO_ROTATE_MS; MOVE_MS = stretch hand-off to the next dot. */
-        static final float ACTIVE_W=22f; static final long MOVE_MS=250; static final int DOT_IDLE_A=89;
-        static final long OUT_FADE_MS=350; static final android.view.animation.Interpolator OUT_FADE_EASE=new android.view.animation.PathInterpolator(0.4f,0f,0.2f,1f); // outgoing pill: solid fill crossfades white -> idle while it shrinks
-        static final android.view.animation.Interpolator MOVE_EASE=new android.view.animation.PathInterpolator(0.16f,1f,0.3f,1f);
+        static final float ACTIVE_W=22f; static final long MOVE_MS=400; static final int DOT_IDLE_A=89;
+        static final long OUT_FADE_MS=450; // outgoing pill: solid fill crossfades white -> idle while it shrinks
+        static final android.view.animation.Interpolator MOVE_EASE=new android.view.animation.PathInterpolator(0.2f,0f,0f,1f); // soft decelerate; shrink+grow share this curve and the one animator clock
         final MainActivity activity; int n, cur, prev; float mix=1f, prevFill; long hopAt; android.animation.ValueAnimator an; // per-pill fill: prevFill = outgoing pill's own fill, frozen at the hop
         long progStart; float pausedAt=-1f; // pausedAt>=0: fill frozen at that fraction
         final Paint dotsPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -28,7 +28,7 @@ class HeroDots extends View {
         long resumeProgress(){ float f=pausedAt>=0?pausedAt:progress(); progStart=android.os.SystemClock.uptimeMillis()-(long)(f*MainActivity.HERO_ROTATE_MS); pausedAt=-1f; invalidate(); return Math.max(0L,(long)((1f-f)*MainActivity.HERO_ROTATE_MS)); }
         void pauseProgress(){ if (pausedAt<0) pausedAt=progress(); invalidate(); }
         float progress(){ return pausedAt>=0?pausedAt:Math.min(1f,(android.os.SystemClock.uptimeMillis()-progStart)/(float)MainActivity.HERO_ROTATE_MS); }
-        float outFade(){ return hopAt==0?1f:OUT_FADE_EASE.getInterpolation(Math.min(1f,(android.os.SystemClock.uptimeMillis()-hopAt)/(float)OUT_FADE_MS)); }
+        float outFade(){ return hopAt==0?1f:MOVE_EASE.getInterpolation(Math.min(1f,(android.os.SystemClock.uptimeMillis()-hopAt)/(float)OUT_FADE_MS)); }
         void stop(){ animate().cancel(); if (an!=null) an.cancel(); }
         @Override protected void onMeasure(int wms, int hms){
             int h=MeasureSpec.getMode(hms)==MeasureSpec.EXACTLY?MeasureSpec.getSize(hms):activity.p(PILL_H);
