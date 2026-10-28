@@ -7,6 +7,8 @@ import android.widget.*;
 
 class HomeLayout {
     final MainActivity a;
+    /** Status pill (weather · time): same 28u height as the top-bar pills; STATUS_MIN_W holds the time before the first label measure. */
+    static final float STATUS_H=28, STATUS_MIN_W=88;
     HomeLayout(MainActivity a) { this.a = a; }
     void place(View v, float x, float y, float w, float hh){ FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w<0?-2:a.p(w), hh<0?-2:a.p(hh)); lp.leftMargin=a.p(x); lp.topMargin=a.p(y); a.root.addView(v, lp); }
     void build() {
@@ -14,15 +16,10 @@ class HomeLayout {
         a.root.setBackgroundResource(R.drawable.bg);
         a.root.setClipChildren(false);
 
-        a.wxPill = new PillView(a, a, "", 4, false); a.wxPill.setFocusable(false); a.wxPill.setClickable(false);
-        a.timePill = new PillView(a, a, "", 4, false); a.timePill.setFocusable(false); a.timePill.setClickable(false);
-        LinearLayout tr = new LinearLayout(a); tr.setGravity(Gravity.CENTER_VERTICAL);
-        tr.addView(a.wxPill, new LinearLayout.LayoutParams(a.p(28), a.p(28)));
-        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(a.p(8), a.p(28));
-        tr.addView(new View(a), gap);
-        tr.addView(a.timePill, new LinearLayout.LayoutParams(a.p(88), a.p(28)));
-        a.clk = tr;
-        a.root.addView(a.clk, a.lp(-2,-2,Gravity.TOP|Gravity.END,0,a.p(17),a.p(46),0));
+        // v83: weather + time share one pill ("icon temp · time"), width wraps the label via setPill
+        a.statusPill = new PillView(a, a, "", 4, false); a.statusPill.setFocusable(false); a.statusPill.setClickable(false);
+        a.clk = a.statusPill;
+        a.root.addView(a.clk, a.lp(a.p(STATUS_MIN_W), a.p(STATUS_H), Gravity.TOP|Gravity.END, 0, a.p(17), a.p(46), 0));
 
         // Quick settings a.gear + inline options
         a.gear = new PillView(a, a, "", 5, false); a.gear.setId(View.generateViewId());

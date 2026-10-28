@@ -445,7 +445,7 @@ class AppGridController {
             if (c==this.a.appMenu) continue;
             if (c instanceof ViewGroup){
                 ((ViewGroup)c).setDescendantFocusability(on?ViewGroup.FOCUS_BLOCK_DESCENDANTS:ViewGroup.FOCUS_AFTER_DESCENDANTS);
-                if (c==this.a.heroG){ c.setFocusable(false); if (this.a.heroBtn!=null) this.a.heroBtn.setFocusable(!on); }
+                if (c==this.a.heroG){ c.setFocusable(false); if (this.a.heroBtn!=null) this.a.heroBtn.setFocusable(!on && this.a.settings.heroOn()); }
             }
             else if (c instanceof PillView){
                 if (on) c.setFocusable(false);
