@@ -110,6 +110,7 @@ class TvData {
     static final int WN_CONTINUE = 0, WN_NEXT = 1, WN_NEW = 2; // TvContract watch_next_type
     /** Play Next pick slots: {pkg, caption, thumb, intent, progress (-1 = none), isNew}. Progress alone can't tell NEW: NEXT-type rows at position 0 have -1 too. */
     static final int PICK_IS_NEW = 5;
+    static final int PICK_ENGAGEMENT = 6, PICK_PLAYBACK = 7;
 
     /** Play Next (video apps, ≤MAX_ITEMS), each group by engagement: other apps' resume/NEXT rows, then YouTube NEW, then YouTube resume. No recs. */
     List<Object[]> collectWatchNext() {
@@ -155,9 +156,15 @@ class TvData {
             if (type != WN_CONTINUE && type != WN_NEXT && !ytNewRow) { dropType++; continue; }
             if (type == WN_CONTINUE && pos <= 0) { dropZero++; continue; }
             if (!fresh(pkg, (String) r[5], (String) r[7], feat, seen)) continue;
-            Object[] p = Arrays.copyOf(o, PICK_IS_NEW + 1); p[PICK_IS_NEW] = ytNewRow;
+            Object[] p = Arrays.copyOf(o, PICK_PLAYBACK + 1); p[PICK_IS_NEW] = ytNewRow;
+            p[PICK_ENGAGEMENT] = r[1]; p[PICK_PLAYBACK] = r[2];
             (ytNewRow ? ytNew : YT.equals(pkg) ? ytResume : other).add(p);
         }
+        Collections.sort(ytResume, (x, y) -> {
+            long engagementX = (Long) x[PICK_ENGAGEMENT], engagementY = (Long) y[PICK_ENGAGEMENT];
+            if (engagementX != engagementY) return Long.compare(engagementY, engagementX);
+            return Long.compare((Long) y[PICK_PLAYBACK], (Long) x[PICK_PLAYBACK]);
+        });
         int[] shown = new int[3]; List<List<Object[]>> groups = Arrays.asList(other, ytNew, ytResume);
         for (int g = 0; g < groups.size(); g++) {
             List<Object[]> l = groups.get(g);

@@ -360,14 +360,29 @@ class CardsController {
         return liveCache.size();
     }
     static final String CAP_CONTINUE="Continue watching";
+    static final int PLUTO_TILE_BG=Color.rgb(24,24,24);
     /** Second Live TV tile: Pluto's own resume item (watch-next art, title, progress); otherwise a "Continue watching" tile with Pluto art that opens the app. */
     View plutoResumeTile(){
         Object[] r=plutoResume;
         if (r!=null){ final Intent in=new Intent((Intent)r[3]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            return card(null, (String)r[2], false, TvData.PLUTO, (String)r[1], CAP_CONTINUE, (Float)r[4], ()->startSafe(in, TvData.PLUTO)); }
+            Drawable banner=null;
+            try { banner=a.pm.getApplicationBanner(TvData.PLUTO); if (banner==null) banner=a.pm.getApplicationIcon(TvData.PLUTO); } catch (Exception e){}
+            View v=card(banner, null, false, TvData.PLUTO, (String)r[1], CAP_CONTINUE, (Float)r[4], ()->startSafe(in, TvData.PLUTO));
+            ImageView image=(ImageView)((GlowFrame)v).inner.getChildAt(0);
+            image.setBackgroundColor(PLUTO_TILE_BG);
+            String guide=plutoResumeGuideArt((String)r[1]);
+            a.images.loadFirstAvailable(image, new String[]{(String)r[2], guide}, false,
+                    image.getWidth()>0?image.getWidth():a.p(CARD_W), image.getHeight()>0?image.getHeight():a.p(CARD_H));
+            return v; }
         Drawable ban=null, ic=null;
         try { ban=a.pm.getApplicationBanner(TvData.PLUTO); ic=a.pm.getApplicationIcon(TvData.PLUTO); } catch (Exception e){}
         return card(ban!=null?ban:ic, null, ban==null, TvData.PLUTO, CAP_CONTINUE, null, -1, ()->a.launchPkg(TvData.PLUTO));
+    }
+    String plutoResumeGuideArt(String title){
+        if (title==null || title.trim().isEmpty()) return null;
+        for (Map.Entry<String,String> entry:plutoNow.entrySet())
+            if (title.equalsIgnoreCase(entry.getValue())) return plutoArt.get(entry.getKey());
+        return null;
     }
     View plutoAppTile(){
         Drawable ban=null, ic=null;
@@ -386,25 +401,16 @@ class CardsController {
         final Intent in=plutoIntent(slug); Long id=plutoId(plutoIds, nm, slug);
         View v=card(null, null, false, "tv.pluto.android", nm, null, -1, ()->startSafe(in, "tv.pluto.android"));
         ImageView big=(ImageView)((GlowFrame)v).inner.getChildAt(0);
-        TextView ov=chName(nm);
-        ((GlowFrame)v).inner.addView(ov, a.lp(-2,-2,Gravity.TOP|Gravity.START,0,0,0,0));
         String art=liveArt(nm, id), logo=plutoLogo.get(nm);
         if (art!=null && loadArt) setLiveArt(big, art, true, false);
         else if (logo!=null && loadArt) setLiveArt(big, logo, true, true);
         else if (art!=null) big.setTag("pend:"+art);
         else if (logo!=null) big.setTag("pendf:"+logo);
-        ov.setVisibility(art!=null||logo!=null?View.VISIBLE:View.GONE);
         liveCaption(v, nm);
         FrameLayout bar=progressBar(Math.max(0f, liveProgress(nm))); bar.setVisibility(liveProgress(nm)<0?View.GONE:View.VISIBLE);
         ((GlowFrame)v).inner.addView(bar, a.lp(a.p(BAR_W), a.p(BAR_H), Gravity.BOTTOM, a.p(BAR_X), 0, 0, a.p(BAR_Y)));
-        plutoCaps.add(new Object[]{v, nm, big, ov, id, bar});
+        plutoCaps.add(new Object[]{v, nm, big, id, bar});
         return v;
-    }
-    TextView chName(String nm){
-        TextView ov=a.text(nm, 7, Color.WHITE, "sans-serif-medium");
-        ov.setPadding(a.p(6),a.p(3),a.p(10),a.p(4));
-        ov.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.argb(160,0,0,0), Color.argb(70,0,0,0), Color.TRANSPARENT}));
-        return ov;
     }
     String liveArt(String nm, Long id){
         String art=plutoArt.get(nm); if (!genericArt(art,null)) return art;
@@ -419,11 +425,10 @@ class CardsController {
     }
     void applyLiveNow(){
         for (Object[] o: plutoCaps){
-            View v=(View)o[0]; String nm=(String)o[1]; ImageView iv=(ImageView)o[2]; TextView ov=(TextView)o[3]; Long id=(Long)o[4]; FrameLayout bar=(FrameLayout)o[5];
+            View v=(View)o[0]; String nm=(String)o[1]; ImageView iv=(ImageView)o[2]; Long id=(Long)o[3]; FrameLayout bar=(FrameLayout)o[4];
             float pr=liveProgress(nm); bar.setVisibility(pr<0?View.GONE:View.VISIBLE); if (pr>=0) setProgress(bar, pr); // from the clock each time the row is shown or the guide refreshes
             String art=liveArt(nm,id), logo=plutoLogo.get(nm);
             liveCaption(v, nm);
-            ov.setVisibility(art!=null||logo!=null?View.VISIBLE:View.GONE);
             if (art!=null) setLiveArt(iv, art, false, false);
             else if (logo!=null) setLiveArt(iv, logo, false, true);
         }
