@@ -60,7 +60,7 @@ class AppGridController {
         int r=0; View f=this.a.getCurrentFocus();
         if (f!=null && this.a.homeGrid!=null && f.getParent()==this.a.homeGrid) r=Math.max(0, (this.a.editMode?this.tileIx(f):this.a.homeGrid.indexOfChild(f))/6);
         final boolean open=this.a.drawerOpen;
-        float y = open ? -(this.a.p(this.a.APP_GRID_Y-17)+Math.max(0, r-4)*this.rowH()) : 0;
+        float y = open ? -(this.a.p(this.a.APP_GRID_Y-DRAWER_TOP_Y)+Math.max(0, r-4)*this.rowH()) : 0;
         this.fadeChrome(open);
         if (open){
             for (View v: new View[]{this.a.tabBar, this.a.cardWrap, this.a.homeGrid}) if (v!=null) v.bringToFront();
@@ -127,6 +127,8 @@ class AppGridController {
     }
     void saveHome(List<String[]> l){ StringBuilder sb=new StringBuilder(); for (String[] app: l){ if (app==null) continue; if (sb.length()>0) sb.append(','); sb.append(app[0]).append('/').append(app[1]); } this.a.prefs().edit().putString("order", sb.toString()).commit(); }
     GridLayout.LayoutParams gridLp(int i){ GridLayout.LayoutParams gl = new GridLayout.LayoutParams(); gl.width=this.a.p(this.a.APP_W); gl.height=this.a.p(this.a.APP_H); gl.rightMargin = (i%6==5)?0:this.a.p(this.a.APP_HG); gl.bottomMargin = this.a.p(this.a.APP_ROW_GAP); return gl; }
+    /** v82: drawer-open top of row 0 (was 17); 40 balances top vs the space under the last visible row (row 4 ends at ~532.5 of 576). */
+    static final float DRAWER_TOP_Y=40f;
     int rowH(){ return this.a.p(this.a.APP_H+this.a.APP_ROW_GAP); }
     void buildHomeGrid(){ buildHomeGrid(-1); }
     void buildHomeGrid(int focusIdx){

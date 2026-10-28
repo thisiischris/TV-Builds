@@ -49,8 +49,11 @@ class HeroController {
     }
     void showHero(){
         final Object[] o;
-        synchronized(a.heroLock){ if (a.heroItems.isEmpty()) return; o=a.heroItems.get(Math.min(a.heroIdx, a.heroItems.size()-1)); }
+        final int n;
+        synchronized(a.heroLock){ if (a.heroItems.isEmpty()) return; n=a.heroItems.size(); o=a.heroItems.get(Math.min(a.heroIdx, n-1)); }
         a.heroGate=android.os.SystemClock.uptimeMillis()+650;
+        // dots hop synchronously, before callers restart progress (scheduleRotate); transitionHero runs later, after the image decode
+        if (a.heroDots!=null && a.heroDots.getVisibility()==View.VISIBLE) a.heroDots.bind(n, a.heroIdx, true);
         if (a.heroBtn==null || !a.heroBtn.isFocused()) bindHeroAction(o);
         final String uri = (String)o[3];
         final int tw=a.heroG!=null&&a.heroG.getWidth()>0?a.heroG.getWidth():a.p(1024), th=a.heroG!=null&&a.heroG.getHeight()>0?a.heroG.getHeight():a.p(400), g=++a.heroLoadGen;
@@ -75,8 +78,6 @@ class HeroController {
         for (View t: texts) t.animate().alpha(0f).translationX(-a.p(10)).setDuration(450).setInterpolator(outIp).start();
         final boolean ctaOn=a.heroBtn!=null && a.heroBtn.isFocused();
         if (ctaOn){ a.heroBtn.animate().cancel(); a.heroBtn.animate().alpha(0f).setStartDelay(0).setDuration(450).setInterpolator(outIp).start(); }
-        // dots hop now, before the caller restarts progress (scheduleRotate), so the hand-off has no reset frame
-        if (a.heroDots!=null && a.heroDots.getVisibility()==View.VISIBLE){ int n; synchronized(a.heroLock){ n=a.heroItems.size(); } a.heroDots.bind(n, a.heroIdx, true); }
         a.h.postDelayed(()->{
             bindHeroCopy(o);
             try { Drawable bd = a.pm.getApplicationBanner((String)o[0]); if (bd==null) bd = a.pm.getApplicationIcon((String)o[0]); a.heroBadge.setImageBitmap(glyph((String)o[0], bd));} catch(Exception e){}
