@@ -44,6 +44,31 @@ class ImageLoader {
         });
     }
 
+    void loadFirstAvailable(ImageView iv, String[] uris, boolean fit, int tw, int th) {
+        if (iv == null || uris == null || uris.length == 0) return;
+        StringBuilder tag = new StringBuilder("fallback:");
+        for (String uri : uris) if (uri != null && !uri.isEmpty()) tag.append(uri).append('|');
+        iv.setTag(tag.toString());
+        pool.execute(() -> {
+            Bitmap bm = null;
+            for (String uri : uris) {
+                if (uri == null || uri.isEmpty()) continue;
+                String k = key(uri, tw, th);
+                bm = cache.get(k);
+                if (bm == null) {
+                    bm = decode(uri, tw, th);
+                    if (bm != null) cache.put(k, bm);
+                }
+                if (bm != null) break;
+            }
+            final Bitmap result = bm;
+            h.post(() -> {
+                if (result == null || iv.getWindowToken() == null || !tag.toString().equals(iv.getTag())) return;
+                apply(iv, result, fit);
+            });
+        });
+    }
+
     static void apply(ImageView iv, Bitmap bm, boolean fit) {
         if (iv.getScaleType() != ImageView.ScaleType.FIT_END)
             iv.setScaleType(fit ? ImageView.ScaleType.FIT_CENTER : ImageView.ScaleType.CENTER_CROP);

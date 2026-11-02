@@ -285,6 +285,7 @@ public class MainActivity extends Activity {
             featuredCache=tv.collectFeatured(tv.queryPreviewFeatured());
             wnPickCache=tv.collectWatchNext();
             cards.plutoIdsCache=tv.queryPlutoIds();
+            cards.plutoResume=tv.plutoResume();
             appsCache=apps;
             StringBuilder sb=new StringBuilder(); List<String> keys=new ArrayList<>(usage.keySet()); Collections.sort(keys,(a,b)->Long.compare(grid.use(b),grid.use(a)));
             for (int i=0;i<Math.min(15,keys.size());i++) sb.append(keys.get(i)).append('=').append(grid.use(keys.get(i))/60000).append("m ");
