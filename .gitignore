@@ -2,3 +2,5 @@ key.jks
 *.jks
 *.apk
 build/
+.env*
+!.env.example
