@@ -1,6 +1,9 @@
 key.jks
 *.jks
 *.apk
+*.apk.idsig
 build/
+shieldhome/out/
+keystore-password.txt
 .env*
 !.env.example
