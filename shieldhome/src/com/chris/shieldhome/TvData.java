@@ -108,11 +108,30 @@ class TvData {
     static final int MAX_ITEMS = 20;
     static final float FINISHED_FRAC = 0.9f;
     static final int WN_CONTINUE = 0, WN_NEXT = 1, WN_NEW = 2; // TvContract watch_next_type
-    /** Play Next pick slots: {pkg, caption, thumb, intent, progress (-1 = none), isNew}. Progress alone can't tell NEW: NEXT-type rows at position 0 have -1 too. */
+    /** Play Next pick slots: {pkg, caption, thumb, intent, progress (-1 = none), isNew, engagement, playback, subtitle, score}. Progress alone can't tell NEW: NEXT-type rows at position 0 have -1 too. */
     static final int PICK_IS_NEW = 5;
-    static final int PICK_ENGAGEMENT = 6, PICK_PLAYBACK = 7;
+    static final int PICK_ENGAGEMENT = 6, PICK_PLAYBACK = 7, PICK_SUB = 8, PICK_SCORE = 9, PICK_LEN = 10;
+    static final String SUB_RESUME = "Resume watching", SUB_NEW = "New", SUB_REC = "Recommended";
 
-    /** Play Next (video apps, ≤MAX_ITEMS), each group by engagement: other apps' resume/NEXT rows, then YouTube NEW, then YouTube resume. No recs. */
+    // ---- v95 Play Next scoring: every candidate gets base(kind) × recency × app weight; the top MAX_ITEMS are interleaved by app. ----
+    static final long DAY_MS = 86400000L;
+    /** Base weight per kind: started-and-unfinished first, then next episode / new upload, then app recommendations. */
+    static final double BASE_RESUME = 1.0, BASE_NEXT = 0.85, BASE_NEW = 0.8, BASE_REC = 0.6;
+    /** Up to RESUME_MID_BONUS extra for an item halfway through (likeliest to be continued), tapering to 0 at the ends. */
+    static final double RESUME_MID_BONUS = 0.3;
+    /** Scores halve every HALF_LIFE_DAYS since last watched / published; items with no timestamp count as UNKNOWN_AGE_DAYS old. */
+    static final double HALF_LIFE_DAYS = 7, UNKNOWN_AGE_DAYS = 7;
+    /** Dropped outright: YouTube NEW uploads older than NEW_MAX_DAYS, resume/next rows untouched for RESUME_MAX_DAYS. */
+    static final long NEW_MAX_DAYS = 14, RESUME_MAX_DAYS = 60;
+    /** App weight = 1 + USAGE_K·ln(1 + hours used in the last 30 days). */
+    static final double USAGE_K = 0.25;
+    /** A recommendation's weight falls with its position in the app's own ranking (its first rows are its trending/top picks). */
+    static final double REC_RANK_K = 0.35;
+    /** At most YT_CAP YouTube tiles while other apps have candidates left; the row is always filled to MAX_ITEMS when there are enough. */
+    static final int YT_CAP = 10;
+
+    /** Play Next (video apps, ≤MAX_ITEMS): resume/next rows from every app, YouTube NEW uploads and (while the featured card is hidden) app
+     *  recommendations, scored and interleaved so apps alternate. See the v95 constants above. */
     List<Object[]> collectWatchNext() {
         List<Object[]> rows = new ArrayList<>();
         try (Cursor c = a.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, null, null, null, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC")) {
@@ -122,7 +141,8 @@ class TvData {
                 if (pkg == null || !VIDEO_APPS.contains(pkg) || newsRow(c, pkg) || !a.installed(pkg)) continue;
                 Object[] o = prog(c, true);
                 if (o == null || o[0] == null || o[2] == null) continue;
-                rows.add(new Object[]{o, l(c, "last_engagement_time_utc_millis"), l(c, "last_playback_position_millis"), l(c, "duration_millis"), (int) l(c, "watch_next_type"), clean(s(c, "title")), idx++, uriOf(o[3])});
+                long published = Math.max(l(c, "start_time_utc_millis"), parseRelease(s(c, "release_date")));
+                rows.add(new Object[]{o, l(c, "last_engagement_time_utc_millis"), l(c, "last_playback_position_millis"), l(c, "duration_millis"), (int) l(c, "watch_next_type"), clean(s(c, "title")), idx++, uriOf(o[3]), published});
             }
         } catch (Exception e) { android.util.Log.w("ShieldHome", "wn " + e); }
         Collections.sort(rows, (x, y) -> {
@@ -134,46 +154,102 @@ class TvData {
             }
             return Integer.compare((Integer) x[6], (Integer) y[6]);
         });
+        // The featured card shows app recommendations only while the wallpaper is off; then Play Next keeps excluding them.
+        // With the wallpaper on the card is hidden, so those recommendations join Play Next instead.
+        boolean heroOn = !a.settings.wallOn();
         Set<String> feat = new HashSet<>();
-        if (a.featuredCache != null) for (Object[] f : a.featuredCache) {
+        if (heroOn && a.featuredCache != null) for (Object[] f : a.featuredCache) {
             if (f[0] != null && f[1] != null) feat.add(f[0] + "|" + clean((String) f[1]));
             feat.add(uriOf(f[4]));
         }
-        List<Object[]> pick = new ArrayList<>();
+        long now = System.currentTimeMillis();
         Set<String> seen = new HashSet<>();
-        List<Object[]> other = new ArrayList<>(), ytNew = new ArrayList<>(), ytResume = new ArrayList<>();
-        Map<String, Integer> ytTypes = new TreeMap<>();
-        int dropDone = 0, dropZero = 0, dropType = 0;
+        List<Object[]> cands = new ArrayList<>();
+        int dropDone = 0, dropZero = 0, dropType = 0, dropOldNew = 0, dropStale = 0;
         for (Object[] r : rows) {
-            if (YT.equals(((Object[]) r[0])[0])) ytTypes.merge("t" + r[4], 1, Integer::sum);
             Object[] o = (Object[]) r[0];
             String pkg = (String) o[0];
-            long pos = (Long) r[2], dur = (Long) r[3];
+            long engaged = (Long) r[1], pos = (Long) r[2], dur = (Long) r[3], published = (Long) r[8];
             int type = (Integer) r[4];
             // Nearly finished: hidden; a show's next episode is its own NEXT-type row and shows instead.
             if (finished(pos, dur)) { dropDone++; continue; }
             boolean ytNewRow = type == WN_NEW && YT.equals(pkg);
             if (type != WN_CONTINUE && type != WN_NEXT && !ytNewRow) { dropType++; continue; }
             if (type == WN_CONTINUE && pos <= 0) { dropZero++; continue; }
+            // NEW = new to you, not necessarily new: age it by its publish time when the app gives one, else by when it was added.
+            long when = ytNewRow && published > 0 ? published : engaged;
+            if (ytNewRow && when > 0 && now - when > NEW_MAX_DAYS * DAY_MS) { dropOldNew++; continue; }
+            if (!ytNewRow && engaged > 0 && now - engaged > RESUME_MAX_DAYS * DAY_MS) { dropStale++; continue; }
             if (!fresh(pkg, (String) r[5], (String) r[7], feat, seen)) continue;
-            Object[] p = Arrays.copyOf(o, PICK_PLAYBACK + 1); p[PICK_IS_NEW] = ytNewRow;
-            p[PICK_ENGAGEMENT] = r[1]; p[PICK_PLAYBACK] = r[2];
-            (ytNewRow ? ytNew : YT.equals(pkg) ? ytResume : other).add(p);
+            float prog = (Float) o[4];
+            double base = ytNewRow ? BASE_NEW : type == WN_NEXT ? BASE_NEXT : BASE_RESUME + (prog > 0 ? RESUME_MID_BONUS * (1 - Math.abs(prog - 0.5) * 2) : 0);
+            cands.add(pickOf(o, ytNewRow, engaged, pos, ytNewRow ? SUB_NEW : SUB_RESUME, base * decay(when, now) * appWeight(pkg)));
         }
-        Collections.sort(ytResume, (x, y) -> {
-            long engagementX = (Long) x[PICK_ENGAGEMENT], engagementY = (Long) y[PICK_ENGAGEMENT];
-            if (engagementX != engagementY) return Long.compare(engagementY, engagementX);
-            return Long.compare((Long) y[PICK_PLAYBACK], (Long) x[PICK_PLAYBACK]);
-        });
-        int[] shown = new int[3]; List<List<Object[]>> groups = Arrays.asList(other, ytNew, ytResume);
-        for (int g = 0; g < groups.size(); g++) {
-            List<Object[]> l = groups.get(g);
-            shown[g] = Math.min(l.size(), MAX_ITEMS - pick.size());
-            pick.addAll(l.subList(0, shown[g]));
-        }
-        android.util.Log.i("ShieldHome", "playnext other=" + shown[0] + "/" + other.size() + " ytNew=" + shown[1] + "/" + ytNew.size() + " ytResume=" + shown[2] + "/" + ytResume.size() + " wnRows=" + rows.size() + " ytTypes=" + ytTypes + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType);
-        return mixOrder(pick);
+        int recs = heroOn ? 0 : addRecommendations(cands, seen);
+        List<Object[]> pick = choose(cands);
+        Map<String, Integer> byApp = new TreeMap<>(); for (Object[] p : pick) byApp.merge(shortPkg((String) p[0]) + ":" + p[PICK_SUB], 1, Integer::sum);
+        android.util.Log.i("ShieldHome", "playnext picked=" + pick.size() + "/" + cands.size() + " recs=" + recs + " heroOn=" + heroOn + " mix=" + byApp
+            + " droppedFinished=" + dropDone + " droppedNoProgress=" + dropZero + " droppedNotResume=" + dropType + " droppedOldNew=" + dropOldNew + " droppedStale=" + dropStale);
+        return pick;
     }
+    static Object[] pickOf(Object[] o, boolean isNew, long engaged, long pos, String sub, double score) {
+        Object[] p = Arrays.copyOf(o, PICK_LEN);
+        p[PICK_IS_NEW] = isNew; p[PICK_ENGAGEMENT] = engaged; p[PICK_PLAYBACK] = pos; p[PICK_SUB] = sub; p[PICK_SCORE] = score;
+        return p;
+    }
+    /** 0.5^(age/HALF_LIFE_DAYS); unknown timestamps count as UNKNOWN_AGE_DAYS. */
+    static double decay(long when, long now) {
+        double days = when > 0 ? Math.max(0, now - when) / (double) DAY_MS : UNKNOWN_AGE_DAYS;
+        return Math.pow(0.5, days / HALF_LIFE_DAYS);
+    }
+    /** Raw 30-day foreground time (not AppGridController.use(), which inflates YouTube for the grid order). */
+    double appWeight(String pkg) {
+        Long ms = a.usage == null ? null : a.usage.get(pkg);
+        return 1 + USAGE_K * Math.log1p((ms == null ? 0 : ms) / 3600000.0);
+    }
+    /** Video apps' home-screen recommendations (PreviewPrograms), each app's rows in its own order (channel, then weight); rank lowers the score. */
+    int addRecommendations(List<Object[]> cands, Set<String> seen) {
+        int n = 0; Map<String, Integer> rank = new HashMap<>();
+        String order = TvContract.PreviewPrograms.COLUMN_CHANNEL_ID + " ASC, " + TvContract.PreviewPrograms.COLUMN_WEIGHT + " DESC";
+        try (Cursor c = a.getContentResolver().query(TvContract.PreviewPrograms.CONTENT_URI, null, null, null, order)) {
+            while (c != null && c.moveToNext()) {
+                String pkg = s(c, "package_name");
+                if (pkg == null || YT.equals(pkg) || !VIDEO_APPS.contains(pkg) || newsRow(c, pkg) || !a.installed(pkg)) continue;
+                Object[] o = prog(c, false);
+                if (o == null || o[2] == null) continue;
+                if (opensYouTube(pkg, (Intent) o[3])) continue;
+                if (!fresh(pkg, clean(s(c, "title")), uriOf(o[3]), Collections.emptySet(), seen)) continue;
+                int r = rank.merge(pkg, 1, Integer::sum) - 1;
+                double popular = 1 + 0.05 * Math.log10(1 + Math.max(0, l(c, "interaction_count")));
+                cands.add(pickOf(o, false, 0L, 0L, SUB_REC, BASE_REC / (1 + REC_RANK_K * r) * popular * appWeight(pkg)));
+                n++;
+            }
+        } catch (Exception e) { android.util.Log.w("ShieldHome", "recs " + e); }
+        return n;
+    }
+    /** Top MAX_ITEMS by score with YouTube held to YT_CAP while others remain (the row still fills from YouTube if they run out),
+     *  then interleaved: each slot takes the best remaining item from a different app than the previous slot when one exists. */
+    static List<Object[]> choose(List<Object[]> cands) {
+        List<Object[]> sorted = new ArrayList<>(cands);
+        Collections.sort(sorted, (x, y) -> Double.compare((Double) y[PICK_SCORE], (Double) x[PICK_SCORE]));
+        List<Object[]> chosen = new ArrayList<>(), overflow = new ArrayList<>();
+        int yt = 0;
+        for (Object[] p : sorted) {
+            if (chosen.size() >= MAX_ITEMS) break;
+            if (YT.equals(p[0]) && yt >= YT_CAP) { overflow.add(p); continue; }
+            if (YT.equals(p[0])) yt++;
+            chosen.add(p);
+        }
+        for (Object[] p : overflow) { if (chosen.size() >= MAX_ITEMS) break; chosen.add(p); }
+        List<Object[]> out = new ArrayList<>(); String last = null;
+        while (!chosen.isEmpty()) {
+            int at = 0; // chosen stays score-sorted (overflow items are lower than everything before them)
+            for (int i = 0; i < chosen.size(); i++) if (!chosen.get(i)[0].equals(last)) { at = i; break; }
+            Object[] p = chosen.remove(at); out.add(p); last = (String) p[0];
+        }
+        return out;
+    }
+    static String shortPkg(String pkg) { int i = pkg.lastIndexOf('.'); return i < 0 ? pkg : pkg.substring(i + 1); }
     static final String PLUTO = "tv.pluto.android";
     /** Pluto's latest unfinished watch-next row as a Play Next pick slot {pkg, caption, thumb, intent, progress}, or null if Pluto publishes none. */
     Object[] plutoResume() {
@@ -189,40 +265,6 @@ class TvData {
             android.util.Log.i("ShieldHome", "pluto resume: none (" + rows + " pluto watch-next rows)");
         } catch (Exception e) { android.util.Log.w("ShieldHome", "pluto resume " + e); }
         return null;
-    }
-    static final String PN_ORDER_PREF = "pn_order", PN_ID_SEP = "\n";
-    /** Stable Play Next order: survivors keep their saved order, gone items drop out, only new items land at random slots. Persisted so it survives activity recreation. */
-    List<Object[]> mixOrder(List<Object[]> pick) {
-        Map<String, Object[]> byId = new LinkedHashMap<>();
-        for (Object[] o : pick) { String id = stableId(o); for (int n = 2; byId.containsKey(id); n++) id = stableId(o) + "#" + n; byId.put(id, o); }
-        List<Object[]> out = new ArrayList<>(); List<String> ids = new ArrayList<>();
-        for (String id : a.prefs().getString(PN_ORDER_PREF, "").split(PN_ID_SEP)) {
-            Object[] o = byId.remove(id);
-            if (o != null) { out.add(o); ids.add(id); }
-        }
-        int kept = out.size();
-        Random r = new Random();
-        for (Map.Entry<String, Object[]> e : byId.entrySet()) {
-            int at = r.nextInt(out.size() + 1);
-            out.add(at, e.getValue()); ids.add(at, e.getKey());
-        }
-        a.prefs().edit().putString(PN_ORDER_PREF, String.join(PN_ID_SEP, ids)).apply();
-        android.util.Log.i("ShieldHome", "playnext order kept=" + kept + " new=" + byId.size());
-        return out;
-    }
-    /** Query params that carry playback state, not identity; dropped from the stable id. */
-    static final Set<String> VOLATILE_PARAMS = new HashSet<>(Arrays.asList("t", "time", "start", "position", "pos", "offset", "resume", "resume_position"));
-    /** Package + content uri. Opaque uris (vnd.youtube:ID) keep their scheme-specific part; hierarchical ones keep
-     *  authority, path and every query param except VOLATILE_PARAMS, sorted, so ids in any param stay distinct. */
-    static String stableId(Object[] o) {
-        Intent in = (Intent) o[3];
-        android.net.Uri d = in.getData();
-        if (d == null) return o[0] + "|" + in.getComponent();
-        if (d.isOpaque()) return o[0] + "|" + d.getScheme() + ":" + d.getSchemeSpecificPart();
-        StringBuilder id = new StringBuilder().append(o[0]).append('|').append(d.getScheme()).append("://").append(d.getAuthority()).append(d.getPath());
-        for (String k : new TreeSet<>(d.getQueryParameterNames()))
-            if (!VOLATILE_PARAMS.contains(k)) id.append(id.indexOf("?") < 0 ? '?' : '&').append(k).append('=').append(d.getQueryParameter(k));
-        return id.toString();
     }
     /** True (and marks seen) when pkg|title and intent uri are not in the featured card or already in Play Next. */
     static boolean fresh(String pkg, String title, String uri, Set<String> feat, Set<String> seen) {

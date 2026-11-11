@@ -228,11 +228,12 @@ class CardsController {
         List<Object[]> pick=a.wnPickCache;
         if (pick==null||pick.isEmpty()) return 0;
         int n=0;
+        Map<String,Integer> subs=new TreeMap<>();
         for (Object[] o: pick){ final Intent fi=new Intent((Intent)o[3]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); final String pk2=(String)o[0]; boolean isNew=(Boolean)o[TvData.PICK_IS_NEW];
-            View v = card(null,(String)o[2],false,pk2,(String)o[1], isNew?SUB_NEW:SUB_RESUME, isNew?-1f:(Float)o[4], ()->{try{a.startActivity(fi);}catch(Exception e){ a.launchPkg(pk2);} });
-            addCard(v, n++); }
-        int nNew=0; for (Object[] o: pick) if ((Boolean)o[TvData.PICK_IS_NEW]) nNew++;
-        android.util.Log.i("ShieldHome","playnext shown="+n+" subNew="+nNew+" subResume="+(n-nNew));
+            String sub=o.length>TvData.PICK_SUB && o[TvData.PICK_SUB]!=null ? (String)o[TvData.PICK_SUB] : isNew?SUB_NEW:SUB_RESUME; // v95: per-pick label (Resume watching / New / Recommended)
+            View v = card(null,(String)o[2],false,pk2,(String)o[1], sub, isNew?-1f:(Float)o[4], ()->{try{a.startActivity(fi);}catch(Exception e){ a.launchPkg(pk2);} });
+            addCard(v, n++); subs.merge(sub, 1, Integer::sum); }
+        android.util.Log.i("ShieldHome","playnext shown="+n+" "+subs);
         return n;
     }
     List<Object[]> plutoCaps = new ArrayList<>(); Map<String,String> plutoNow = new HashMap<>(); Map<String,String> plutoArt = new HashMap<>(); Map<String,String> plutoLogo = new HashMap<>(); final Map<String,long[]> plutoSpan = new HashMap<>(); volatile Object[] plutoResume; /* set on the TvData worker */ final Map<String,String> plutoSlug = new java.util.concurrent.ConcurrentHashMap<>(); long plutoAt=0;
