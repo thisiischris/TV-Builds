@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     static final int TILE_R = 11;
     static final long HERO_ROTATE_MS = 16000;
     final android.view.animation.DecelerateInterpolator focusInterpolator = new android.view.animation.DecelerateInterpolator();
-    static final float APP_FOCUS=1.20f, APP_HOLD=1.23f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f, APP_GRID_Y=467.5f;
+    static final float APP_FOCUS=1.12f, APP_HOLD=1.15f, APP_W=142.5f, APP_H=78.5f, APP_HG=19.8f, APP_VG=21f, APP_GRID_Y=467.5f; // v89: calmer focus growth (was 1.20/1.23; hold stays 0.03 above focus)
     /** v82: extra breathing room between app rows (half above, half below each row); APP_GRID_Y fixed so row 1 still peeks. */
     static final float APP_ROW_PAD=4f, APP_ROW_GAP=APP_VG+APP_ROW_PAD;
     static final String[] PLAY_PKGS = {"com.google.android.youtube.tv","com.netflix.ninja","com.disney.disneyplus","com.hulu.livingroomplus","com.wbd.stream","com.amazon.amazonvideo.livingroom","com.plexapp.android"};
@@ -181,6 +181,7 @@ public class MainActivity extends Activity {
             if (x==menuPop){ if (f) menuPop=null; return; }
             x.animate().scaleX(f?sc:1f).scaleY(f?sc:1f).translationX(0).translationY(0).rotation(0).setDuration(220).setInterpolator(focusInterpolator).start();
             x.setTranslationZ(f?p(12):0);
+            if (f) g.sampleTint();
             if (g.glowAnimator!=null) g.glowAnimator.cancel();
             g.glowAnimator = android.animation.ValueAnimator.ofFloat(g.glow, f?1f:0f); g.glowAnimator.setDuration(220);
             g.glowAnimator.addUpdateListener(a->{ g.glow=(Float)a.getAnimatedValue(); g.syncHalo(); }); g.glowAnimator.start();
@@ -199,6 +200,36 @@ public class MainActivity extends Activity {
         bl.setColor(Color.BLACK); bl.setMaskFilter(new BlurMaskFilter(p(32), BlurMaskFilter.Blur.NORMAL));
         c.drawRoundRect(pad, pad, pad+w, pad+h, r, r, bl);
         glowBmps.put(k, bm); return bm;
+    }
+    /** v87: white soft-edged rounded rect (alpha mask) for the colour halo; tinted at draw time by GlowFrame. Tighter than the shadow so it reads as a rim glow. */
+    static final float HALO_BLUR=14f, HALO_SPREAD=2f;
+    Bitmap haloBmp(int w, int h, float r){
+        String k="halo:"+w+"x"+h+":"+(int)r;
+        Bitmap hit=glowBmps.get(k); if (hit!=null && !hit.isRecycled()) return hit;
+        int pad=p(48), s=p(HALO_SPREAD);
+        Bitmap bm=Bitmap.createBitmap(Math.max(1,w+pad*2), Math.max(1,h+pad*2), Bitmap.Config.ALPHA_8);
+        Canvas c=new Canvas(bm);
+        Paint bl=new Paint(Paint.ANTI_ALIAS_FLAG);
+        bl.setColor(Color.WHITE); bl.setMaskFilter(new BlurMaskFilter(p(HALO_BLUR), BlurMaskFilter.Blur.NORMAL));
+        c.drawRoundRect(pad-s, pad-s, pad+w+s, pad+h+s, r+s, r+s, bl);
+        glowBmps.put(k, bm); return bm;
+    }
+    /** v87: halo colour from a tiny sample of a tile: saturation-weighted average (so logos/accents win over white or dark fills), then lifted to a bright, slightly softened glow. */
+    int glowColor(Bitmap bm){
+        int w=bm.getWidth(), h=bm.getHeight(); int[] px=new int[w*h]; bm.getPixels(px, 0, w, 0, 0, w, h);
+        double wr=0, wg=0, wb=0, wsum=0, ar=0, ag=0, ab=0; int n=0; float[] hsv=new float[3];
+        for (int c: px){
+            if (Color.alpha(c)<128) continue;
+            int r=Color.red(c), g=Color.green(c), b=Color.blue(c);
+            ar+=r; ag+=g; ab+=b; n++;
+            Color.colorToHSV(c, hsv); if (hsv[2]<0.15f) continue;
+            double wt=hsv[1]*hsv[1]*hsv[2]; wr+=r*wt; wg+=g*wt; wb+=b*wt; wsum+=wt;
+        }
+        if (n==0) return Color.WHITE;
+        int base = wsum>n*0.03 ? Color.rgb((int)(wr/wsum), (int)(wg/wsum), (int)(wb/wsum)) : Color.rgb((int)(ar/n), (int)(ag/n), (int)(ab/n));
+        Color.colorToHSV(base, hsv);
+        hsv[1]=Math.min(hsv[1], 0.80f); hsv[2]=Math.max(hsv[2], 0.92f);
+        return Color.HSVToColor(hsv);
     }
     View appTile(final String pkg, String cls, String label){
         FrameLayout f = new FrameLayout(this); f.setClipToOutline(true);

@@ -15,6 +15,10 @@ class FocusController {
     /** App-grid tiles are restored by identity (tile tag = package), so a rebuilt or reordered grid still lands on the launched app. */
     String savedKey;
     boolean backLong, pendingRestore;
+    /** v91: held Left/Right in the app grid repeats at the system rate (~50 ms), which crosses a 6-app row in ~0.25 s and reads as a snap
+     *  to the end. Repeats (not first presses) are paced to one move per GRID_REPEAT_MS so the focus visibly walks the row. */
+    static final long GRID_REPEAT_MS = 80;
+    long lastGridHz;
 
     FocusController(MainActivity a) { this.a = a; }
 
@@ -118,6 +122,11 @@ class FocusController {
         View t;
         if (v) t = navTarget(f, sec, k == KeyEvent.KEYCODE_DPAD_UP);
         else {
+            if (sec >= 4) {
+                long now = android.os.SystemClock.uptimeMillis();
+                if (e.getRepeatCount() > 0 && now - lastGridHz < GRID_REPEAT_MS) return true; // swallow: too soon after the last move
+                lastGridHz = now;
+            }
             List<View> it = secItems(sec);
             int ix = it.indexOf(secRoot(f, sec));
             int ni = ix + (k == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);

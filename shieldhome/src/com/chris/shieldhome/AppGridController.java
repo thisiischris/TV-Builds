@@ -41,10 +41,23 @@ class AppGridController {
         if (this.a.speakV!=null){ this.a.speakV.setFocusable(!hide && this.a.searchOpen && !this.a.dimSlide); this.a.typeV.setFocusable(!hide && this.a.searchOpen && !this.a.dimSlide); }
     }
     void boxLayer(View v, boolean on){ if (v!=null) v.setLayerType(on?View.LAYER_TYPE_HARDWARE:View.LAYER_TYPE_NONE, null); }
+    /** v89: alpha of row 1 (the peek under the first row) while the drawer is closed, so its cut-off top edge reads as a hint, not a glitch. */
+    static final float PEEK_ALPHA=0.60f;
+    /** Re-apply row 0 (full) and peek-row alphas in place after the grid is rebuilt or reordered (a tile may have moved between the two rows). */
+    void syncPeek(){
+        if (this.a.homeGrid==null) return;
+        int n=this.a.homeGrid.getChildCount();
+        for (int i=0;i<Math.min(12,n);i++){ View t=this.a.homeGrid.getChildAt(i); t.animate().cancel(); t.setAlpha(i<6||this.a.drawerOpen?1f:PEEK_ALPHA); }
+    }
     void staggerDrawer(boolean open){
         if (this.a.homeGrid==null) return;
         int n=this.a.homeGrid.getChildCount(), rows=Math.max(1,(n+5)/6);
-        for (int row=2; row<rows; row++){ // row 1 is the peek; leave it visible when closed
+        for (int c=0;c<6;c++){ // row 1 is the peek: brightens as the drawer opens, dims back when it closes
+            int i=6+c; if (i>=n) break;
+            View t=this.a.homeGrid.getChildAt(i); t.animate().cancel();
+            t.animate().alpha(open?1f:PEEK_ALPHA).setStartDelay(0).setDuration(600).setInterpolator(this.a.drawerIp).start();
+        }
+        for (int row=2; row<rows; row++){
             int delay=open?(row-1)*40:(rows-1-row)*40;
             for (int c=0;c<6;c++){
                 int i=row*6+c; if (i>=n) break;
@@ -142,6 +155,7 @@ class AppGridController {
         this.a.homeBindSig=sig;
         this.a.homeGrid.removeAllViews();
         for (int i=0;i<all.size();i++) this.a.homeGrid.addView(homeTile(all.get(i), i), gridLp(i));
+        syncPeek();
         ViewGroup.LayoutParams lp=this.a.homeGrid.getLayoutParams();
         if (lp!=null){ int height=rowH()*Math.max(1,(all.size()+5)/6); if (lp.height!=height){ lp.height=height; this.a.homeGrid.setLayoutParams(lp); } }
         if (focusIdx>=0 && this.a.homeGrid.getChildCount()>0){
@@ -231,6 +245,7 @@ class AppGridController {
         this.a.homeGrid.removeAllViews();
         for (int i=0;i<this.a.tiles.length;i++) this.a.homeGrid.addView(this.a.tiles[i], gridLp(i));
         this.a.tiles=null; this.a.tgtX=null; this.a.tgtY=null;
+        syncPeek();
     }
     void enterEdit(int i){ if (this.a.editMode) return; this.a.editMode=true; closeMenu(false); startDrag(i); setEditDim(true); }
     void startDrag(int i){

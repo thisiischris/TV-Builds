@@ -20,6 +20,8 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     static final String PLUGIN_DESC="tv.projectivy.plugin.wallpaperprovider.api.IWallpaperProviderService";
     static final int TX_GET_WALLPAPERS=IBinder.FIRST_CALL_TRANSACTION, EVENT_TIME_ELAPSED=1, TYPE_VIDEO=4, MAX_ITEMS=500, MAX_REBINDS=1;
     static final long FADE_MS=800;
+    /** v89: switching videos fades the current one out over SWAP_OUT_MS before the player is torn down; onPrepared fades the next one in over FADE_MS. */
+    static final long SWAP_OUT_MS=350;
     /** Bottom scrim over the video: WALL_TOP_ALPHA above WALL_DIM_START (fraction of screen height), smoothstep over WALL_DIM_STOPS stops to WALL_DIM_ALPHA black at WALL_DIM_END, solid below. */
     static final float WALL_DIM_START=0.45f, WALL_DIM_END=0.92f; static final int WALL_DIM_ALPHA=225, WALL_DIM_STOPS=24;
     /** Light dim (~6% black) over the rest of the screen: the gradient starts from this alpha and CLAMP carries it to the top edge, so there is no band. */
@@ -100,7 +102,13 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
         if (uris.isEmpty()) return;
         pressArrow(dir<0?prev:nextBtn);
         idx=((idx+dir)%uris.size()+uris.size())%uris.size(); fails=0; resumePos=0;
-        release(); play();
+        swap();
+    }
+    /** Fade the current video out, then tear the player down and start the one at idx (which fades itself in once prepared).
+     *  Repeated calls restart the fade from the current alpha and only the last one plays; stop() cancels it (end actions don't run on cancel). */
+    void swap(){
+        view.animate().cancel();
+        view.animate().alpha(0f).setDuration(SWAP_OUT_MS).withEndAction(()->{ release(); if (visible && a.settings.wallOn()) play(); }).start();
     }
 
     /** Pref changed or home became visible: show + play when on, stop + release when off. */
@@ -176,7 +184,7 @@ class WallpaperController implements TextureView.SurfaceTextureListener {
     /** The playing video becomes the locked one (after Left/Right, or when error/missing-URI skipping moved past the locked video). */
     void lockCurrent(){ if (!locked()) return; String u=uris.get(idx%uris.size()); if (!u.equals(a.prefs().getString(PREF_LOCK_URI, null))) a.prefs().edit().putString(PREF_LOCK_URI, u).apply(); }
     /** Advance on completion/error (while locked, only errors reach here: the next playable video becomes the locked one via lockCurrent); async, and gives up after a full pass of failures (no recursion on bad URIs). */
-    void next(){ release(); resumePos=0; idx=(idx+1)%Math.max(1,uris.size()); if (++fails>uris.size()) return; a.h.post(()->{ if (visible && a.settings.wallOn()) play(); }); }
+    void next(){ resumePos=0; idx=(idx+1)%Math.max(1,uris.size()); if (++fails>uris.size()){ release(); return; } swap(); }
     void release(){ prepared=false; if (mp!=null){ try { mp.reset(); mp.release(); } catch (Exception e){} mp=null; } }
     void stop(){ view.animate().cancel(); view.setAlpha(0f); scrim.animate().cancel(); scrim.setAlpha(0f); release(); }
 

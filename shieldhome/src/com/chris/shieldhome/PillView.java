@@ -23,16 +23,12 @@ class PillView extends View {
             float w=getWidth(), hh=getHeight(), r=hh/2;
             pt.setStyle(Paint.Style.FILL);
             boolean fo = isFocused();
-            boolean bare = this==activity.gear && !fo;
-            if (!bare){
-                if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
-                else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
-                else if (icon==5 && this!=activity.dimBar) pt.setColor(fo?Color.argb(155,170,170,191):Color.argb(95,162,162,183));
-                else pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
-                c.drawRoundRect(0,0,w,hh,r,r,pt);
-                if (icon==5 && !on && this!=activity.dimBar){ pt.setShader(new LinearGradient(0,0,0,hh,Color.argb(70,255,255,255),Color.argb(0,255,255,255),Shader.TileMode.CLAMP)); c.drawRoundRect(0,0,w,hh,r,r,pt); pt.setShader(null); }
-                if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
-            }
+            // v88: the brightness (gear) pill always shows the same container as Search and the status pill (was bare until focused, with its own lighter focus fill).
+            if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
+            else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
+            else pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
+            c.drawRoundRect(0,0,w,hh,r,r,pt);
+            if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
             int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
             if (this==activity.dimBar){
                 pt.setStyle(Paint.Style.FILL); pt.setTextSize(activity.p(12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
