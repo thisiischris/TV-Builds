@@ -337,6 +337,7 @@ public class MainActivity extends Activity {
         refreshCards();
         hero.applyFeaturedCache();
         if (focus!=null) focus.afterBind();
+        if (tab==0) cards.prewarmSoon(); // v96: build the Live TV row while idle so the first switch is instant
     }
     boolean playNextOn(){ return wnPickCache!=null && !wnPickCache.isEmpty(); }
     void applyTabs(){

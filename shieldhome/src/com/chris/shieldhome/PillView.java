@@ -10,7 +10,13 @@ class PillView extends View {
         // Search pill: Assistant icon at the left inner padding (where the magnifier began), label SEARCH_GAP after it, same padding after the label.
         static final float SEARCH_PAD=14, SEARCH_ASST=15, SEARCH_GAP=4, LABEL_SIZE=12;
         final MainActivity activity; String label; int icon; boolean on; Drawable asst; Path track, fill; Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
-        PillView(MainActivity activity, Context c, String l, int ic, boolean o){ super(c); this.activity=activity; label=l; icon=ic; on=o; setFocusable(true); setClickable(true); }
+        /** v98: focused glass pills (Search, brightness, menu, speak/type) turn solid white with a dark glyph, grow FOCUS_SCALE and lift with a
+         *  FOCUS_LIFT shadow (the pill outline below gives the elevation a rounded shadow; PillView draws itself, so it has no background outline). */
+        static final float FOCUS_SCALE=1.10f, FOCUS_LIFT=6f;
+        static final int FOCUS_FILL=Color.WHITE, FG_DARK=Color.rgb(22,22,30), FG_LIGHT=Color.rgb(232,232,240);
+        PillView(MainActivity activity, Context c, String l, int ic, boolean o){ super(c); this.activity=activity; label=l; icon=ic; on=o; setFocusable(true); setClickable(true);
+            setOutlineProvider(new ViewOutlineProvider(){ @Override public void getOutline(View v, Outline out){ out.setRoundRect(0, 0, v.getWidth(), v.getHeight(), v.getHeight()/2f); } }); }
+        boolean whiteFocus(){ return isFocused() && !on && icon!=2 && this!=activity.dimBar; }
         /** The search pill wraps its content: padding, Assistant icon, gap, measured label, equal padding. */
         @Override protected void onMeasure(int ws, int hs){
             if (icon!=3 || getLayoutParams()==null || getLayoutParams().width!=ViewGroup.LayoutParams.WRAP_CONTENT){ super.onMeasure(ws, hs); return; }
@@ -18,7 +24,9 @@ class PillView extends View {
             setMeasuredDimension(w, getDefaultSize(getSuggestedMinimumHeight(), hs));
         }
         void labelPaint(){ pt.setTextSize(activity.p(this==activity.heroBtn?14:icon==2?12.5f:LABEL_SIZE)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL)); }
-        @Override protected void onFocusChanged(boolean f, int d, Rect r){ super.onFocusChanged(f,d,r); if (this==activity.heroBtn) return; animate().scaleX(f?1.07f:1f).scaleY(f?1.07f:1f).setDuration(160).setInterpolator(activity.focusInterpolator).start(); setElevation(f?activity.p(4):0); invalidate(); }
+        // Use the focus state AFTER super: super runs the focus listener, and Search's listener (expandSearch) hands focus to speak/type right away,
+        // nesting an onFocusChanged(false) inside this call; acting on the stale `f` re-applied the focused shadow/scale to an unfocused pill.
+        @Override protected void onFocusChanged(boolean gained, int d, Rect r){ super.onFocusChanged(gained,d,r); if (this==activity.heroBtn) return; boolean f=isFocused(); animate().scaleX(f?FOCUS_SCALE:1f).scaleY(f?FOCUS_SCALE:1f).setDuration(160).setInterpolator(activity.focusInterpolator).start(); setElevation(f?activity.p(FOCUS_LIFT):0); invalidate(); }
         @Override protected void onDraw(Canvas c){
             float w=getWidth(), hh=getHeight(), r=hh/2;
             pt.setStyle(Paint.Style.FILL);
@@ -26,10 +34,11 @@ class PillView extends View {
             // v88: the brightness (gear) pill always shows the same container as Search and the status pill (was bare until focused, with its own lighter focus fill).
             if (icon==2) pt.setColor(fo?Color.WHITE:Color.rgb(225,224,228));
             else if (on) pt.setColor(fo?Color.WHITE:Color.rgb(229,227,228));
+            else if (whiteFocus()) pt.setColor(FOCUS_FILL);
             else pt.setColor(fo?Color.argb(185,102,100,119):Color.argb(140,60,58,75));
             c.drawRoundRect(0,0,w,hh,r,r,pt);
-            if (!on && icon!=2){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
-            int fg = (icon==2||on) ? Color.rgb(22,22,30) : Color.rgb(232,232,240);
+            if (!on && icon!=2 && !whiteFocus()){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(Color.argb(40,255,255,255)); c.drawRoundRect(.5f,.5f,w-.5f,hh-.5f,r,r,pt); }
+            int fg = (icon==2||on||whiteFocus()) ? FG_DARK : FG_LIGHT;
             if (this==activity.dimBar){
                 pt.setStyle(Paint.Style.FILL); pt.setTextSize(activity.p(12)); pt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
                 float labW=pt.measureText("90%"), pad=activity.p(12), gap=activity.p(8), th=activity.p(6), tw=w-pad*2-gap-labW, ty=(hh-th)/2, rr=th/2, t=Math.max(0, Math.min(1, activity.dimFill/0.9f));

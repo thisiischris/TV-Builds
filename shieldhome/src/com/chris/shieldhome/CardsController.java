@@ -270,7 +270,7 @@ class CardsController {
                 if (t0!=null){ m.put(ch.optString("name"), t0.optString("title")); long[] se={guideTime(f, t0.optString("start")), guideTime(f, t0.optString("stop"))}; if (se[0]>0 && se[1]>se[0]) span.put(ch.optString("name"), se); String img=plutoGuideArt(t0, ban); if (img!=null) art.put(ch.optString("name"), img); }
                 String sl=ch.optString("slug",null); if (sl!=null) plutoSlug.put(ch.optString("name"), sl); }
             android.util.Log.i("ShieldHome","pluto now: "+m.size()+" channels art="+art.size()+" logos="+logos.size());
-            a.h.post(()->{ plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoLogo.clear(); plutoLogo.putAll(logos); plutoSpan.clear(); plutoSpan.putAll(span); plutoAt=System.currentTimeMillis(); applyLiveNow(); setPicks(picks); });
+            a.h.post(()->{ tifArt.clear(); tifAsked.clear(); plutoNow.clear(); plutoNow.putAll(m); plutoArt.clear(); plutoArt.putAll(art); plutoLogo.clear(); plutoLogo.putAll(logos); plutoSpan.clear(); plutoSpan.putAll(span); plutoAt=System.currentTimeMillis(); applyLiveNow(); setPicks(picks); });
         } catch (Exception e){ android.util.Log.w("ShieldHome","pluto guide "+e); }
         finally { if (c!=null) c.disconnect(); a.h.post(()->plutoBusy=false); } });
     }
@@ -338,8 +338,10 @@ class CardsController {
         if (b.toString().equals(a.prefs().getString(PREF_LIVE_PICKS, ""))) return;
         a.prefs().edit().putString(PREF_LIVE_PICKS, b.toString()).apply();
         android.util.Log.i("ShieldHome","live picks: "+picks.size());
+        warming=false; a.h.removeCallbacks(warmStep); // a prewarm in progress was building the old mix
         liveCache=null; cardsBindSig="";
         if (a.tab==1 && a.cardRow!=null && !a.cardRow.hasFocus()) refreshCards();
+        else if (a.tab!=1) prewarmSoon(); // keep the next switch to Live TV instant with the new mix
     }
     String slugify(String n){ return n.toLowerCase(Locale.US).replace("+","").replaceAll("[^a-z0-9]+","-").replaceAll("(^-|-$)",""); }
     Intent plutoIntent(String slug){ return new Intent(Intent.ACTION_VIEW, Uri.parse("https://pluto.tv/live-tv"+(slug==null?"":"/"+slug))).setPackage("tv.pluto.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); }
@@ -350,15 +352,55 @@ class CardsController {
         return null;
     }
     int loadLive(){
+        if (warming) finishWarm(); // switched mid-prewarm: build the remaining tiles now
         if (liveCache!=null && !liveCache.isEmpty()){ showLiveCache(); fillPlutoNow(plutoCaps); return liveCache.size(); }
-        liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
-        if (a.installed("tv.pluto.android")){ // not installed: 0 tiles, so refreshCards falls back to the LIVE_PKGS app tiles
-            putLive(plutoAppTile(), "pluto-app");
-            putLive(plutoResumeTile(), "pluto-resume");
-            int chans=0; for (String[] p: livePicks()){ if (chans++>=MAX_LIVE_CHANNELS) break; putLive(plutoTile(p[0], p[1], true), p[0]); }
-            fillPlutoNow(plutoCaps);
-        }
+        buildLive(true);
         return liveCache.size();
+    }
+    /** Builds the Live TV tiles into liveCache; attach=false builds them off-row (prewarm) so the first tab switch only re-parents them. */
+    void buildLive(boolean attach){
+        liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
+        if (!a.installed("tv.pluto.android")) return; // not installed: 0 tiles, so refreshCards falls back to the LIVE_PKGS app tiles
+        putLive(plutoAppTile(), "pluto-app", attach);
+        putLive(plutoResumeTile(), "pluto-resume", attach);
+        int chans=0; for (String[] p: livePicks()){ if (chans++>=MAX_LIVE_CHANNELS) break; putLive(plutoTile(p[0], p[1], true), p[0], attach); }
+        fillPlutoNow(plutoCaps);
+    }
+    /** v96: the first switch to Live TV used to build ~22 tiles (~200 ms) on the UI thread at that moment (a visible hitch). After a bind on
+     *  the Play Next tab, the row is built off-screen once the UI is idle (PREWARM_DELAY_MS later), ONE tile per main-loop message so frames
+     *  keep rendering between tiles; the guide fetch starts when it finishes. A switch mid-prewarm finishes the remainder at once. */
+    static final long PREWARM_DELAY_MS=1500;
+    boolean prewarmQueued, warming; List<String[]> warmPicks; int warmAt; long warmMs;
+    void prewarmSoon(){
+        if (prewarmQueued || warming || liveCache!=null) return;
+        prewarmQueued=true;
+        a.h.postDelayed(()->android.os.Looper.myQueue().addIdleHandler(()->{ prewarmQueued=false; prewarmLive(); return false; }), PREWARM_DELAY_MS);
+    }
+    void prewarmLive(){
+        if (warming || liveCache!=null || a.tab==1 || a.cardRow==null || !a.installed("tv.pluto.android")) return; // built, building, or Live TV builds itself
+        liveCache=new ArrayList<>(); liveSlugs.clear(); plutoCaps.clear();
+        warmPicks=livePicks(); warmAt=-2; warmMs=0; warming=true;
+        a.h.post(warmStep);
+    }
+    final Runnable warmStep=new Runnable(){ public void run(){
+        if (!warming) return;
+        long t0=android.os.SystemClock.uptimeMillis(); boolean more=warmOne(); warmMs+=android.os.SystemClock.uptimeMillis()-t0;
+        if (more) a.h.post(this); else endWarm();
+    }};
+    /** Builds the next prewarm tile (-2 app tile, -1 resume tile, then channels); false when none are left. */
+    boolean warmOne(){
+        if (warmAt==-2) putLive(plutoAppTile(), "pluto-app", false);
+        else if (warmAt==-1) putLive(plutoResumeTile(), "pluto-resume", false);
+        else if (warmAt<Math.min(warmPicks.size(), MAX_LIVE_CHANNELS)){ String[] p=warmPicks.get(warmAt); putLive(plutoTile(p[0], p[1], true), p[0], false); }
+        else return false;
+        warmAt++; return true;
+    }
+    void finishWarm(){ a.h.removeCallbacks(warmStep); while (warmOne()) {} endWarm(); }
+    void endWarm(){
+        if (!warming) return;
+        warming=false;
+        android.util.Log.i("ShieldHome","live prewarm tiles="+liveCache.size()+" busy="+warmMs+"ms");
+        fillPlutoNow(plutoCaps);
     }
     static final String CAP_CONTINUE="Continue watching";
     static final int PLUTO_TILE_BG=Color.rgb(24,24,24);
@@ -390,7 +432,7 @@ class CardsController {
         try { ban=a.pm.getApplicationBanner("tv.pluto.android"); ic=a.pm.getApplicationIcon("tv.pluto.android"); } catch (Exception e){}
         return card(ban!=null?ban:ic, null, ban==null, "tv.pluto.android", "Pluto TV", null, -1, ()->startSafe(plutoIntent(null), "tv.pluto.android"));
     }
-    void putLive(View v, String slug){ if (slug!=null) liveSlugs.add(slug); liveCache.add(v); addCard(v, liveCache.size()-1); }
+    void putLive(View v, String slug, boolean attach){ if (slug!=null) liveSlugs.add(slug); liveCache.add(v); if (attach) addCard(v, liveCache.size()-1); }
     void showLiveCache(){
         if (a.cardRow.getChildCount()==liveCache.size() && a.cardRow.getChildCount()>0 && a.cardRow.getChildAt(0)==liveCache.get(0)){ applyLiveNow(); return; }
         a.cardRow.removeAllViews();
@@ -413,9 +455,17 @@ class CardsController {
         plutoCaps.add(new Object[]{v, nm, big, id, bar});
         return v;
     }
+    /** v96: TV-provider "now" art per channel id, looked up on the pool (was a ContentResolver query per tile on the UI thread); cleared with each guide refresh. */
+    final Map<Long,String> tifArt=new java.util.concurrent.ConcurrentHashMap<>(); final Set<Long> tifAsked=java.util.concurrent.ConcurrentHashMap.newKeySet();
     String liveArt(String nm, Long id){
         String art=plutoArt.get(nm); if (!genericArt(art,null)) return art;
-        art=tifNowArt(id); return genericArt(art,null)?null:art;
+        if (id==null) return null;
+        art=tifArt.get(id);
+        if (art==null && tifAsked.add(id)){
+            try { a.pool.execute(()->{ String r=tifNowArt(id); if (r!=null){ tifArt.put(id, r); a.h.post(this::applyLiveNow); } }); }
+            catch (java.util.concurrent.RejectedExecutionException e){ tifAsked.remove(id); } // activity going away
+        }
+        return genericArt(art,null)?null:art;
     }
     /** Focus caption for a channel tile: what's airing now (guide timeline title) over the channel name as the subtitle; the name alone if there is no title. */
     void liveCaption(View v, String nm){

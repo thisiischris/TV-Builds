@@ -16,7 +16,10 @@ class LockButton extends View {
     final MainActivity a; final Paint pt=new Paint(Paint.ANTI_ALIAS_FLAG); final Path shackle=new Path(); final RectF rf=new RectF(); final int glyph; boolean flash;
     /** 0 = open (shackle raised), 1 = closed; overshoots past the ends during the morph. */
     float m; ValueAnimator morph;
-    LockButton(MainActivity a, int glyph){ super(a); this.a=a; this.glyph=glyph; setFocusable(glyph==GLYPH_LOCK); setClickable(glyph==GLYPH_LOCK); pt.setStrokeCap(Paint.Cap.ROUND); pt.setStrokeJoin(Paint.Join.ROUND); }
+    LockButton(MainActivity a, int glyph){ super(a); this.a=a; this.glyph=glyph; setFocusable(glyph==GLYPH_LOCK); setClickable(glyph==GLYPH_LOCK); pt.setStrokeCap(Paint.Cap.ROUND); pt.setStrokeJoin(Paint.Join.ROUND);
+        setOutlineProvider(new android.view.ViewOutlineProvider(){ @Override public void getOutline(View v, Outline o){ o.setOval(0, 0, v.getWidth(), v.getHeight()); } }); }
+    /** v98: focused lock matches the top-bar pills: solid white with a dark padlock and a soft PillView.FOCUS_LIFT shadow. */
+    @Override protected void onFocusChanged(boolean gained, int d, Rect r){ super.onFocusChanged(gained, d, r); setElevation(isFocused()?a.p(PillView.FOCUS_LIFT):0); invalidate(); } // state after the listener ran (see PillView)
     void setFlash(boolean f){ flash=f; invalidate(); }
 
     void setLocked(boolean locked, boolean animate){
@@ -30,9 +33,10 @@ class LockButton extends View {
 
     @Override protected void onDraw(Canvas c){
         float w=getWidth(), h=getHeight(), cx=w/2f, cy=h/2f, r=Math.min(w,h)/2f;
-        pt.setStyle(Paint.Style.FILL); pt.setColor(flash?FILL_PRESS:isFocused()?FILL_FOCUS:FILL); c.drawCircle(cx, cy, r, pt);
-        pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(EDGE); c.drawCircle(cx, cy, r-.5f, pt);
-        pt.setColor(FG); pt.setStrokeWidth(a.p(STROKE));
+        boolean white=isFocused() && !flash;
+        pt.setStyle(Paint.Style.FILL); pt.setColor(flash?FILL_PRESS:white?PillView.FOCUS_FILL:FILL); c.drawCircle(cx, cy, r, pt);
+        if (!white){ pt.setStyle(Paint.Style.STROKE); pt.setStrokeWidth(1); pt.setColor(EDGE); c.drawCircle(cx, cy, r-.5f, pt); }
+        pt.setStyle(Paint.Style.STROKE); pt.setColor(white?PillView.FG_DARK:FG); pt.setStrokeWidth(a.p(STROKE));
         if (glyph!=GLYPH_LOCK){ // chevron pointing in the glyph direction, optically centred
             float s=2f*r/a.p(WallpaperController.LOCK_D), cw=a.p(CHEVRON_W)*s*glyph, ch=a.p(CHEVRON_H)*s/2f, x0=cx-cw/2f; // chevron scales with the circle
             shackle.rewind(); shackle.moveTo(x0, cy-ch); shackle.lineTo(x0+cw, cy); shackle.lineTo(x0, cy+ch); c.drawPath(shackle, pt); return;
